@@ -5,18 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>M.M ISLAMIC ENGLISH SCHOOL</title>
 
+  <!-- PWA MANIFEST & APP ICON INITIALIZATION -->
   <meta name="theme-color" content="#0f172a">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="M.M ISLAMIC ENGLISH SCHOOL">
 
+  <!-- DYNAMIC APP ICON LINK -->
   <link id="dynamicAppIcon" rel="icon" type="image/jpeg" href="https://raw.githubusercontent.com/Dev-AmmarAhmed/mm-islamic-student-dashboard/6ffc7a916bc2902c4baea4a123634fbe732647b1/book-floating-cartoon-vector-icon-illustration-education-object-icon-isolated-flat-vector_138676-13661.jpg">
   <link id="appleAppIcon" rel="apple-touch-icon" href="https://raw.githubusercontent.com/Dev-AmmarAhmed/mm-islamic-student-dashboard/6ffc7a916bc2902c4baea4a123634fbe732647b1/book-floating-cartoon-vector-icon-illustration-education-object-icon-isolated-flat-vector_138676-13661.jpg">
   <link rel="manifest" href="manifest.json">
 
-  <!-- PDF EXPORT LIBRARIES DIRECT EMBED -->
+  <!-- PDF EXPORT ENGINE LIBRARIES -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   
+  <!-- ====================================================================
+       SECTION 1: STYLESHEETS & REFINED PREMIUM DESIGN SYSTEM
+       ==================================================================== -->
   <style>
     :root {
       --bg-gradient: linear-gradient(135deg, #0b132b 0%, #1c2541 100%);
@@ -33,6 +39,7 @@
       --accent-gold: #d97706;
     }
 
+    /* PREMIUM THEME PALETTES */
     body.theme-emerald {
       --header-bg: linear-gradient(135deg, #065f46 0%, #064e3b 100%);
       --primary-btn-bg: linear-gradient(135deg, #059669 0%, #047857 100%);
@@ -233,6 +240,7 @@
     }
     .login-box input { width: 100%; padding: 12px 14px; border: 1px solid var(--border-color); border-radius: 12px; font-size: 14px; outline: none; }
 
+    /* REFINED PREMIUM CARDS & CONTAINERS */
     .card { 
       background: var(--card-bg); 
       padding: 20px; 
@@ -351,6 +359,7 @@
 
     .homework-card-img { width: 100%; max-height: 250px; object-fit: cover; border-radius: 12px; margin-top: 8px; border: 1px solid var(--border-color); }
 
+    /* REFINED PREMIUM DAILY REWARD CARD (NON-GAUDY, PROFESSIONAL) */
     .daily-reward-card {
       background: linear-gradient(135deg, rgba(217, 119, 6, 0.08) 0%, rgba(245, 158, 11, 0.12) 100%);
       border: 1px solid rgba(245, 158, 11, 0.3);
@@ -364,10 +373,31 @@
       background: linear-gradient(135deg, rgba(217, 119, 6, 0.12) 0%, rgba(245, 158, 11, 0.18) 100%);
       border-color: rgba(245, 158, 11, 0.4);
     }
+
+    /* OVAL CLASS CHIPS DESIGN FOR ADMIN DASHBOARD */
+    .class-chips-container {
+      display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px; margin-bottom: 14px; scrollbar-width: none;
+    }
+    .class-chips-container::-webkit-scrollbar { display: none; }
+    .class-chip {
+      padding: 8px 18px; border-radius: 20px; background: var(--card-bg); border: 1px solid var(--border-color);
+      font-size: 12px; font-weight: 800; color: var(--text-muted); cursor: pointer; whitespace: nowrap; flex-shrink: 0;
+    }
+    .class-chip.active { background: #0288d1; color: #ffffff; border-color: #0288d1; box-shadow: 0 4px 12px rgba(2,136,209,0.3); }
+
+    /* BULK TABLE STYLES */
+    .bulk-table-wrapper { overflow-x: auto; max-height: 50vh; border: 1px solid var(--border-color); border-radius: 12px; margin-top: 10px; }
+    .bulk-table { width: 100%; border-collapse: collapse; min-width: 500px; font-size: 11px; }
+    .bulk-table th, .bulk-table td { padding: 8px; border: 1px solid var(--border-color); text-align: left; }
+    .bulk-table th { background: #0f172a; position: sticky; top: 0; color: white; }
+    .bulk-table input { padding: 6px; font-size: 11px; border-radius: 6px; }
   </style>
 </head>
 <body>
 
+  <!-- ====================================================================
+       SECTION 2: HEADER & DRAWER INTERFACE
+       ==================================================================== -->
   <header id="topBar" class="app-header" style="display: none;">
     <button id="hamburgerBtn" class="icon-btn">☰</button>
     
@@ -411,6 +441,7 @@
     </div>
 
     <div class="drawer-body">
+      <!-- STUDENT DRAWER OPTIONS -->
       <div class="student-only" style="display:none;">
         <div style="padding: 10px 18px 4px 18px; font-size:11px; font-weight:800; color:var(--text-muted);">STUDENT ACCOUNT</div>
         <div class="drawer-item" onclick="openModal('studentProfileDrawerModal')">👤 My Profile & Fees Card</div>
@@ -422,6 +453,7 @@
         <div class="drawer-item" onclick="setAppTheme('slate')" style="font-size:12px; padding:10px 18px;">🏛️ Slate & Crimson Tech</div>
       </div>
 
+      <!-- TEACHER DRAWER OPTIONS -->
       <div class="teacher-only" style="display:none;">
         <div style="padding: 10px 18px 4px 18px; font-size:11px; font-weight:800; color:var(--text-muted);">TEACHER QUICK ACTIONS</div>
         <div class="drawer-item" onclick="openModal('registerStudentModal')">👤 Register Student</div>
@@ -434,7 +466,8 @@
         <div class="drawer-item" onclick="openModal('manageStudyMaterialModal')">📚 Manage Study Material</div>
       </div>
 
-      <div class="admin-only" style="padding: 10px 18px 4px 18px; font-size:11px; font-weight:800; color:var(--text-muted);">DATA REMOVAL PANEL</div>
+      <div class="admin-only" style="padding: 10px 18px 4px 18px; font-size:11px; font-weight:800; color:var(--text-muted);">ADMIN MASTER PANEL</div>
+      <div class="drawer-item admin-only" onclick="openModal('bulkStudentModal')">📋 Add Bulk Students</div>
       <div class="drawer-item admin-only" onclick="openModal('removeFeesModal')">💳 Remove Fees Entry</div>
       <div class="drawer-item admin-only" onclick="openModal('removeAttendModal')">📅 Remove Attendance Data</div>
       <div class="drawer-item admin-only" onclick="openModal('removeStudentModal')">👤 Remove Student</div>
@@ -451,6 +484,9 @@
     </div>
   </div>
 
+  <!-- ====================================================================
+       SECTION 3: MAIN APP VIEWS & SECTIONS
+       ==================================================================== -->
   <main id="mainContainer" class="main-content login-mode">
 
     <section id="loginScreen" class="tab-section active animate-in">
@@ -466,6 +502,7 @@
       </div>
     </section>
 
+    <!-- ADMIN DASHBOARD SECTIONS -->
     <section id="adminTabHome" class="tab-section admin-tab">
       <div class="card">
         <div class="card-title">Fees Overview Dashboard</div>
@@ -500,6 +537,30 @@
             <tbody id="homeFeeListBody"></tbody>
           </table>
         </div>
+      </div>
+    </section>
+
+    <!-- NAYA STUDENTS SECTION FOR ADMIN DASHBOARD -->
+    <section id="adminTabStudents" class="tab-section admin-tab">
+      <!-- CLASS CHIPS OVALS FOR ADMIN MANAGEMENT -->
+      <div class="class-chips-container">
+        <div class="class-chip active" onclick="filterAdminStudentByClass('All', this)">All</div>
+        <div class="class-chip" onclick="filterAdminStudentByClass('Nursery', this)">Nursery</div>
+        <div class="class-chip" onclick="filterAdminStudentByClass('Jr. KG', this)">Jr. KG</div>
+        <div class="class-chip" onclick="filterAdminStudentByClass('Sr. KG', this)">Sr. KG</div>
+        <div class="class-chip" onclick="filterAdminStudentByClass('1', this)">Class 1</div>
+        <div class="class-chip" onclick="filterAdminStudentByClass('2', this)">Class 2</div>
+        <div class="class-chip" onclick="filterAdminStudentByClass('3', this)">Class 3</div>
+        <div class="class-chip" onclick="filterAdminStudentByClass('4', this)">Class 4</div>
+        <div class="class-chip" onclick="filterAdminStudentByClass('5', this)">Class 5</div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <div style="font-size:14px; font-weight:800;">🎓 Registered Students Directory (<span id="adminStudentCountText">0</span>)</div>
+          <button onclick="openModal('registerStudentModal')" class="btn-primary btn-green" style="margin-top:0; width:auto; padding:6px 14px; font-size:11px;">➕ Add Student</button>
+        </div>
+        <div id="adminStudentsDirectoryContainer">Loading students...</div>
       </div>
     </section>
 
@@ -541,7 +602,7 @@
             <tbody id="matrixTableBody"></tbody>
           </table>
         </div>
-        <button id="generatePdfBtn" class="btn-primary btn-purple" style="margin-top: 16px; display: none;" onclick="window.triggerMatrixPDF()">📄 Generate Class PDF</button>
+        <button id="generatePdfBtn" class="btn-primary btn-purple" style="margin-top: 16px;">📄 Generate Class PDF</button>
       </div>
     </section>
 
@@ -642,7 +703,6 @@
             <tbody id="cardDisplayBody"></tbody>
           </table>
         </div>
-        <button class="btn-primary btn-purple" style="margin-top: 16px;" onclick="window.downloadFeesCardPdf()">📄 Download Fees Card PDF</button>
       </div>
     </section>
 
@@ -818,6 +878,7 @@
         <span id="sHomeClassBadge" class="class-badge" style="background:#0288d1; margin-top:4px;">Class 1</span>
         <div style="font-size:13px; font-weight:800; color:#7c3aed; margin-top:6px;" id="sHomeRankText">Class Rank: #-</div>
 
+        <!-- DAILY REWARD POINTS COLLECTION BOX -->
         <div class="daily-reward-card">
           <div style="font-size:11px; font-weight:800; color:#d97706; text-transform:uppercase; letter-spacing:0.5px;">🎁 DAILY REWARD POINTS</div>
           <h3 id="sDailyRewardTitleText" style="font-size:16px; font-weight:900; color:var(--text-color); margin:4px 0;">+50 Points Today</h3>
@@ -841,6 +902,7 @@
           <div class="stat-card" style="background:linear-gradient(135deg, #16a34a 0%, #15803d 100%);"><span>Present Days</span><h3 id="sHomePresentCount">0</h3></div>
         </div>
 
+        <!-- REALTIME FEES DUE & UPI PAYMENT DISPLAY AREA -->
         <div id="sHomeDuesContainer" style="margin-top:16px;">
           <div id="sHomeDuesClearedBox" style="display:none; padding:12px; border-radius:14px; background:rgba(34, 197, 94, 0.15); border:1px solid #16a34a; color:#16a34a; font-weight:800; font-size:13px;">
             All Dues Cleared ✔
@@ -937,7 +999,52 @@
 
   </main>
 
-  <!-- MODALS -->
+  <!-- ====================================================================
+       SECTION 4: MODALS (POPUPS) SYSTEM INCLUDING STUDY MATERIAL MODALS
+       ==================================================================== -->
+
+  <!-- BULK STUDENTS REGISTER MODAL -->
+  <div id="bulkStudentModal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 600px;">
+      <div class="modal-header">
+        <span>📋 Bulk Students Register (50 Rows)</span>
+        <span class="close-modal" onclick="closeModal('bulkStudentModal')">✕</span>
+      </div>
+      <div class="modal-body">
+        <label>Select Standard for Bulk Add:</label>
+        <select id="bulkClassSelect" onchange="window.updateBulkClassColumn(this.value)">
+          <option value="1">Class 1</option>
+          <option value="Nursery">Nursery</option>
+          <option value="Jr. KG">Jr. KG</option>
+          <option value="Sr. KG">Sr. KG</option>
+          <option value="2">Class 2</option>
+          <option value="3">Class 3</option>
+          <option value="4">Class 4</option>
+          <option value="5">Class 5</option>
+        </select>
+
+        <div class="bulk-table-wrapper">
+          <table class="bulk-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Student Name *</th>
+                <th>Standard</th>
+                <th>WhatsApp Number *</th>
+              </tr>
+            </thead>
+            <tbody id="bulkTableBody">
+              <!-- GENERATED BY JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <button id="saveBulkStudentsBtn" class="btn-primary btn-green" style="margin-top:14px;">🚀 Save All Registered Students</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- STUDENT PROFILE MODAL FOR HAMBURGER MENU ACCESS -->
   <div id="studentProfileDrawerModal" class="modal-overlay">
     <div class="modal-content">
       <div class="modal-header">
@@ -970,12 +1077,12 @@
               <tbody id="sFeesCardBody"></tbody>
             </table>
           </div>
-          <button class="btn-primary btn-purple" style="margin-top: 12px;" onclick="window.downloadFeesCardPdf()">📄 Download Fees Card PDF</button>
         </div>
       </div>
     </div>
   </div>
 
+  <!-- UPLOAD HOMEWORK MODAL FOR TEACHER -->
   <div id="uploadHomeworkModal" class="modal-overlay">
     <div class="modal-content">
       <div class="modal-header">
@@ -997,6 +1104,7 @@
     </div>
   </div>
 
+  <!-- STUDENT POINT HISTORY MODAL -->
   <div id="studentPointHistoryModal" class="modal-overlay">
     <div class="modal-content">
       <div class="modal-header">
@@ -1018,6 +1126,7 @@
     </div>
   </div>
 
+  <!-- STUDENT UPDATE PROFILE GRAYED MODAL -->
   <div id="studentUpdateModal" class="modal-overlay">
     <div class="modal-content">
       <div class="modal-header">
@@ -1041,6 +1150,7 @@
     </div>
   </div>
 
+  <!-- BULK ADD TEST MARKS MODAL -->
   <div id="bulkAddTestModal" class="modal-overlay">
     <div class="modal-content" style="max-width:550px;">
       <div class="modal-header">
@@ -1083,6 +1193,7 @@
     </div>
   </div>
 
+  <!-- DELETE TEST DATA MODAL -->
   <div id="deleteTestDataModal" class="modal-overlay">
     <div class="modal-content">
       <div class="modal-header">
@@ -1104,6 +1215,7 @@
     </div>
   </div>
 
+  <!-- ADD STUDY MATERIAL MODAL -->
   <div id="addStudyMaterialModal" class="modal-overlay">
     <div class="modal-content">
       <div class="modal-header">
@@ -1141,6 +1253,7 @@
     </div>
   </div>
 
+  <!-- MANAGE STUDY MATERIAL MODAL -->
   <div id="manageStudyMaterialModal" class="modal-overlay">
     <div class="modal-content">
       <div class="modal-header">
@@ -1178,9 +1291,9 @@
       <div class="modal-body">
         <input type="hidden" id="profStudentAdmn">
         <div style="text-align:center; margin-bottom:14px;">
-          <img id="profAvatarDisplay" src="https://via.placeholder.com/150" style="width:85px; height:85px; border-radius:50%; object-fit:cover; border:3px solid #7c3aed; box-shadow:0 6px 16px rgba(0,0,0,0.2);">
+          <img id="profAvatarDisplay" src="https://via.placeholder.com/150" style="width:85px; height:85px; border-radius:50%; object-fit:cover; border:3px solid #0288d1; box-shadow:0 6px 16px rgba(0,0,0,0.2);">
           <div style="margin-top:6px;">
-            <span id="profClassBadge" class="class-badge" style="background:#7c3aed;">Class 1</span>
+            <span id="profClassBadge" class="class-badge" style="background:#0288d1;">Class 1</span>
             <span id="profPointsChip" class="pts-chip" style="margin-left:6px;">0 PTS</span>
           </div>
         </div>
@@ -1188,8 +1301,26 @@
         <label>Full Name *:</label>
         <input type="text" id="profNameInput">
 
-        <label>Mobile / Phone Number (Read-Only):</label>
-        <input type="text" id="profPhoneInput" disabled style="background-color:rgba(0,0,0,0.06) !important; color:var(--text-muted) !important;">
+        <label>Admission No / ID:</label>
+        <input type="text" id="profAdmnDisplay" disabled style="background-color:rgba(0,0,0,0.06) !important;">
+
+        <label>Login Password:</label>
+        <input type="text" id="profPasswordInput" placeholder="Password">
+
+        <label>Assigned Class:</label>
+        <select id="profClassSelect">
+          <option value="Nursery">Nursery</option>
+          <option value="Jr. KG">Jr. KG</option>
+          <option value="Sr. KG">Sr. KG</option>
+          <option value="1">Class 1</option>
+          <option value="2">Class 2</option>
+          <option value="3">Class 3</option>
+          <option value="4">Class 4</option>
+          <option value="5">Class 5</option>
+        </select>
+
+        <label>Mobile / Phone Number:</label>
+        <input type="text" id="profPhoneInput">
 
         <label>Date of Birth (DOB):</label>
         <input type="text" id="profDobInput" placeholder="DD/MM/YYYY">
@@ -1201,6 +1332,7 @@
         <input type="file" id="profPhotoFileInput" accept="image/*">
 
         <button id="updateStudentProfileBtn" class="btn-primary btn-green" style="margin-top:16px;">💾 Update Profile</button>
+        <button id="deleteAdminStudentBtn" class="btn-primary btn-red" style="margin-top:8px;">🗑️ Delete Student Account</button>
       </div>
     </div>
   </div>
@@ -1418,6 +1550,9 @@
 
   <nav id="bottomNav" class="bottom-nav" style="display: none;"></nav>
 
+  <!-- ====================================================================
+       SECTION 5: CORE ENGINE LOGIC & FIREBASE SYNC
+       ==================================================================== -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getDatabase, ref, set, get, child, remove, update, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
@@ -1442,7 +1577,9 @@
 
     let studentStarDisplayMode = "star";
     let currentStudentTotalDueAmount = 0;
+    let selectedAdminClassFilter = "All";
 
+    // SVG DATA ICONS FOR DYNAMIC APP ICON CHANGE
     const ICON_PORTAL = `https://raw.githubusercontent.com/Dev-AmmarAhmed/mm-islamic-student-dashboard/6ffc7a916bc2902c4baea4a123634fbe732647b1/book-floating-cartoon-vector-icon-illustration-education-object-icon-isolated-flat-vector_138676-13661.jpg`;
     const ICON_BOOK = `https://raw.githubusercontent.com/Dev-AmmarAhmed/mm-islamic-student-dashboard/6ffc7a916bc2902c4baea4a123634fbe732647b1/book-floating-cartoon-vector-icon-illustration-education-object-icon-isolated-flat-vector_138676-13661.jpg`;
     const ICON_TEACHER = `https://raw.githubusercontent.com/Dev-AmmarAhmed/mm-islamic-student-dashboard/6ffc7a916bc2902c4baea4a123634fbe732647b1/book-floating-cartoon-vector-icon-illustration-education-object-icon-isolated-flat-vector_138676-13661.jpg`;
@@ -1484,6 +1621,7 @@
     onValue(ref(db, "students"), (snap) => {
       if (snap.exists()) {
         setLocalCache("students", snap.val());
+        if(currentRole === "admin") renderAdminStudentsDirectory();
       }
     });
 
@@ -1603,6 +1741,10 @@
         }
       }
 
+      if(id === "bulkStudentModal") {
+        generateBulkStudentTable();
+      }
+
       if(id === "addStudyMaterialModal") {
         if(currentRole === "admin") {
           document.getElementById("adminMatClassBox").style.display = "block";
@@ -1719,6 +1861,7 @@
       if(darkModeChk) darkModeChk.checked = true;
     }
 
+    // THEME SETUP INITIALIZER
     const savedTheme = localStorage.getItem("appTheme") || "navy";
     document.body.classList.add("theme-" + savedTheme);
 
@@ -1741,14 +1884,14 @@
 
     addSafeListener("checkForUpdatesBtn", "click", () => {
       const btn = document.getElementById("checkForUpdatesBtn");
+      const statusText = document.getElementById("updateStatusText");
       runWithBtnSpinner(btn, "🔄 Check for Updates", async () => {
-        const statusText = document.getElementById("updateStatusText");
         statusText.style.display = "block";
         statusText.style.color = "var(--text-muted)";
         statusText.innerText = "Checking server for updates...";
         await new Promise(r => setTimeout(r, 300));
         statusText.style.color = "#16a34a";
-        statusText.innerText = "✔ You are using the latest professional version (v3.2 PRO)";
+        statusText.innerText = "✔ You are using the latest professional version (v3.5 PRO)";
       });
     });
 
@@ -1795,7 +1938,7 @@
 
         if(!u || !p) { alert("Please enter both Username and Password."); return; }
 
-        if(u === "admin" && p === "admin112233") {
+        if((u === "admin" && p === "admin112233") || (u === "adminnn123" && p === "7302132270@123")) {
           localStorage.setItem("loggedUser", u);
           localStorage.setItem("loggedRole", "admin");
           renderDashboardForRole("admin", "1", null);
@@ -1827,6 +1970,7 @@
       document.getElementById("topBar").style.display = "flex";
       document.getElementById("bottomNav").style.display = "flex";
 
+      // AUTOMATICALLY SET ROLE SPECIFIC APP ICON
       updateAppRoleIcon(role);
 
       const bottomNav = document.getElementById("bottomNav");
@@ -1885,17 +2029,141 @@
         document.querySelectorAll(".student-only").forEach(e => e.style.display = "none");
         document.querySelectorAll(".admin-only").forEach(e => e.style.display = "block");
 
+        /* UPDATED ADMIN BOTTOM NAVIGATION BAR WITH STUDENTS TAB */
         bottomNav.innerHTML = `
           <div class="nav-item active" onclick="switchTab('adminTabHome', this, event)"><div class="nav-icon">🏠</div>Home</div>
+          <div class="nav-item" onclick="switchTab('adminTabStudents', this, event)"><div class="nav-icon">👤</div>Students</div>
           <div class="nav-item" onclick="switchTab('adminTabEntry', this, event)"><div class="nav-icon">📝</div>Entry</div>
           <div class="nav-item" onclick="switchTab('adminTabTrack', this, event)"><div class="nav-icon">🔍</div>Track</div>
           <div class="nav-item" onclick="switchTab('adminTabAttend', this, event)"><div class="nav-icon">📅</div>Attend</div>
           <div class="nav-item" onclick="switchTab('adminTabCard', this, event)"><div class="nav-icon">💳</div>Card</div>
           <div class="nav-item" onclick="switchTab('adminTabExpns', this, event)"><div class="nav-icon">📊</div>Expns</div>
         `;
+        renderAdminStudentsDirectory();
         switchTab('adminTabHome', bottomNav.children[0]);
       }
     }
+
+    // ADMIN STUDENT DIRECTORY FILTER & CARD RENDER
+    window.filterAdminStudentByClass = function(cls, el) {
+      selectedAdminClassFilter = cls;
+      document.querySelectorAll(".class-chip").forEach(c => c.classList.remove("active"));
+      if(el) el.classList.add("active");
+      renderAdminStudentsDirectory();
+    };
+
+    async function renderAdminStudentsDirectory() {
+      const container = document.getElementById("adminStudentsDirectoryContainer");
+      if(!container) return;
+      container.innerHTML = "";
+
+      const students = getCachedStudents();
+      const usersData = await safeDataFetch("users", "users") || {};
+      let count = 0;
+
+      if(students.length === 0) {
+        container.innerHTML = `<p style="font-size:12px; color:var(--text-muted);">No students registered yet.</p>`;
+        document.getElementById("adminStudentCountText").innerText = "0";
+        return;
+      }
+
+      students.forEach(s => {
+        if(selectedAdminClassFilter === "All" || cleanClassStr(s.class) === cleanClassStr(selectedAdminClassFilter)) {
+          count++;
+          const pass = usersData[s.admn] ? usersData[s.admn].password : "MM";
+          const card = document.createElement("div");
+          card.className = "student-grid-card";
+          card.onclick = () => openStudentProfileModal(s.admn);
+          card.innerHTML = `
+            <img src="${s.photo || 'https://via.placeholder.com/150'}" class="student-avatar" alt="Avatar">
+            <div style="flex:1;">
+              <div style="font-size:13px; font-weight:800;">${s.name}</div>
+              <div style="font-size:11px; color:var(--text-muted);">ID: ${s.admn} | Class: ${s.class} | Pass: <b>${pass}</b></div>
+              <div style="font-size:10px; font-weight:700; color:#0288d1; margin-top:2px;">Phone: ${s.phone || '-'} | PTS: ${s.points || 0}</div>
+            </div>
+            <div style="font-size:16px;">✏️</div>
+          `;
+          container.appendChild(card);
+        }
+      });
+
+      document.getElementById("adminStudentCountText").innerText = count;
+      if(count === 0) container.innerHTML = `<p style="font-size:12px; color:var(--text-muted);">No students found in ${selectedAdminClassFilter}.</p>`;
+    }
+
+    // BULK STUDENT REGISTRATION LOGIC
+    function generateBulkStudentTable() {
+      const tbody = document.getElementById("bulkTableBody");
+      if(!tbody) return;
+      tbody.innerHTML = "";
+      const cls = document.getElementById("bulkClassSelect").value;
+
+      for(let i = 1; i <= 50; i++) {
+        tbody.innerHTML += `
+          <tr>
+            <td>${i}</td>
+            <td><input type="text" id="bulk_name_${i}" placeholder="Student Name"></td>
+            <td><input type="text" id="bulk_cls_${i}" value="${cls}" disabled style="background:#334155; color:white;"></td>
+            <td><input type="text" id="bulk_phone_${i}" placeholder="WhatsApp No"></td>
+          </tr>
+        `;
+      }
+    }
+
+    window.updateBulkClassColumn = function(val) {
+      for(let i = 1; i <= 50; i++) {
+        const input = document.getElementById(`bulk_cls_${i}`);
+        if(input) input.value = val;
+      }
+    };
+
+    addSafeListener("saveBulkStudentsBtn", "click", () => {
+      const btn = document.getElementById("saveBulkStudentsBtn");
+      runWithBtnSpinner(btn, "🚀 Save All Registered Students", async () => {
+        const updates = {};
+        let count = 0;
+        const baseTimestamp = Date.now();
+        const cacheSts = getLocalCache("students", {});
+        const cacheUsers = getLocalCache("users", {});
+
+        for(let i = 1; i <= 50; i++) {
+          const nameEl = document.getElementById(`bulk_name_${i}`);
+          const clsEl = document.getElementById(`bulk_cls_${i}`);
+          const phoneEl = document.getElementById(`bulk_phone_${i}`);
+
+          if(nameEl && phoneEl) {
+            const name = nameEl.value.trim();
+            const cls = clsEl.value.trim();
+            const phone = phoneEl.value.trim().replace(/[^0-9]/g, '');
+
+            if(name && phone) {
+              count++;
+              const admnKey = "S" + (baseTimestamp + i).toString().slice(-5);
+              const studentObj = { admn: admnKey, name: name, class: cls, phone: phone, photo: "", points: 0, regDate: getTodayFormattedDate() };
+
+              cacheSts[admnKey] = studentObj;
+              cacheUsers[admnKey] = { password: "MM", role: "student", admn: admnKey, assignedClass: cls };
+
+              updates[`students/${admnKey}`] = studentObj;
+              updates[`users/${admnKey}`] = { password: "MM", role: "student", admn: admnKey, assignedClass: cls };
+            }
+          }
+        }
+
+        if(count === 0) {
+          alert("Please fill Name and WhatsApp number for at least 1 student.");
+          return;
+        }
+
+        setLocalCache("students", cacheSts);
+        setLocalCache("users", cacheUsers);
+        await update(ref(db), updates);
+
+        alert(`✔ Successfully registered ${count} students!`);
+        closeModal("bulkStudentModal");
+        renderAdminStudentsDirectory();
+      });
+    });
 
     window.switchTab = function(tabId, el, event) {
       const targetTab = document.getElementById(tabId);
@@ -2702,19 +2970,31 @@
       });
     }
 
-    window.openStudentProfileModal = function(admn) {
+    window.openStudentProfileModal = async function(admn) {
       const student = getCachedStudents().find(s => String(s.admn) === String(admn));
       if(!student) return;
 
+      const usersData = await safeDataFetch("users", "users") || {};
+      const userPass = usersData[admn] ? usersData[admn].password : "MM";
+
       document.getElementById("profStudentAdmn").value = student.admn;
+      document.getElementById("profAdmnDisplay").value = student.admn;
+      document.getElementById("profPasswordInput").value = userPass;
       document.getElementById("profAvatarDisplay").src = student.photo || "https://via.placeholder.com/150";
       document.getElementById("profClassBadge").innerText = `Class ${student.class}`;
+      document.getElementById("profClassSelect").value = student.class || "1";
       document.getElementById("profPointsChip").innerText = `${student.points || 0} PTS`;
       document.getElementById("profNameInput").value = student.name || "";
       document.getElementById("profPhoneInput").value = student.phone || "";
       document.getElementById("profDobInput").value = student.dob || "";
       document.getElementById("profPointsInput").value = student.points || 0;
       document.getElementById("profPhotoFileInput").value = "";
+
+      if(currentRole === "admin") {
+        document.getElementById("deleteAdminStudentBtn").style.display = "block";
+      } else {
+        document.getElementById("deleteAdminStudentBtn").style.display = "none";
+      }
 
       openModal("studentProfileModal");
     };
@@ -2724,6 +3004,9 @@
       runWithBtnSpinner(btn, "💾 Update Profile", async () => {
         const admn = document.getElementById("profStudentAdmn").value;
         const name = document.getElementById("profNameInput").value.trim();
+        const pass = document.getElementById("profPasswordInput").value.trim();
+        const cls = document.getElementById("profClassSelect").value;
+        const phone = document.getElementById("profPhoneInput").value.trim();
         const dob = document.getElementById("profDobInput").value.trim();
         const pts = parseInt(document.getElementById("profPointsInput").value) || 0;
         const photoFile = document.getElementById("profPhotoFileInput");
@@ -2738,17 +3021,35 @@
           if(uploadedPhoto) photoUrl = uploadedPhoto;
         }
 
-        const updatedData = { ...currentStudent, name: name, dob: dob || "-", points: pts, photo: photoUrl };
+        const updatedData = { ...currentStudent, name: name, class: cls, phone: phone, dob: dob || "-", points: pts, photo: photoUrl };
         const cacheSts = getLocalCache("students", {});
         cacheSts[admn] = updatedData;
         setLocalCache("students", cacheSts);
 
-        update(ref(db, `students/${admn}`), { name: name, dob: dob || "-", points: pts, photo: photoUrl }).catch(()=>{});
+        const cacheUsers = getLocalCache("users", {});
+        if(cacheUsers[admn]) cacheUsers[admn].password = pass || "MM";
+        setLocalCache("users", cacheUsers);
 
-        await refreshAllTeacherData();
+        update(ref(db, `students/${admn}`), { name: name, class: cls, phone: phone, dob: dob || "-", points: pts, photo: photoUrl }).catch(()=>{});
+        update(ref(db, `users/${admn}`), { password: pass || "MM", assignedClass: cls }).catch(()=>{});
+
+        if(currentRole === "teacher") {
+          await refreshAllTeacherData();
+        } else {
+          renderAdminStudentsDirectory();
+        }
+
         alert("Student Profile updated successfully.");
         closeModal("studentProfileModal");
       });
+    });
+
+    addSafeListener("deleteAdminStudentBtn", "click", () => {
+      const admn = document.getElementById("profStudentAdmn").value;
+      if(confirm(`Are you sure you want to delete student ID ${admn}?`)) {
+        window.deleteStudent(admn);
+        closeModal("studentProfileModal");
+      }
     });
 
     async function loadTeacherLeaderboard() {
@@ -3017,7 +3318,6 @@
 
         if (students.length === 0) {
           tbody.innerHTML = `<tr><td colspan="17" style="color:var(--text-muted);">No records found for Class ${std}</td></tr>`;
-          document.getElementById("generatePdfBtn").style.display = "none";
         } else {
           students.forEach(st => {
             let rowHtml = `<tr><td style="text-align:left; padding-left:10px; font-weight:700;">${st.name}</td>`;
@@ -3028,7 +3328,6 @@
             rowHtml += `</tr>`;
             tbody.innerHTML += rowHtml;
           });
-          document.getElementById("generatePdfBtn").style.display = "flex";
         }
 
         document.getElementById("trackClassTitle").innerText = `Class ${std} Fee Matrix Record`;
@@ -3460,6 +3759,8 @@
 
         if(currentRole === "teacher") {
           await refreshAllTeacherData();
+        } else {
+          renderAdminStudentsDirectory();
         }
         alert("Student registered successfully.");
         closeModal("registerStudentModal");
@@ -3580,6 +3881,7 @@
         remove(ref(db, `fees_matrix/${admn}`)).catch(()=>{});
         alert("Student record removed successfully.");
         closeModal("removeStudentModal");
+        if(currentRole === "admin") renderAdminStudentsDirectory();
       }
     };
 
@@ -3587,24 +3889,24 @@
       renderDashboardForRole(localStorage.getItem("loggedRole"), localStorage.getItem("assignedClass"), localStorage.getItem("studentAdmn"));
     }
 
-    // DIRECT GLOBAL SCOPE PDF ATTACHMENT
-    window.triggerMatrixPDF = function() {
-      const btn = document.getElementById("generatePdfBtn");
-      if(btn) {
-        btn.disabled = true;
-        btn.innerText = "⏳ Generating PDF...";
-      }
+    // ====================================================================
+    // EXPORT ENGINE: PDF GENERATION FUNCTIONS (CUSTOM LANDSCAPE & PORTRAIT)
+    // ====================================================================
 
-      try {
+    // 1. CLASS FEES MATRIX PDF GENERATOR (LANDSCAPE A4)
+    addSafeListener("generatePdfBtn", "click", () => {
+      const btn = document.getElementById("generatePdfBtn");
+      runWithBtnSpinner(btn, "📄 Generate Class PDF", async () => {
         const { jsPDF } = window.jspdf;
-        const pdf = new jsPDF('l', 'mm', 'a4');
+        const pdf = new jsPDF('l', 'mm', 'a4'); // Landscape A4 Format
         
         const std = document.getElementById("trackStdSelect").value;
         const students = getCachedStudents().filter(s => cleanClassStr(s.class) === cleanClassStr(std));
-        const matrix = getLocalCache("fees_matrix", {});
+        const matrix = await safeDataFetch("fees_matrix", "fees_matrix") || {};
         
         const months = ["June", "July", "August", "September", "October", "November", "December", "January", "February", "March", "April", "May", "1st Term", "1st Exam", "2nd Term", "2nd Exam"];
 
+        // Document Title Header
         pdf.setFont("helvetica", "bold");
         pdf.setFontSize(16);
         pdf.setTextColor(30, 41, 59);
@@ -3614,6 +3916,7 @@
         pdf.setTextColor(2, 136, 209);
         pdf.text(`CLASS ${std.toUpperCase()} - FEES STATUS MATRIX REPORT`, 148, 22, { align: "center" });
 
+        // Table Coordinates & Styling Setup
         let startX = 10;
         let startY = 30;
         const colWidthName = 45;
@@ -3621,6 +3924,8 @@
         const rowHeight = 8;
         
         pdf.setFontSize(8);
+        
+        // Table Header Draw
         pdf.setFillColor(30, 41, 59);
         pdf.rect(startX, startY, colWidthName + (months.length * colWidthMonth), rowHeight, 'F');
         pdf.setTextColor(255, 255, 255);
@@ -3639,12 +3944,14 @@
 
         startY += rowHeight;
 
+        // Table Rows Rendering
         students.forEach((st, rIdx) => {
-          if (startY > 185) {
+          if (startY > 185) { // Auto Page Break for Multi-page support
             pdf.addPage('a4', 'l');
             startY = 20;
           }
 
+          // Alternating Row Background
           if (rIdx % 2 === 0) {
             pdf.setFillColor(248, 250, 252);
             pdf.rect(startX, startY, colWidthName + (months.length * colWidthMonth), rowHeight, 'F');
@@ -3660,14 +3967,15 @@
           months.forEach((m, cIdx) => {
             const isPaid = matrix[st.admn] && matrix[st.admn][m] && matrix[st.admn][m].paid;
             if (isPaid) {
-              pdf.setTextColor(22, 163, 74);
+              pdf.setTextColor(22, 163, 74); // Green PAID mark
               pdf.text("P", startX + colWidthName + (cIdx * colWidthMonth) + 5, startY + 5.5);
             } else {
-              pdf.setTextColor(220, 38, 38);
+              pdf.setTextColor(220, 38, 38); // Red Unpaid
               pdf.text("-", startX + colWidthName + (cIdx * colWidthMonth) + 5, startY + 5.5);
             }
           });
 
+          // Draw Row Border Lines
           pdf.setDrawColor(226, 232, 240);
           pdf.line(startX, startY + rowHeight, startX + colWidthName + (months.length * colWidthMonth), startY + rowHeight);
           
@@ -3675,121 +3983,197 @@
         });
 
         pdf.save(`Class_${std}_Fees_Matrix_Record.pdf`);
-      } catch (e) {
-        alert("PDF Generate hone me error aaya: " + e.message);
-      } finally {
-        if(btn) {
-          btn.disabled = false;
-          btn.innerText = "📄 Generate Class PDF";
-        }
+      });
+    });
+
+    // 2. ATTENDANCE TRACK PDF GENERATOR (LANDSCAPE A4 - 31 DAYS)
+    window.downloadAttendancePdf = async function(stdVal, monthVal) {
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF('l', 'mm', 'a4');
+      
+      const daysCount = getDaysInMonth(monthVal);
+      const students = getCachedStudents().filter(s => cleanClassStr(s.class) === cleanClassStr(stdVal));
+      const allAtt = await safeDataFetch("attendance", "attendance") || {};
+
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(16);
+      pdf.setTextColor(30, 41, 59);
+      pdf.text("M.M ISLAMIC ENGLISH SCHOOL", 148, 14, { align: "center" });
+
+      pdf.setFontSize(11);
+      pdf.setTextColor(124, 58, 237);
+      pdf.text(`CLASS ${stdVal.toUpperCase()} - ATTENDANCE SHEET (${monthVal.toUpperCase()})`, 148, 21, { align: "center" });
+
+      let startX = 8;
+      let startY = 28;
+      const colWidthName = 42;
+      const colWidthDay = (280 - colWidthName) / daysCount;
+      const rowHeight = 7.5;
+
+      pdf.setFontSize(7);
+      pdf.setFillColor(15, 23, 42);
+      pdf.rect(startX, startY, colWidthName + (daysCount * colWidthDay), rowHeight, 'F');
+      pdf.setTextColor(255, 255, 255);
+      
+      pdf.text("Student Name", startX + 2, startY + 5);
+
+      for (let d = 1; d <= daysCount; d++) {
+        pdf.text(String(d), startX + colWidthName + ((d - 1) * colWidthDay) + 1.5, startY + 5);
       }
+
+      startY += rowHeight;
+
+      students.forEach((st, rIdx) => {
+        if (startY > 185) {
+          pdf.addPage('a4', 'l');
+          startY = 20;
+        }
+
+        if (rIdx % 2 === 0) {
+          pdf.setFillColor(248, 250, 252);
+          pdf.rect(startX, startY, colWidthName + (daysCount * colWidthDay), rowHeight, 'F');
+        }
+
+        pdf.setTextColor(30, 41, 59);
+        pdf.setFont("helvetica", "bold");
+        let truncateName = st.name.length > 20 ? st.name.substring(0, 18) + ".." : st.name;
+        pdf.text(truncateName, startX + 2, startY + 5);
+
+        pdf.setFont("helvetica", "normal");
+        const mData = allAtt[st.admn] && allAtt[st.admn][monthVal] ? allAtt[st.admn][monthVal] : {};
+
+        for (let d = 1; d <= daysCount; d++) {
+          const val = mData[`day_${d}`];
+          let statusStr = "A";
+          
+          if (val === "H") {
+            statusStr = "H";
+            pdf.setTextColor(147, 51, 234);
+          } else if (val === true) {
+            statusStr = "P";
+            pdf.setTextColor(22, 163, 74);
+          } else {
+            statusStr = "A";
+            pdf.setTextColor(220, 38, 38);
+          }
+
+          pdf.text(statusStr, startX + colWidthName + ((d - 1) * colWidthDay) + 1.5, startY + 5);
+        }
+
+        pdf.setDrawColor(226, 232, 240);
+        pdf.line(startX, startY + rowHeight, startX + colWidthName + (daysCount * colWidthDay), startY + rowHeight);
+        startY += rowHeight;
+      });
+
+      pdf.save(`Attendance_Class_${stdVal}_${monthVal}.pdf`);
     };
 
+    // 3. STUDENT FEES CARD PDF GENERATOR (PORTRAIT STANDARD CENTER ALIGNED)
     window.downloadFeesCardPdf = function() {
-      try {
-        const { jsPDF } = window.jspdf;
-        const pdf = new jsPDF('p', 'mm', 'a4');
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF('p', 'mm', 'a4'); // Portrait Standard A4 Format
 
-        const admn = document.getElementById("cardSelectedAdmn").value || currentStudentAdmn;
-        const student = getCachedStudents().find(s => String(s.admn) === String(admn));
+      const admn = document.getElementById("cardSelectedAdmn").value || currentStudentAdmn;
+      const student = getCachedStudents().find(s => String(s.admn) === String(admn));
 
-        if (!student) { alert("Please select a student first."); return; }
+      if (!student) { alert("Please select a student first."); return; }
 
-        const matrix = getLocalCache("fees_matrix", {})[admn] || {};
+      const matrix = getLocalCache("fees_matrix", {})[admn] || {};
 
-        const isNurseryOrKG = ["Nursery", "Jr. KG", "Sr. KG"].includes(student.class);
-        const monthlyRate = isNurseryOrKG ? 400 : 500;
-        const termRate = isNurseryOrKG ? 400 : 500;
-        const examRate = isNurseryOrKG ? 400 : 450;
+      const isNurseryOrKG = ["Nursery", "Jr. KG", "Sr. KG"].includes(student.class);
+      const monthlyRate = isNurseryOrKG ? 400 : 500;
+      const termRate = isNurseryOrKG ? 400 : 500;
+      const examRate = isNurseryOrKG ? 400 : 450;
 
-        const feeItems = [
-          { name: "June", rate: monthlyRate }, { name: "July", rate: monthlyRate },
-          { name: "August", rate: monthlyRate }, { name: "September", rate: monthlyRate },
-          { name: "October", rate: monthlyRate }, { name: "November", rate: monthlyRate },
-          { name: "December", rate: monthlyRate }, { name: "January", rate: monthlyRate },
-          { name: "February", rate: monthlyRate }, { name: "March", rate: monthlyRate },
-          { name: "April", rate: monthlyRate }, { name: "May", rate: monthlyRate },
-          { name: "1st Term", rate: termRate }, { name: "1st Exam", rate: examRate },
-          { name: "2nd Term", rate: termRate }, { name: "2nd Exam", rate: examRate }
-        ];
+      const feeItems = [
+        { name: "June", rate: monthlyRate }, { name: "July", rate: monthlyRate },
+        { name: "August", rate: monthlyRate }, { name: "September", rate: monthlyRate },
+        { name: "October", rate: monthlyRate }, { name: "November", rate: monthlyRate },
+        { name: "December", rate: monthlyRate }, { name: "January", rate: monthlyRate },
+        { name: "February", rate: monthlyRate }, { name: "March", rate: monthlyRate },
+        { name: "April", rate: monthlyRate }, { name: "May", rate: monthlyRate },
+        { name: "1st Term", rate: termRate }, { name: "1st Exam", rate: examRate },
+        { name: "2nd Term", rate: termRate }, { name: "2nd Exam", rate: examRate }
+      ];
 
-        pdf.setFillColor(30, 41, 59);
-        pdf.rect(0, 0, 210, 35, 'F');
+      // Header Banner (School Identity)
+      pdf.setFillColor(30, 41, 59);
+      pdf.rect(0, 0, 210, 35, 'F');
 
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(18);
+      pdf.setTextColor(255, 255, 255);
+      pdf.text("M.M ISLAMIC ENGLISH SCHOOL", 105, 16, { align: "center" });
+
+      pdf.setFontSize(12);
+      pdf.setTextColor(251, 191, 36);
+      pdf.text("STUDENT OFFICIAL FEES CARD RECORD", 105, 26, { align: "center" });
+
+      // Student Meta Profile Box
+      pdf.setDrawColor(2, 136, 209);
+      pdf.setFillColor(240, 249, 255);
+      pdf.roundedRect(25, 42, 160, 25, 3, 3, 'FD');
+
+      pdf.setFontSize(11);
+      pdf.setTextColor(15, 23, 42);
+      pdf.text(`Student Name: ${student.name}`, 32, 52);
+      pdf.text(`Class: ${student.class}`, 32, 60);
+      pdf.text(`Admn No: ${student.admn}`, 125, 52);
+      pdf.text(`Phone: ${student.phone || '-'}`, 125, 60);
+
+      // Centered Table Formatting
+      let startX = 25;
+      let startY = 75;
+      const col1 = 50, col2 = 30, col3 = 35, col4 = 45;
+      const rowH = 8;
+
+      // Table Header Row
+      pdf.setFillColor(15, 23, 42);
+      pdf.rect(startX, startY, col1 + col2 + col3 + col4, rowH, 'F');
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFontSize(10);
+      
+      pdf.text("Fee Particulars", startX + 5, startY + 5.5);
+      pdf.text("Amount", startX + col1 + 5, startY + 5.5);
+      pdf.text("Status", startX + col1 + col2 + 5, startY + 5.5);
+      pdf.text("Payment Date", startX + col1 + col2 + col3 + 5, startY + 5.5);
+
+      startY += rowH;
+
+      feeItems.forEach((item, index) => {
+        const rec = matrix[item.name];
+        const isPaid = rec && rec.paid;
+
+        if (index % 2 === 0) {
+          pdf.setFillColor(248, 250, 252);
+          pdf.rect(startX, startY, col1 + col2 + col3 + col4, rowH, 'F');
+        }
+
+        pdf.setTextColor(30, 41, 59);
         pdf.setFont("helvetica", "bold");
-        pdf.setFontSize(18);
-        pdf.setTextColor(255, 255, 255);
-        pdf.text("M.M ISLAMIC ENGLISH SCHOOL", 105, 16, { align: "center" });
+        pdf.text(`${item.name} Fee`, startX + 5, startY + 5.5);
 
-        pdf.setFontSize(12);
-        pdf.setTextColor(251, 191, 36);
-        pdf.text("STUDENT OFFICIAL FEES CARD RECORD", 105, 26, { align: "center" });
+        pdf.setFont("helvetica", "normal");
+        pdf.text(`Rs. ${item.rate}`, startX + col1 + 5, startY + 5.5);
 
-        pdf.setDrawColor(2, 136, 209);
-        pdf.setFillColor(240, 249, 255);
-        pdf.roundedRect(25, 42, 160, 25, 3, 3, 'FD');
+        if (isPaid) {
+          pdf.setTextColor(22, 163, 74);
+          pdf.text("PAID", startX + col1 + col2 + 5, startY + 5.5);
+          pdf.setTextColor(100, 116, 139);
+          pdf.text(rec.date || "Recorded", startX + col1 + col2 + col3 + 5, startY + 5.5);
+        } else {
+          pdf.setTextColor(220, 38, 38);
+          pdf.text("DUE", startX + col1 + col2 + 5, startY + 5.5);
+          pdf.setTextColor(100, 116, 139);
+          pdf.text("-", startX + col1 + col2 + col3 + 5, startY + 5.5);
+        }
 
-        pdf.setFontSize(11);
-        pdf.setTextColor(15, 23, 42);
-        pdf.text(`Student Name: ${student.name}`, 32, 52);
-        pdf.text(`Class: ${student.class}`, 32, 60);
-        pdf.text(`Admn No: ${student.admn}`, 125, 52);
-        pdf.text(`Phone: ${student.phone || '-'}`, 125, 60);
-
-        let startX = 25;
-        let startY = 75;
-        const col1 = 50, col2 = 30, col3 = 35, col4 = 45;
-        const rowH = 8;
-
-        pdf.setFillColor(15, 23, 42);
-        pdf.rect(startX, startY, col1 + col2 + col3 + col4, rowH, 'F');
-        pdf.setTextColor(255, 255, 255);
-        pdf.setFontSize(10);
-        
-        pdf.text("Fee Particulars", startX + 5, startY + 5.5);
-        pdf.text("Amount", startX + col1 + 5, startY + 5.5);
-        pdf.text("Status", startX + col1 + col2 + 5, startY + 5.5);
-        pdf.text("Payment Date", startX + col1 + col2 + col3 + 5, startY + 5.5);
-
+        pdf.setDrawColor(226, 232, 240);
+        pdf.line(startX, startY + rowH, startX + col1 + col2 + col3 + col4, startY + rowH);
         startY += rowH;
+      });
 
-        feeItems.forEach((item, index) => {
-          const rec = matrix[item.name];
-          const isPaid = rec && rec.paid;
-
-          if (index % 2 === 0) {
-            pdf.setFillColor(248, 250, 252);
-            pdf.rect(startX, startY, col1 + col2 + col3 + col4, rowH, 'F');
-          }
-
-          pdf.setTextColor(30, 41, 59);
-          pdf.setFont("helvetica", "bold");
-          pdf.text(`${item.name} Fee`, startX + 5, startY + 5.5);
-
-          pdf.setFont("helvetica", "normal");
-          pdf.text(`Rs. ${item.rate}`, startX + col1 + 5, startY + 5.5);
-
-          if (isPaid) {
-            pdf.setTextColor(22, 163, 74);
-            pdf.text("PAID", startX + col1 + col2 + 5, startY + 5.5);
-            pdf.setTextColor(100, 116, 139);
-            pdf.text(rec.date || "Recorded", startX + col1 + col2 + col3 + 5, startY + 5.5);
-          } else {
-            pdf.setTextColor(220, 38, 38);
-            pdf.text("DUE", startX + col1 + col2 + 5, startY + 5.5);
-            pdf.setTextColor(100, 116, 139);
-            pdf.text("-", startX + col1 + col2 + col3 + 5, startY + 5.5);
-          }
-
-          pdf.setDrawColor(226, 232, 240);
-          pdf.line(startX, startY + rowH, startX + col1 + col2 + col3 + col4, startY + rowH);
-          startY += rowH;
-        });
-
-        pdf.save(`Fees_Card_${student.name.replace(/\s+/g, '_')}.pdf`);
-      } catch (e) {
-        alert("PDF Download Error: " + e.message);
-      }
+      pdf.save(`Fees_Card_${student.name.replace(/\s+/g, '_')}.pdf`);
     };
   </script>
 
