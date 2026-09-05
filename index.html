@@ -14,7 +14,7 @@
   <link id="appleAppIcon" rel="apple-touch-icon" href="https://raw.githubusercontent.com/Dev-AmmarAhmed/mm-islamic-student-dashboard/6ffc7a916bc2902c4baea4a123634fbe732647b1/book-floating-cartoon-vector-icon-illustration-education-object-icon-isolated-flat-vector_138676-13661.jpg">
   <link rel="manifest" href="manifest.json">
 
-  <!-- PDF EXPORT ENGINE LIBRARIES -->
+  <!-- PDF EXPORT LIBRARIES DIRECT EMBED -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   
   <style>
@@ -541,7 +541,7 @@
             <tbody id="matrixTableBody"></tbody>
           </table>
         </div>
-        <button id="generatePdfBtn" class="btn-primary btn-purple" style="margin-top: 16px; display: none;" onclick="triggerMatrixPDF()">📄 Generate Class PDF</button>
+        <button id="generatePdfBtn" class="btn-primary btn-purple" style="margin-top: 16px; display: none;" onclick="window.triggerMatrixPDF()">📄 Generate Class PDF</button>
       </div>
     </section>
 
@@ -642,7 +642,7 @@
             <tbody id="cardDisplayBody"></tbody>
           </table>
         </div>
-        <button class="btn-primary btn-purple" style="margin-top: 16px;" onclick="downloadFeesCardPdf()">📄 Download Fees Card PDF</button>
+        <button class="btn-primary btn-purple" style="margin-top: 16px;" onclick="window.downloadFeesCardPdf()">📄 Download Fees Card PDF</button>
       </div>
     </section>
 
@@ -970,7 +970,7 @@
               <tbody id="sFeesCardBody"></tbody>
             </table>
           </div>
-          <button class="btn-primary btn-purple" style="margin-top: 12px;" onclick="downloadFeesCardPdf()">📄 Download Fees Card PDF</button>
+          <button class="btn-primary btn-purple" style="margin-top: 12px;" onclick="window.downloadFeesCardPdf()">📄 Download Fees Card PDF</button>
         </div>
       </div>
     </div>
@@ -3587,11 +3587,13 @@
       renderDashboardForRole(localStorage.getItem("loggedRole"), localStorage.getItem("assignedClass"), localStorage.getItem("studentAdmn"));
     }
 
-    // DIRECT PDF GENERATION LOGIC
-    window.triggerMatrixPDF = async function() {
+    // DIRECT GLOBAL SCOPE PDF ATTACHMENT
+    window.triggerMatrixPDF = function() {
       const btn = document.getElementById("generatePdfBtn");
-      btn.disabled = true;
-      btn.innerText = "⏳ Generating PDF...";
+      if(btn) {
+        btn.disabled = true;
+        btn.innerText = "⏳ Generating PDF...";
+      }
 
       try {
         const { jsPDF } = window.jspdf;
@@ -3676,8 +3678,10 @@
       } catch (e) {
         alert("PDF Generate hone me error aaya: " + e.message);
       } finally {
-        btn.disabled = false;
-        btn.innerText = "📄 Generate Class PDF";
+        if(btn) {
+          btn.disabled = false;
+          btn.innerText = "📄 Generate Class PDF";
+        }
       }
     };
 
