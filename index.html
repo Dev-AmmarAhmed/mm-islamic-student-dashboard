@@ -3620,5 +3620,12 @@
       renderDashboardForRole(localStorage.getItem("loggedRole"), localStorage.getItem("assignedClass"), localStorage.getItem("studentAdmn"));
     }
   </script>
+
+  <script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sv.js');
+  }
+  </script>
+  
 </body>
 </html>
