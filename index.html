@@ -4177,10 +4177,17 @@
     };
   </script>
 
+
   <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sv.js');
-    }
-  </script>
+  // Service worker ko completely unregister karke purana cache destroy karega
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(function(registrations) {
+      for(let registration of registrations) {
+        registration.unregister();
+      }
+    });
+  }
+</script>
+
 </body>
 </html>
