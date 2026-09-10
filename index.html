@@ -463,6 +463,8 @@
       </div>
 
       <div class="admin-only" style="padding: 10px 18px 4px 18px; font-size:11px; font-weight:800; color:var(--text-muted);">ADMIN MASTER PANEL</div>
+      <div class="drawer-item admin-only" onclick="openModal('adminLeaderboardModal')">🏆 Class Leaderboards</div>
+      <div class="drawer-item admin-only" onclick="exportFullDatabaseJson()">📥 Export Full JSON Backup</div>
       <div class="drawer-item admin-only" onclick="openModal('bulkStudentModal')">📋 Add Bulk Students</div>
       <div class="drawer-item admin-only" onclick="openModal('removeFeesModal')">💳 Remove Fees Entry</div>
       <div class="drawer-item admin-only" onclick="openModal('removeAttendModal')">📅 Remove Attendance Data</div>
@@ -832,13 +834,13 @@
       </div>
 
       <div class="card">
-        <div class="card-title">⭐ Award Performance Points</div>
+        <div class="card-title">⭐ Award / Deduct Performance Points</div>
         <label>Select Student:</label>
         <select id="performStudentSelect"><option value="">-- Select Student --</option></select>
-        <label>Points to Award:</label>
-        <input type="number" id="performPointsInput" placeholder="e.g. 10">
+        <label>Points (+ / -):</label>
+        <input type="number" id="performPointsInput" placeholder="e.g. 10 or -10 (Minus allowed)">
         <label>Reason:</label>
-        <input type="text" id="performReasonInput" placeholder="e.g. Completed assignment">
+        <input type="text" id="performReasonInput" placeholder="e.g. Completed assignment / Incomplete HW">
         <button id="submitPerformPointsBtn" class="btn-primary btn-orange" style="margin-top:14px;">Submit Points</button>
       </div>
     </section>
@@ -1003,6 +1005,49 @@
   <!-- ====================================================================
        SECTION 4: MODALS (POPUPS) SYSTEM INCLUDING STUDY MATERIAL MODALS
        ==================================================================== -->
+
+  <!-- ADMIN MULTI-CLASS LEADERBOARD & POINTS EDIT MODAL -->
+  <div id="adminLeaderboardModal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 520px;">
+      <div class="modal-header">
+        <span>🏆 Class Leaderboard & Points Editor</span>
+        <span class="close-modal" onclick="closeModal('adminLeaderboardModal')">✕</span>
+      </div>
+      <div class="modal-body">
+        <label>Select Class / Standard:</label>
+        <select id="adminLbClassSelect" onchange="window.renderAdminClassLeaderboard(this.value)">
+          <option value="1">Class 1</option>
+          <option value="Nursery">Nursery</option>
+          <option value="Jr. KG">Jr. KG</option>
+          <option value="Sr. KG">Sr. KG</option>
+          <option value="2">Class 2</option>
+          <option value="3">Class 3</option>
+          <option value="4">Class 4</option>
+          <option value="5">Class 5</option>
+        </select>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:14px; margin-bottom:8px;">
+          <div style="font-size:12px; font-weight:800; color:var(--text-muted);" id="adminLbHeaderClassText">Class 1 Standings</div>
+          <button id="toggleAdminLbEditBtn" onclick="window.toggleAdminLeaderboardEditMode()" class="btn-primary btn-purple" style="width:auto; padding:5px 12px; font-size:11px; margin-top:0;">✏️ Edit / Update Points</button>
+        </div>
+
+        <div class="table-container" style="max-height: 55vh; overflow-y: auto;">
+          <table style="min-width: 100%;">
+            <thead>
+              <tr>
+                <th style="width:36px;">#</th>
+                <th style="text-align:left; padding-left:10px;">Student Name</th>
+                <th style="width:110px;">Points</th>
+              </tr>
+            </thead>
+            <tbody id="adminLbTableBody"><tr><td colspan="3">Loading Leaderboard...</td></tr></tbody>
+          </table>
+        </div>
+
+        <button id="saveAdminLbPointsBtn" onclick="window.saveAdminLeaderboardPoints()" class="btn-primary btn-green" style="margin-top:14px; display:none;">💾 Save Updated Points</button>
+      </div>
+    </div>
+  </div>
 
   <!-- BULK STUDENTS REGISTER MODAL -->
   <div id="bulkStudentModal" class="modal-overlay">
@@ -1324,7 +1369,7 @@
         <label>Date of Birth (DOB):</label>
         <input type="text" id="profDobInput" placeholder="DD/MM/YYYY">
 
-        <label>Total Performance Points:</label>
+        <label>Total Performance Points (+ / -):</label>
         <input type="number" id="profPointsInput" placeholder="0">
 
         <label>Change Photo (Optional):</label>
@@ -1577,8 +1622,10 @@
     let studentStarDisplayMode = "star";
     let currentStudentTotalDueAmount = 0;
     let selectedAdminClassFilter = "All";
+    let isAdminLbEditMode = false;
 
     let inMemoryStudentsData = {};
+    let fullDbCache = {}; // Global Cache for Full JSON Export Engine
 
     const ICON_PORTAL = `https://raw.githubusercontent.com/Dev-AmmarAhmed/mm-islamic-student-dashboard/6ffc7a916bc2902c4baea4a123634fbe732647b1/book-floating-cartoon-vector-icon-illustration-education-object-icon-isolated-flat-vector_138676-13661.jpg`;
     const ICON_BOOK = `https://raw.githubusercontent.com/Dev-AmmarAhmed/mm-islamic-student-dashboard/6ffc7a916bc2902c4baea4a123634fbe732647b1/book-floating-cartoon-vector-icon-illustration-education-object-icon-isolated-flat-vector_138676-13661.jpg`;
@@ -1603,11 +1650,16 @@
       return String(str).replace(/class\s*/i, "").trim();
     }
 
-    onValue(ref(db, "students"), (snap) => {
+    // Realtime Listener for Entire DB Cache
+    onValue(ref(db), (snap) => {
       if (snap.exists()) {
-        inMemoryStudentsData = snap.val();
-        if(currentRole === "admin") renderAdminStudentsDirectory();
+        fullDbCache = snap.val();
+        if (fullDbCache.students) {
+          inMemoryStudentsData = fullDbCache.students;
+          if(currentRole === "admin") renderAdminStudentsDirectory();
+        }
       } else {
+        fullDbCache = {};
         inMemoryStudentsData = {};
       }
     });
@@ -1698,6 +1750,12 @@
       closeDrawer();
       const modal = document.getElementById(id);
       if(modal) modal.classList.add("active");
+
+      if(id === "adminLeaderboardModal") {
+        isAdminLbEditMode = false;
+        const clsVal = document.getElementById("adminLbClassSelect").value || "1";
+        window.renderAdminClassLeaderboard(clsVal);
+      }
 
       if(id === "registerStudentModal") {
         const srField = document.getElementById("regSrNo");
@@ -1862,9 +1920,21 @@
         statusText.style.display = "block";
         statusText.style.color = "var(--text-muted)";
         statusText.innerText = "Checking server for updates...";
-        await new Promise(r => setTimeout(r, 300));
+        
+        // Force Unregister SW & Clear Cache for seamless updates
+        if ('serviceWorker' in navigator) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          for (let reg of registrations) { await reg.unregister(); }
+        }
+        if ('caches' in window) {
+          const keys = await caches.keys();
+          for (let key of keys) { await caches.delete(key); }
+        }
+
+        await new Promise(r => setTimeout(r, 500));
         statusText.style.color = "#16a34a";
-        statusText.innerText = "✔ You are using the latest professional version (v3.5 PRO)";
+        statusText.innerText = "✔ Application updated to latest version! Reloading...";
+        setTimeout(() => location.reload(true), 1000);
       });
     });
 
@@ -2019,6 +2089,93 @@
         switchTab('adminTabHome', bottomNav.children[0]);
       }
     }
+
+    // ADMIN MULTI-CLASS LEADERBOARD & POINTS EDIT ENGINE
+    window.renderAdminClassLeaderboard = function(cls) {
+      const cleanCls = cleanClassStr(cls);
+      document.getElementById("adminLbHeaderClassText").innerText = `Class ${cleanCls} Standings`;
+      
+      const tbody = document.getElementById("adminLbTableBody");
+      const students = getLiveStudents().filter(s => cleanClassStr(s.class) === cleanCls);
+      students.sort((a,b) => (b.points || 0) - (a.points || 0));
+
+      tbody.innerHTML = "";
+      if(students.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="3" style="color:var(--text-muted); padding:12px;">No students registered in Class ${cleanCls}</td></tr>`;
+        return;
+      }
+
+      students.forEach((st, idx) => {
+        const pts = st.points || 0;
+        if(isAdminLbEditMode) {
+          tbody.innerHTML += `
+            <tr>
+              <td><b>${idx + 1}</b></td>
+              <td style="text-align:left; padding-left:10px; font-weight:700;">${st.name}</td>
+              <td>
+                <input type="number" class="admin-lb-pts-input" data-admn="${st.admn}" value="${pts}" style="width:80px; padding:4px 8px; font-size:11px; text-align:center; font-weight:800;">
+              </td>
+            </tr>
+          `;
+        } else {
+          tbody.innerHTML += `
+            <tr>
+              <td><b>${idx + 1}</b></td>
+              <td style="text-align:left; padding-left:10px; font-weight:700;">${st.name}</td>
+              <td><span class="pts-chip">${pts} PTS</span></td>
+            </tr>
+          `;
+        }
+      });
+    };
+
+    window.toggleAdminLeaderboardEditMode = function() {
+      isAdminLbEditMode = !isAdminLbEditMode;
+      const toggleBtn = document.getElementById("toggleAdminLbEditBtn");
+      const saveBtn = document.getElementById("saveAdminLbPointsBtn");
+      const currentCls = document.getElementById("adminLbClassSelect").value || "1";
+
+      if(isAdminLbEditMode) {
+        toggleBtn.innerText = "❌ Cancel Edit";
+        toggleBtn.style.background = "#64748b";
+        saveBtn.style.display = "block";
+      } else {
+        toggleBtn.innerText = "✏️ Edit / Update Points";
+        toggleBtn.style.background = "";
+        saveBtn.style.display = "none";
+      }
+
+      window.renderAdminClassLeaderboard(currentCls);
+    };
+
+    window.saveAdminLeaderboardPoints = function() {
+      const btn = document.getElementById("saveAdminLbPointsBtn");
+      runWithBtnSpinner(btn, "💾 Save Updated Points", async () => {
+        const inputs = document.querySelectorAll(".admin-lb-pts-input");
+        const updates = {};
+
+        inputs.forEach(inp => {
+          const admn = inp.getAttribute("data-admn");
+          const ptsVal = parseInt(inp.value);
+          if(!isNaN(ptsVal)) {
+            updates[`students/${admn}/points`] = ptsVal;
+          }
+        });
+
+        await update(ref(db), updates);
+
+        alert("✔ Class Leaderboard Points Updated Successfully!");
+        isAdminLbEditMode = false;
+        document.getElementById("toggleAdminLbEditBtn").innerText = "✏️ Edit / Update Points";
+        document.getElementById("toggleAdminLbEditBtn").style.background = "";
+        btn.style.display = "none";
+
+        const currentCls = document.getElementById("adminLbClassSelect").value || "1";
+        window.renderAdminClassLeaderboard(currentCls);
+
+        if(currentRole === "teacher") refreshAllTeacherData();
+      });
+    };
 
     window.filterAdminStudentByClass = function(cls, el) {
       selectedAdminClassFilter = cls;
@@ -2997,16 +3154,17 @@
       const btn = document.getElementById("submitPerformPointsBtn");
       runWithBtnSpinner(btn, "Submit Points", async () => {
         const admn = document.getElementById("performStudentSelect").value;
-        const pts = parseInt(document.getElementById("performPointsInput").value) || 0;
+        const ptsInputVal = document.getElementById("performPointsInput").value.trim();
+        const pts = parseInt(ptsInputVal);
 
-        if(!admn || pts <= 0) { alert("Please select a student and enter valid points."); return; }
+        if(!admn || isNaN(pts) || pts === 0) { alert("Please select a student and enter valid non-zero points (+ or -)."); return; }
 
         const st = getLiveStudents().find(s => String(s.admn) === String(admn));
         if(st) {
           const newPts = (st.points || 0) + pts;
           await update(ref(db, `students/${admn}`), { points: newPts });
           await refreshAllTeacherData();
-          alert(`Awarded ${pts} Points successfully.`);
+          alert(`Updated Points for ${st.name}: ${pts >= 0 ? '+' : ''}${pts} Points (Total: ${newPts}).`);
         }
       });
     });
@@ -3734,6 +3892,29 @@
       }
     };
 
+    // DATABASE FULL EXPORT ENGINE (REALTIME MERGED STRUCTURE)
+    window.exportFullDatabaseJson = function() {
+      try {
+        if (!fullDbCache || Object.keys(fullDbCache).length === 0) {
+          alert("Database sync loading... Please wait 2 seconds and try again.");
+          return;
+        }
+
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(fullDbCache, null, 2));
+        const downloadAnchor = document.createElement('a');
+        downloadAnchor.setAttribute("href", dataStr);
+        downloadAnchor.setAttribute("download", `full_firebase_database_export_${getTodayKey()}.json`);
+        document.body.appendChild(downloadAnchor);
+        downloadAnchor.click();
+        downloadAnchor.remove();
+
+        alert("✔ Full Firebase Database Backup Exported Successfully!");
+      } catch (err) {
+        console.error("Export Error:", err);
+        alert("Failed to export database: " + err.message);
+      }
+    };
+
     if(localStorage.getItem("loggedUser")) {
       renderDashboardForRole(localStorage.getItem("loggedRole"), localStorage.getItem("assignedClass"), localStorage.getItem("studentAdmn"));
     }
@@ -4037,6 +4218,7 @@
   </script>
 
   <script>
+    // Automatic Cache Invalidation Engine
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(function(registrations) {
         for(let registration of registrations) {
