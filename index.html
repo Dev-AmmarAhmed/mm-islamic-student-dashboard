@@ -1604,11 +1604,11 @@
           </div>
         </div>
 
-        <label>Full Name *:</label>
+                <label>Full Name *:</label>
         <input type="text" id="profNameInput">
 
-        <label>Admission No / ID:</label>
-        <input type="text" id="profAdmnDisplay" disabled style="background-color:rgba(0,0,0,0.06) !important;">
+        <label>Admission No / ID * (Editable):</label>
+        <input type="text" id="profAdmnDisplay" style="font-weight:800;">
 
         <label>Login Password:</label>
         <input type="text" id="profPasswordInput" placeholder="Password">
@@ -1644,7 +1644,7 @@
     </div>
   </div>
 
-  <div id="registerStudentModal" class="modal-overlay">
+  <div  <div id="registerStudentModal" class="modal-overlay">
     <div class="modal-content">
       <div class="modal-header">
         <span>👤 Register New Student</span>
@@ -1652,9 +1652,10 @@
       </div>
       <div class="modal-body">
         <label>Sr. No.:</label>
-        <input type="text" id="regSrNo" value="Loading..." disabled style="font-weight:700;">
+        <input type="text" id="regSrNo" value="Loading..." disabled style="font-weight:700; background-color:rgba(0,0,0,0.06) !important;">
         <label>Admission No.:</label>
-        <input type="number" id="regAdmn" placeholder="e.g. 101">
+        <input type="text" id="regAdmn" value="Loading..." disabled style="font-weight:700; background-color:rgba(0,0,0,0.06) !important;">
+
         <label>Full Name *:</label>
         <input type="text" id="regName" placeholder="Student Full Name">
         <label>Select Class *:</label>
@@ -2151,9 +2152,20 @@
 
 
 
-                 if(id === "registerStudentModal") {
+                        if(id === "registerStudentModal") {
         const liveSts = getLiveStudents();
-        const nextNum = liveSts.length + 1;
+        let maxAdmn = 0;
+        
+        liveSts.forEach(s => {
+          if(s && s.admn) {
+            const num = parseInt(s.admn);
+            if(!isNaN(num) && num > maxAdmn) {
+              maxAdmn = num;
+            }
+          }
+        });
+
+        const nextNum = (maxAdmn > 0 ? maxAdmn : liveSts.length) + 1;
         
         const srField = document.getElementById("regSrNo");
         const admnField = document.getElementById("regAdmn");
@@ -2172,6 +2184,7 @@
           }
         }
       }
+
 
 
       if(id === "bulkStudentModal") {
@@ -3513,10 +3526,12 @@
       window.openModal("studentProfileModal");
     };
 
-    addSafeListener("updateStudentProfileBtn", "click", () => {
+
+        addSafeListener("updateStudentProfileBtn", "click", () => {
       const btn = document.getElementById("updateStudentProfileBtn");
       runWithBtnSpinner(btn, "💾 Update Profile", async () => {
-        const admn = document.getElementById("profStudentAdmn").value;
+        const oldAdmn = document.getElementById("profStudentAdmn").value;
+        const newAdmn = document.getElementById("profAdmnDisplay").value.trim();
         const name = document.getElementById("profNameInput").value.trim();
         const pass = document.getElementById("profPasswordInput").value.trim();
         const cls = document.getElementById("profClassSelect").value;
@@ -3525,9 +3540,9 @@
         const pts = parseInt(document.getElementById("profPointsInput").value) || 0;
         const photoFile = document.getElementById("profPhotoFileInput");
 
-        if(!admn || !name) { alert("Student Name is required."); return; }
+        if(!newAdmn || !name) { alert("Student Name and Admission No are required."); return; }
 
-        const currentStudent = await getStudentRecord(admn);
+        const currentStudent = await getStudentRecord(oldAdmn);
         let photoUrl = currentStudent ? (currentStudent.photo || "https://via.placeholder.com/150") : "https://via.placeholder.com/150";
 
         if(photoFile && photoFile.files.length > 0) {
@@ -3535,8 +3550,30 @@
           if(uploadedPhoto) photoUrl = uploadedPhoto;
         }
 
-        await update(ref(db, `students/${admn}`), { name: name, class: cls, phone: phone, dob: dob || "-", points: pts, photo: photoUrl });
-        await update(ref(db, `users/${admn}`), { password: pass || "MM", assignedClass: cls });
+        const updatedStudentObj = {
+          srNo: newAdmn,
+          admn: newAdmn,
+          name: name,
+          class: cls,
+          phone: phone,
+          dob: dob || "-",
+          points: pts,
+          photo: photoUrl,
+          regDate: currentStudent ? (currentStudent.regDate || getTodayFormattedDate()) : getTodayFormattedDate()
+        };
+
+        const updates = {};
+
+        // Agar Adm No change hua hai toh old entry delete hogi
+        if(String(oldAdmn) !== String(newAdmn)) {
+          updates[`students/${oldAdmn}`] = null;
+          updates[`users/${oldAdmn}`] = null;
+        }
+
+        updates[`students/${newAdmn}`] = updatedStudentObj;
+        updates[`users/${newAdmn}`] = { password: pass || "MM", role: "student", admn: newAdmn, assignedClass: cls };
+
+        await update(ref(db), updates);
 
         if(currentRole === "teacher") {
           await refreshAllTeacherData();
@@ -3548,6 +3585,10 @@
         window.closeModal("studentProfileModal");
       });
     });
+
+
+
+              
 
     addSafeListener("deleteAdminStudentBtn", "click", () => {
       const admn = document.getElementById("profStudentAdmn").value;
@@ -4196,11 +4237,10 @@
       alert(`Attendance record cleared for Class ${std} (${month}).`);
     });
 
-     addSafeListener("saveStudentBtn", "click", () => {
+           addSafeListener("saveStudentBtn", "click", () => {
       const btn = document.getElementById("saveStudentBtn");
       runWithBtnSpinner(btn, "Submit Registration", async () => {
-        const srNo = document.getElementById("regSrNo").value;
-        const inputAdmn = document.getElementById("regAdmn").value.trim();
+        const finalAdmn = document.getElementById("regAdmn").value.trim();
         const name = document.getElementById("regName").value.trim();
         const std = currentRole === "teacher" ? assignedClass : document.getElementById("regStd").value;
         const rawPhone = document.getElementById("regPhone").value.trim();
@@ -4210,17 +4250,6 @@
         if(!name || !std || !rawPhone) { alert("Please fill Name, Class, and Phone number."); return; }
 
         let cleanPhone = rawPhone.replace(/[^0-9]/g, '');
-        
-        // Single Unified Reference Engine: Auto calculate non-overlapping ID
-        let liveSts = getLiveStudents();
-        let finalAdmn = inputAdmn || String(liveSts.length + 1);
-
-        // Conflict check: If ID already exists, increment to prevent replacing Student 140/141
-        let attempts = 0;
-        while(liveSts.some(s => String(s.admn) === String(finalAdmn)) && attempts < 500) {
-          finalAdmn = String(parseInt(finalAdmn) + 1);
-          attempts++;
-        }
 
         let photoUrl = "https://via.placeholder.com/150";
         if(fileInput && fileInput.files.length > 0) {
@@ -4244,7 +4273,6 @@
         
         alert(`✔ Student registered successfully with Admission No: ${finalAdmn}`);
         
-        // Clear input values
         document.getElementById("regName").value = "";
         document.getElementById("regPhone").value = "";
         document.getElementById("regDob").value = "";
@@ -4253,6 +4281,7 @@
         window.closeModal("registerStudentModal");
       });
     });
+
 
 
     addSafeListener("saveTeacherBtn", "click", () => {
