@@ -1105,14 +1105,25 @@
       </div>
     </section>
 
-    <section id="teacherTabTest" class="tab-section teacher-tab">
+      <section id="teacherTabTest" class="tab-section teacher-tab">
       <div class="card">
         <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
           <span>📝 Interactive Online Tests</span>
           <button class="btn-primary btn-green" style="width:auto; padding:6px 12px; font-size:11px; margin-top:0;" onclick="openModal('createOnlineTestModal')">➕ Add Test</button>
         </div>
-        <p style="font-size:12px; color:var(--text-muted);">Create interactive online tests with auto-grading, dynamic options, and automatic expiration cleanup.</p>
+        <p style="font-size:12px; color:var(--text-muted); margin-bottom: 12px;">Create interactive online tests with auto-grading, dynamic options, and automatic expiration cleanup.</p>
+        
+        <!-- YAHAN TUMHARE ACTIVE TESTS DIKHENGE -->
+        <div id="tActiveOnlineTestsContainer" style="margin-bottom: 12px; max-height: 200px; overflow-y: auto;">
+          <div style="font-size:11px; color:var(--text-muted); padding: 10px; background: rgba(0,0,0,0.02); border-radius: 8px;">Loading active tests...</div>
+        </div>
+
+        <!-- GREEN HISTORY LINK -->
+        <div style="text-align: right; border-top: 1px dashed var(--border-color); padding-top: 10px;">
+          <a href="javascript:void(0)" onclick="openModal('onlineTestHistoryModal')" style="font-size:12px; font-weight:800; color:#16a34a; text-decoration:none;">📜 View Test History &rarr;</a>
+        </div>
       </div>
+
 
       <div class="card">
         <div class="card-title">📝 Add Offline Test Marks</div>
@@ -1282,6 +1293,59 @@
        SECTION 4: MODALS (POPUPS) SYSTEM INCLUDING STUDY MATERIAL MODALS
        ==================================================================== -->
 
+  <!-- TEACHER ONLINE TEST HISTORY & STUDENT RESULT MODAL -->
+  <div id="onlineTestHistoryModal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 600px;">
+      <div class="modal-header">
+        <span>📜 Online Test History</span>
+        <span class="close-modal" onclick="closeModal('onlineTestHistoryModal')">✕</span>
+      </div>
+      <div class="modal-body">
+        
+        <!-- TEST HISTORY TABLE -->
+        <div class="table-container" style="max-height: 30vh; overflow-y: auto;">
+          <table style="min-width: 100%;">
+            <thead>
+              <tr>
+                <th>Test Name (Click to View)</th>
+                <th>Subject</th>
+                <th>Time Given</th>
+                <th>Expiry Date</th>
+              </tr>
+            </thead>
+            <tbody id="tTestHistoryTableBody">
+              <tr><td colspan="4" style="padding:10px;">Loading history...</td></tr>
+            </tbody>
+          </table>
+        </div>
+        
+        <!-- STUDENT WISE RESULT TABLE (Hidden initially, opens on click) -->
+        <div id="tTestAttemptDetailsBox" style="display:none; margin-top: 18px; border-top: 2px solid var(--border-color); padding-top: 16px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <div style="font-size:13px; font-weight:800; color:#0288d1;" id="tAttemptDetailsTitle">Test Results: -</div>
+          </div>
+          <div class="table-container" style="max-height: 35vh; overflow-y: auto;">
+            <table style="min-width: 100%;">
+              <thead>
+                <tr>
+                  <th style="min-width:140px; text-align:left; padding-left:10px;">Student Name</th>
+                  <th>Status</th>
+                  <th>Marks</th>
+                  <th>Time Taken</th>
+                </tr>
+              </thead>
+              <tbody id="tTestAttemptsTableBody">
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+
+  
   <!-- WEEKLY REWARD DETAILS MODAL -->
   <div id="weeklyRewardDetailsModal" class="modal-overlay">
     <div class="modal-content" style="max-width: 480px;">
@@ -5112,6 +5176,157 @@
         refreshStudentDashboard();
       });
     };
+    // ====================================================================
+    // NEW FEATURE: TEACHER ONLINE TESTS DISPLAY, REMOVE & HISTORY ENGINE
+    // ====================================================================
+
+    // 1. Load Active Tests in Dashboard Box
+    window.loadTeacherActiveOnlineTests = function() {
+      const container = document.getElementById("tActiveOnlineTestsContainer");
+      if(!container) return;
+      
+      const testsRef = ref(db, `online_tests/${assignedClass}`);
+      onValue(testsRef, (snap) => {
+        container.innerHTML = "";
+        if (!snap.exists()) {
+          container.innerHTML = `<div style="font-size:11px; color:var(--text-muted); padding: 10px; background: rgba(0,0,0,0.02); border-radius: 8px;">No active tests found for Class ${assignedClass}.</div>`;
+          return;
+        }
+        
+        let html = "";
+        const tests = snap.val();
+        
+        for (let testId in tests) {
+          const t = tests[testId];
+          html += `
+            <div style="display:flex; justify-content:space-between; align-items:center; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; margin-bottom: 8px; background: var(--card-bg); box-shadow: 0 2px 8px rgba(0,0,0,0.02);">
+              <div>
+                <div style="font-size:13px; font-weight:800; color:var(--text-color);">${t.testName}</div>
+                <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Sub: ${t.subject} | Time: ${t.timeMinutes} Min</div>
+              </div>
+              <button class="btn-sm-del" style="background:#dc2626; color:white; padding:6px 12px; font-size:11px; border-radius:8px;" onclick="window.removeOnlineTest('${testId}')">🗑️ Remove</button>
+            </div>
+          `;
+        }
+        container.innerHTML = html;
+      });
+    };
+
+    // 2. Remove Button Functionality
+    window.removeOnlineTest = async function(testId) {
+      if(confirm("Are you sure you want to delete this test? The test will be removed for all students.")) {
+        try {
+          await remove(ref(db, `online_tests/${assignedClass}/${testId}`));
+          // Optional: You can also delete test_attempts data here if you want
+        } catch(e) {
+          alert("Error removing test: " + e.message);
+        }
+      }
+    };
+
+    // 3. Load Test History inside the New Modal
+    window.loadTeacherTestHistory = async function() {
+      const tbody = document.getElementById("tTestHistoryTableBody");
+      document.getElementById("tTestAttemptDetailsBox").style.display = "none";
+      tbody.innerHTML = `<tr><td colspan="4" style="padding:12px;">Loading history...</td></tr>`;
+      
+      try {
+        const snap = await get(ref(db, `online_tests/${assignedClass}`));
+        if (!snap.exists()) {
+          tbody.innerHTML = `<tr><td colspan="4" style="padding:12px; color:var(--text-muted);">No tests created yet.</td></tr>`;
+          return;
+        }
+        
+        const tests = snap.val();
+        let html = "";
+        for (let testId in tests) {
+          const t = tests[testId];
+          const expDate = new Date(t.expiry).toLocaleString('en-IN', {day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'});
+          
+          html += `
+            <tr style="cursor:pointer; transition: background 0.2s;" onclick="window.loadTestAttempts('${testId}', '${t.testName}')" onmouseover="this.style.background='rgba(2, 136, 209, 0.1)'" onmouseout="this.style.background='transparent'">
+              <td style="color:#0288d1; font-weight:800; text-decoration:underline;">${t.testName}</td>
+              <td>${t.subject}</td>
+              <td>${t.timeMinutes} Min</td>
+              <td style="font-size:10px;">${expDate}</td>
+            </tr>
+          `;
+        }
+        tbody.innerHTML = html;
+      } catch(e) {
+        tbody.innerHTML = `<tr><td colspan="4" style="padding:12px; color:red;">Error loading history.</td></tr>`;
+      }
+    };
+
+    // 4. Fetch Results of Kids when a Test is clicked
+    window.loadTestAttempts = async function(testId, testName) {
+      document.getElementById("tTestAttemptDetailsBox").style.display = "block";
+      document.getElementById("tAttemptDetailsTitle").innerText = `Results for: ${testName}`;
+      const tbody = document.getElementById("tTestAttemptsTableBody");
+      tbody.innerHTML = `<tr><td colspan="4" style="padding:12px;">Loading student results...</td></tr>`;
+      
+      try {
+         // Get students of this specific assigned class
+         const classStudents = getLiveStudents().filter(s => cleanClassStr(s.class) === cleanClassStr(assignedClass));
+         
+         // Fetch marks/attempts from Firebase (Assuming structure: test_attempts/testId/admnId)
+         const attemptsSnap = await get(ref(db, `test_attempts/${testId}`));
+         const attemptsData = attemptsSnap.exists() ? attemptsSnap.val() : {};
+
+         if (classStudents.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="4" style="padding:12px;">No students found in Class ${assignedClass}.</td></tr>`;
+            return;
+         }
+
+         let html = "";
+         classStudents.forEach(st => {
+            const attempt = attemptsData[st.admn];
+            if(attempt) {
+               html += `
+                 <tr>
+                   <td style="text-align:left; padding-left:10px; font-weight:800;">${st.name}</td>
+                   <td><span style="background:rgba(34, 197, 94, 0.15); color:#16a34a; padding:4px 8px; border-radius:6px; font-size:10px; font-weight:800;">Completed</span></td>
+                   <td style="font-weight:900; color:#0288d1;">${attempt.marksObtained} / ${attempt.totalMarks}</td>
+                   <td style="font-size:11px; font-weight:700;">${attempt.timeTaken || '-'} Min</td>
+                 </tr>
+               `;
+            } else {
+               html += `
+                 <tr>
+                   <td style="text-align:left; padding-left:10px; font-weight:700; color:var(--text-muted);">${st.name}</td>
+                   <td><span style="background:rgba(239, 68, 68, 0.15); color:#dc2626; padding:4px 8px; border-radius:6px; font-size:10px; font-weight:800;">Not Attempted</span></td>
+                   <td style="color:var(--text-muted);">-</td>
+                   <td style="color:var(--text-muted);">-</td>
+                 </tr>
+               `;
+            }
+         });
+         tbody.innerHTML = html;
+      } catch(e) {
+        tbody.innerHTML = `<tr><td colspan="4" style="padding:12px; color:red;">Error loading results.</td></tr>`;
+      }
+    };
+
+    // 5. Trigger Functions automatically
+    // Update OpenModal to load history when modal opens
+    const originalOpenModal = window.openModal;
+    window.openModal = function(id) {
+      originalOpenModal(id);
+      if(id === "onlineTestHistoryModal") {
+        window.loadTeacherTestHistory();
+      }
+    };
+
+    // Auto-load Active Tests when Teacher Test Tab is clicked
+    document.addEventListener("click", (e) => {
+      if(e.target.closest(".nav-item") && e.target.closest(".nav-item").innerText.includes("Test") && currentRole === "teacher") {
+        window.loadTeacherActiveOnlineTests();
+      }
+    });
+
+    // Also load it once after 2 seconds just in case it's the default screen
+    setTimeout(() => { if(currentRole === 'teacher') window.loadTeacherActiveOnlineTests(); }, 2000);
+
 
     
   </script>
