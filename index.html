@@ -596,8 +596,9 @@
     
     <div class="header-title-box">
       <div class="header-title">M.M ISLAMIC ENGLISH SCHOOL</div>
-      <div class="header-subtitle" id="portalRoleSubHeader">PORTAL DASHBOARD</div>
-      <div id="classBadgeContainer" class="class-badge" style="display:none;">Class: 1</div>
+     <!-- Search for this line in your HTML (around line 425) -->
+<div class="header-subtitle" id="portalRoleSubHeader">PORTAL DASHBOARD</div>
+ <div id="classBadgeContainer" class="class-badge" style="display:none;">Class: 1</div>
       
       <div id="studentStarsContainer" class="star-counter-badge student-only" style="display:none;" onclick="toggleStarPointsDisplay()">
         <span id="studentStarIcon">⭐</span>
@@ -2034,40 +2035,46 @@
 
   <nav id="bottomNav" class="bottom-nav" style="display: none;"></nav>
 
-  <!-- ====================================================================
-       SECTION 5: CORE ENGINE LOGIC & FIREBASE REALTIME SYNC
-       ==================================================================== -->
-    <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js";
-    // YAHAN DATABASE KA IMPORT MISSING THA JO MAINE ADD KAR DIYA HAI
-    import { getDatabase, ref, onValue, set, update, remove, child, get } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+  <script type="module">
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyBHpbgoGs7HFQ3-1tBn9BpGT4YYDaKkZB8",
-      authDomain: "mm-islamic-erp.firebaseapp.com",
-      databaseURL: "https://mm-islamic-erp-default-rtdb.firebaseio.com",
-      projectId: "mm-islamic-erp",
-      storageBucket: "mm-islamic-erp.firebasestorage.app",
-      messagingSenderId: "547338314533",
-      appId: "1:547338314533:web:3973c2b36ef8b3b01170cc"
-    };
+      /* ====================================================================
+   SECTION 5: CORE ENGINE LOGIC & FIREBASE REALTIME SYNC
+   ==================================================================== */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js";
+import { getDatabase, ref, onValue, set, update, remove, child, get } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-    const app = initializeApp(firebaseConfig);
-    
-    // YAHAN ERROR BYPASS LAGAYA HAI TAAKI APP CRASH NA HO
-    try {
-      if (typeof initializeAppCheck === 'function') {
-        const appCheck = initializeAppCheck(app, {
-          provider: new ReCaptchaEnterpriseProvider('6LefZbUtAAAAADOa8KBfn1qywMly7Ky2-UlX6zxW'),
-          isTokenAutoRefreshEnabled: true
-        });
-      }
-    } catch (err) {
-      console.warn("App Check bypass:", err);
-    }
-    
-    const db = getDatabase(app);
+// 1. ADD THIS AUTH IMPORT (MISSING IN YOUR ORIGINAL CODE)
+import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBHpbgoGs7HFQ3-1tBn9BpGT4YYDaKkZB8",
+  authDomain: "mm-islamic-erp.firebaseapp.com",
+  databaseURL: "https://mm-islamic-erp-default-rtdb.firebaseio.com",
+  projectId: "mm-islamic-erp",
+  storageBucket: "mm-islamic-erp.firebasestorage.app",
+  messagingSenderId: "547338314533",
+  appId: "1:547338314533:web:3973c2b36ef8b3b01170cc"
+};
+
+const app = initializeApp(firebaseConfig);
+
+try {
+  if (typeof initializeAppCheck === 'function') {
+    initializeAppCheck(app, {
+      provider: new ReCaptchaEnterpriseProvider('6LefZbUtAAAAADOa8KBfn1qywMly7Ky2-UlX6zxW'),
+      isTokenAutoRefreshEnabled: true
+    });
+  }
+} catch (err) {
+  console.warn("App Check bypass:", err);
+}
+
+const db = getDatabase(app);
+
+// 2. INITIALIZE FIREBASE AUTH INSTANCE
+const auth = getAuth(app);
+
 
 
     let currentRole = "admin";
@@ -2594,36 +2601,58 @@
       }
     });
 
-    addSafeListener("loginBtn", "click", () => {
-      const btn = document.getElementById("loginBtn");
-      runWithBtnSpinner(btn, "PORTAL LOGIN", async () => {
-        const u = document.getElementById("loginUsername").value.trim();
-        const p = document.getElementById("loginPassword").value.trim();
+    // REPLACE YOUR EXISTING loginBtn LISTENER WITH THIS:
+addSafeListener("loginBtn", "click", () => {
+  const btn = document.getElementById("loginBtn");
+  runWithBtnSpinner(btn, "PORTAL LOGIN", async () => {
+    const u = document.getElementById("loginUsername").value.trim();
+    const p = document.getElementById("loginPassword").value.trim();
 
-        if(!u || !p) { alert("Please enter both Username and Password."); return; }
+    if(!u || !p) { alert("Please enter both Username and Password."); return; }
 
-        if((u === "admin" && p === "admin112233") || (u === "adminnn123" && p === "7302132270@123")) {
-          localStorage.setItem("loggedUser", u);
-          localStorage.setItem("loggedRole", "admin");
-          renderDashboardForRole("admin", "1", null);
-          return;
-        }
+    // Hardcoded Master Admin Bypass (Testing)
+    if((u === "admin" && p === "admin112233") || (u === "adminnn123" && p === "7302132270@123")) {
+      localStorage.setItem("loggedUser", u);
+      localStorage.setItem("loggedRole", "admin");
+      renderDashboardForRole("admin", "1", null);
+      return;
+    }
 
-        const usersData = await safeDataFetch("users");
-        const uData = usersData ? usersData[u] : null;
+    // FIREBASE AUTH VERIFICATION (Strict Rules Access Fix)
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, u, p);
+      
+      const usersData = await safeDataFetch("users");
+      const uData = usersData ? usersData[u] : null;
 
-        if(uData && uData.password === p) {
-          localStorage.setItem("loggedUser", u);
-          localStorage.setItem("loggedRole", uData.role);
-          if(uData.assignedClass) localStorage.setItem("assignedClass", uData.assignedClass);
-          if(uData.admn) localStorage.setItem("studentAdmn", uData.admn);
-          renderDashboardForRole(uData.role, uData.assignedClass, uData.admn);
-        } else {
-          document.getElementById("loginError").style.display = "block";
-          document.getElementById("loginError").innerText = "Invalid credentials. Please try again.";
-        }
-      });
-    });
+      if (uData) {
+        localStorage.setItem("loggedUser", u);
+        localStorage.setItem("loggedRole", uData.role);
+        if(uData.assignedClass) localStorage.setItem("assignedClass", uData.assignedClass);
+        if(uData.admn) localStorage.setItem("studentAdmn", uData.admn);
+        renderDashboardForRole(uData.role, uData.assignedClass, uData.admn);
+      } else {
+        renderDashboardForRole("student", "1", u);
+      }
+    } catch (authError) {
+      // Fallback for Custom Database User Verification
+      const usersData = await safeDataFetch("users");
+      const uData = usersData ? usersData[u] : null;
+
+      if(uData && uData.password === p) {
+        localStorage.setItem("loggedUser", u);
+        localStorage.setItem("loggedRole", uData.role);
+        if(uData.assignedClass) localStorage.setItem("assignedClass", uData.assignedClass);
+        if(uData.admn) localStorage.setItem("studentAdmn", uData.admn);
+        renderDashboardForRole(uData.role, uData.assignedClass, uData.admn);
+      } else {
+        document.getElementById("loginError").style.display = "block";
+        document.getElementById("loginError").innerText = "Invalid credentials. Please try again.";
+      }
+    }
+  });
+});
+
 
     addSafeListener("logoutBtn", "click", () => { 
       localStorage.removeItem("loggedUser");
