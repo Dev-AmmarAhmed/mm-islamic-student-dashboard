@@ -2602,23 +2602,20 @@
 
         if(!u || !p) { alert("Please enter both Username and Password."); return; }
 
-        if((u === "admin" && p === "admin112233") || (u === "adminnn123" && p === "7302132270@123")) {
-          localStorage.setItem("loggedUser", u);
-          localStorage.setItem("loggedRole", "admin");
-          renderDashboardForRole("admin", "1", null);
-          return;
-        }
 
+        
         const usersData = await safeDataFetch("users");
         const uData = usersData ? usersData[u] : null;
 
         if(uData && uData.password === p) {
-          localStorage.setItem("loggedUser", u);
-          localStorage.setItem("loggedRole", uData.role);
-          if(uData.assignedClass) localStorage.setItem("assignedClass", uData.assignedClass);
-          if(uData.admn) localStorage.setItem("studentAdmn", uData.admn);
-          renderDashboardForRole(uData.role, uData.assignedClass, uData.admn);
-        } else {
+  localStorage.setItem("loggedUser", u);
+  localStorage.setItem("loggedPass", p); // Local storage me password save kiya
+  localStorage.setItem("loggedRole", uData.role);
+  if(uData.assignedClass) localStorage.setItem("assignedClass", uData.assignedClass);
+  if(uData.admn) localStorage.setItem("studentAdmn", uData.admn);
+  renderDashboardForRole(uData.role, uData.assignedClass, uData.admn);
+}
+        else {
           document.getElementById("loginError").style.display = "block";
           document.getElementById("loginError").innerText = "Invalid credentials. Please try again.";
         }
@@ -4594,9 +4591,15 @@
       }
     };
 
-    if(localStorage.getItem("loggedUser")) {
-      renderDashboardForRole(localStorage.getItem("loggedRole"), localStorage.getItem("assignedClass"), localStorage.getItem("studentAdmn"));
-    }
+    // Auto-login configuration using saved LocalStorage credentials
+const savedUser = localStorage.getItem("loggedUser");
+const savedRole = localStorage.getItem("loggedRole");
+const savedClass = localStorage.getItem("assignedClass");
+const savedAdmn = localStorage.getItem("studentAdmn");
+
+if(savedUser && savedRole) {
+  renderDashboardForRole(savedRole, savedClass, savedAdmn);
+}
 
     addSafeListener("generatePdfBtn", "click", () => {
       const btn = document.getElementById("generatePdfBtn");
