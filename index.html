@@ -1179,14 +1179,19 @@ body.dark-mode.teacher-mode {
     <!-- TEACHER DASHBOARD SECTIONS -->
  <section id="teacherTabHome" class="tab-section teacher-tab">
   
-  <!-- Teacher Portal Welcome Card (Unfolding Animated) -->
+   <!-- Teacher Portal Welcome Card (Unfolding Animated) -->
   <div class="card unfold-card">
     <div class="card-title">🏫 Teacher Portal</div>
     <div style="display: flex; justify-content: space-between; align-items: center;">
       <div>
+        <!-- Professional Teacher Name Display -->
+        <h2 id="tWelcomeTeacherName" style="font-size: 19px; font-weight: 800; color: var(--text-color); margin-bottom: 4px; letter-spacing: 0.3px;">Teacher Name</h2>
         <p style="font-size:13px; font-weight:700;">Assigned Class: <b id="tWelcomeClassText" style="color:#7c3aed;">Class 1</b></p>
         <p style="font-size:12px; color:var(--text-muted); margin-top:4px;">Manage attendance, study materials, tests, and claim daily rewards.</p>
       </div>
+
+
+      
       <!-- My Rank Card display -->
       <div style="text-align: right; background: rgba(124, 58, 237, 0.1); padding: 8px 12px; border-radius: 12px; border: 1px solid rgba(124, 58, 237, 0.3);">
         <div style="font-size: 10px; font-weight: 800; color: var(--text-muted);">MY RANK</div>
@@ -1604,19 +1609,23 @@ body.dark-mode.teacher-mode {
 
 
   
-  <!-- WEEKLY REWARD DETAILS MODAL -->
+   <!-- WEEKLY REWARD DETAILS MODAL -->
   <div id="weeklyRewardDetailsModal" class="modal-overlay">
-    <div class="modal-content" style="max-width: 480px;">
+    <div class="modal-content" style="max-width: 520px; overflow-x: hidden;">
       <div class="modal-header">
-        <span>📅 Weekly Reward Schedule</span>
+        <span>📅 Daily & Weekly Reward Schedule</span>
         <span class="close-modal" onclick="closeModal('weeklyRewardDetailsModal')">✕</span>
       </div>
       <div class="modal-body" style="padding: 16px 12px;">
-        <div class="weekdays-grid-5" id="weekdaysGridTop"></div>
-        <div class="weekends-grid-2" id="weekendsGridBottom"></div>
+        <div style="font-size:11px; font-weight:800; color:var(--text-muted); margin-bottom:8px; text-align:center;">WEEKDAYS REWARDS (+50 PTS)</div>
+        <div class="weekdays-grid-5" id="weekdaysGridTop" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; width: 100%;"></div>
+        
+        <div style="font-size:11px; font-weight:800; color:#d97706; margin-top:14px; margin-bottom:8px; text-align:center;">WEEKEND BONUS REWARDS (+80 PTS)</div>
+        <div class="weekends-grid-2" id="weekendsGridBottom" style="display: flex; justify-content: space-between; gap: 8px; width: 100%;"></div>
       </div>
     </div>
   </div>
+
 
   <!-- ADMIN MULTI-CLASS LEADERBOARD & POINTS EDIT MODAL -->
   <div id="adminLeaderboardModal" class="modal-overlay">
@@ -2940,30 +2949,34 @@ body.dark-mode.teacher-mode {
         refreshStudentDashboard();
         window.switchTab('studentTabHome', bottomNav.children[0]);
 
-      } else if(role === "teacher") {
-        document.body.classList.remove("student-mode");
-        document.body.classList.add("teacher-mode");
-        document.getElementById("portalRoleSubHeader").innerText = "TEACHERS DASHBOARD PRO";
-        document.getElementById("classBadgeContainer").style.display = "inline-block";
-        document.getElementById("classBadgeContainer").innerText = `Class: ${assignedClass}`;
-        document.getElementById("studentStarsContainer").style.display = "none";
+    } else if(role === "teacher") {
+  document.body.classList.remove("student-mode");
+  document.body.classList.add("teacher-mode");
+  document.getElementById("portalRoleSubHeader").innerText = "TEACHERS DASHBOARD PRO";
+  document.getElementById("classBadgeContainer").style.display = "inline-block";
+  document.getElementById("classBadgeContainer").innerText = `Class: ${assignedClass}`;
+  document.getElementById("studentStarsContainer").style.display = "none";
 
-        document.querySelectorAll(".admin-only").forEach(e => e.style.display = "none");
-        document.querySelectorAll(".student-only").forEach(e => e.style.display = "none");
-        document.querySelectorAll(".teacher-only").forEach(e => e.style.display = "block");
+  document.querySelectorAll(".admin-only").forEach(e => e.style.display = "none");
+  document.querySelectorAll(".student-only").forEach(e => e.style.display = "none");
+  document.querySelectorAll(".teacher-only").forEach(e => e.style.display = "block");
 
-        bottomNav.innerHTML = `
-          <div class="nav-item active" onclick="switchTab('teacherTabHome', this, event)"><div class="nav-icon">🏠</div>Home</div>
-          <div class="nav-item" onclick="switchTab('teacherTabAttend', this, event)"><div class="nav-icon">📅</div>Attend</div>
-          <div class="nav-item" onclick="switchTab('teacherTabTrackAtt', this, event)"><div class="nav-icon">🔍</div>Track</div>
-          <div class="nav-item" onclick="switchTab('teacherTabStudents', this, event)"><div class="nav-icon">👤</div>Students</div>
-          <div class="nav-item" onclick="switchTab('teacherTabPerform', this, event)"><div class="nav-icon">⭐</div>Perform</div>
-          <div class="nav-item" onclick="switchTab('teacherTabTest', this, event)"><div class="nav-icon">📋</div>Test</div>
-        `;
-        document.getElementById("tWelcomeClassText").innerText = `Class ${assignedClass}`;
-        refreshAllTeacherData();
-        window.switchTab('teacherTabHome', bottomNav.children[0]);
-      } else {
+  bottomNav.innerHTML = `
+    <div class="nav-item active" onclick="switchTab('teacherTabHome', this, event)"><div class="nav-icon">🏠</div>Home</div>
+    <div class="nav-item" onclick="switchTab('teacherTabAttend', this, event)"><div class="nav-icon">📅</div>Attend</div>
+    <div class="nav-item" onclick="switchTab('teacherTabTrackAtt', this, event)"><div class="nav-icon">🔍</div>Track</div>
+    <div class="nav-item" onclick="switchTab('teacherTabStudents', this, event)"><div class="nav-icon">👤</div>Students</div>
+    <div class="nav-item" onclick="switchTab('teacherTabPerform', this, event)"><div class="nav-icon">⭐</div>Perform</div>
+    <div class="nav-item" onclick="switchTab('teacherTabTest', this, event)"><div class="nav-icon">📋</div>Test</div>
+  `;
+  document.getElementById("tWelcomeClassText").innerText = `Class ${assignedClass}`;
+  
+  // App initialization aur role switch hote hi pure dashboard data ko auto load karna
+  window.refreshTeacherDashboardData();
+  refreshAllTeacherData();
+  window.switchTab('teacherTabHome', bottomNav.children[0]);
+}
+else {
         document.body.classList.remove("teacher-mode", "student-mode");
         document.getElementById("portalRoleSubHeader").innerText = "ADMINISTRATOR DASHBOARD PRO";
         document.getElementById("classBadgeContainer").style.display = "none";
@@ -5864,23 +5877,45 @@ window.triggerNotificationCardEntrance = function() {
 // 5. Unified Dashboard Refresh Engine
 window.checkTeacherDailyClaimStatus = async function() {
   const loggedUser = localStorage.getItem("loggedUser");
-  if(!loggedUser) return;
-  const todayKey = getTodayKey();
-  const claims = await safeDataFetch(`teacher_daily_claims/${loggedUser}/${todayKey}`);
-  
   const claimBtn = document.getElementById("tClaimDailyPointsBtn");
   const claimedBadge = document.getElementById("tDailyClaimedBadge");
-  
+
+  if (!loggedUser || !claimBtn) return;
+
+  // Verification step: Jab tak firebase se verify na ho button ko grayed aur non-pressable rakhein
+  claimBtn.disabled = true;
+  claimBtn.style.opacity = "0.5";
+  claimBtn.style.cursor = "not-allowed";
+  claimBtn.innerText = "⏳ Verifying Claim Status...";
+  if (claimedBadge) claimedBadge.style.display = "none";
+
+  const todayKey = getTodayKey();
+  const claims = await safeDataFetch(`teacher_daily_claims/${loggedUser}/${todayKey}`);
+
   if (claims === true) {
-    if(claimBtn) claimBtn.style.display = "none";
-    if(claimedBadge) claimedBadge.style.display = "block";
+    claimBtn.style.display = "none";
+    if (claimedBadge) claimedBadge.style.display = "block";
   } else {
-    if(claimBtn) claimBtn.style.display = "block";
-    if(claimedBadge) claimedBadge.style.display = "none";
+    claimBtn.style.display = "block";
+    claimBtn.disabled = false;
+    claimBtn.style.opacity = "1";
+    claimBtn.style.cursor = "pointer";
+    claimBtn.innerText = "🎁 Claim Today's Points";
+    if (claimedBadge) claimedBadge.style.display = "none";
   }
 };
 
+
 window.refreshTeacherDashboardData = async function() {
+  const loggedUser = localStorage.getItem("loggedUser");
+  if(loggedUser) {
+    const teacherData = await safeDataFetch(`teachers/${loggedUser}`);
+    const nameEl = document.getElementById("tWelcomeTeacherName");
+    if(nameEl && teacherData && teacherData.name) {
+      nameEl.innerText = teacherData.name;
+    }
+  }
+
   await window.checkTeacherDailyClaimStatus();
   await window.renderTeacherboardCardsTable();
   if (typeof window.loadTeacherBoardNotifications === 'function') {
@@ -5888,6 +5923,7 @@ window.refreshTeacherDashboardData = async function() {
   }
   window.triggerNotificationCardEntrance();
 };
+
 
 
       
