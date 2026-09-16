@@ -2368,24 +2368,33 @@ body.dark-mode.teacher-mode {
       if(appleIcon) appleIcon.href = selectedIcon;
     }
 
-    function cleanClassStr(str) {
-      if (!str) return "";
-      return String(str).replace(/class\s*/i, "").trim();
-    }
+   function cleanClassStr(str) {
+  if (!str) return "";
+  let cleaned = String(str).replace(/class\s*/i, "").trim();
+  return cleaned;
+}
 
-    // Realtime Listener for Entire DB Cache
-    onValue(ref(db), (snap) => {
-      if (snap.exists()) {
-        fullDbCache = snap.val();
-        if (fullDbCache.students) {
-          inMemoryStudentsData = fullDbCache.students;
-          if(currentRole === "admin") renderAdminStudentsDirectory();
-        }
-      } else {
-        fullDbCache = {};
-        inMemoryStudentsData = {};
+
+
+  // Realtime Listener for Entire DB Cache
+onValue(ref(db), (snap) => {
+  if (snap.exists()) {
+    fullDbCache = snap.val();
+    if (fullDbCache.students) {
+      inMemoryStudentsData = fullDbCache.students;
+      if(currentRole === "admin") renderAdminStudentsDirectory();
+      if(currentRole === "teacher") {
+        refreshAllTeacherData();
+        window.loadTeacherLeaderboard();
       }
-    });
+    }
+  } else {
+    fullDbCache = {};
+    inMemoryStudentsData = {};
+  }
+});
+
+
 
     async function safeDataFetch(refPath) {
       try {
@@ -2822,14 +2831,17 @@ body.dark-mode.teacher-mode {
       });
     });
 
-    function getLiveStudents() {
-      try { 
-        if(Array.isArray(inMemoryStudentsData)) return inMemoryStudentsData;
-        return Object.values(inMemoryStudentsData).filter(item => item && typeof item === 'object'); 
-      } catch(e) { 
-        return []; 
-      }
-    }
+ function getLiveStudents() {
+  try { 
+    if (!inMemoryStudentsData) return [];
+    if (Array.isArray(inMemoryStudentsData)) return inMemoryStudentsData.filter(Boolean);
+    return Object.values(inMemoryStudentsData).filter(item => item && typeof item === 'object'); 
+  } catch(e) { 
+    return []; 
+  }
+}
+
+
 
     async function getStudentRecord(admnId) {
       if (!admnId) return null;
@@ -3066,8 +3078,11 @@ body.dark-mode.teacher-mode {
         const currentCls = document.getElementById("adminLbClassSelect").value || "1";
         window.renderAdminClassLeaderboard(currentCls);
 
-        if(currentRole === "teacher") refreshAllTeacherData();
-      });
+     if(currentRole === "teacher") {
+  refreshAllTeacherData();
+  window.loadTeacherLeaderboard();
+}
+ });
     };
 
     window.filterAdminStudentByClass = function(cls, el) {
@@ -4865,17 +4880,21 @@ body.dark-mode.teacher-mode {
       }
     };
 
-    const savedUser = localStorage.getItem("loggedUser");
-    const savedRole = localStorage.getItem("loggedRole");
-    const savedClass = localStorage.getItem("assignedClass");
-    const savedAdmn = localStorage.getItem("studentAdmn");
+  const savedUser = localStorage.getItem("loggedUser");
+const savedRole = localStorage.getItem("loggedRole");
+const savedClass = localStorage.getItem("assignedClass");
+const savedAdmn = localStorage.getItem("studentAdmn");
 
-    if(savedUser && savedRole) {
-      renderDashboardForRole(savedRole, savedClass, savedAdmn);
-      if(savedRole === "teacher") {
-        window.refreshTeacherDashboardData();
-      }
-    }
+if(savedUser && savedRole) {
+  renderDashboardForRole(savedRole, savedClass, savedAdmn);
+  if(savedRole === "teacher") {
+    setTimeout(() => {
+      window.refreshTeacherDashboardData();
+      refreshAllTeacherData();
+    }, 500);
+  }
+}
+
 
     addSafeListener("generatePdfBtn", "click", () => {
       const btn = document.getElementById("generatePdfBtn");
@@ -4962,6 +4981,37 @@ body.dark-mode.teacher-mode {
         pdf.save(`Class_${std}_Fees_Matrix_Record.pdf`);
       });
     });
+
+
+    window.loadTeacherLeaderboard = function() {
+  const container = document.getElementById("leaderboardListContainer");
+  if(!container) return;
+
+  const targetClass = cleanClassStr(assignedClass);
+  const students = getLiveStudents().filter(s => cleanClassStr(s.class) === targetClass);
+
+  students.sort((a,b) => (b.points || 0) - (a.points || 0));
+
+  container.innerHTML = "";
+  if(students.length === 0) {
+    container.innerHTML = `<p style="padding:14px; font-size:12px; color:var(--text-muted); text-align:center;">No students registered in Class ${assignedClass}</p>`;
+    return;
+  }
+
+  students.forEach((st, idx) => {
+    const pts = st.points || 0;
+    const stars = Math.floor(pts / 10);
+    container.innerHTML += `
+      <div class="lb-row">
+        <div style="display:flex; align-items:center;">
+          <div class="lb-badge">${idx + 1}</div>
+          <span style="font-size:13px; font-weight:800;">${st.name}</span>
+        </div>
+        <span class="pts-chip" style="background:#fbbf24; color:#0f172a !important;">⭐ ${stars} (${pts} PTS)</span>
+      </div>
+    `;
+  });
+};
 
     window.downloadAttendancePdf = async function(stdVal, monthVal) {
       const { jsPDF } = window.jspdf;
