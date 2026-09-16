@@ -2915,86 +2915,97 @@ onValue(ref(db), (snap) => {
       location.reload(); 
     });
 
-    function renderDashboardForRole(role, aClass, sAdmn) {
-      currentRole = role; assignedClass = aClass || "1"; currentStudentAdmn = sAdmn || localStorage.getItem("studentAdmn");
-      document.getElementById("mainContainer").classList.remove("login-mode");
-      document.getElementById("loginScreen").classList.remove("active");
-      document.getElementById("topBar").style.display = "flex";
-      document.getElementById("bottomNav").style.display = "flex";
+  function renderDashboardForRole(role, aClass, sAdmn) {
+  currentRole = role; 
+  assignedClass = aClass || "1"; 
+  currentStudentAdmn = sAdmn || localStorage.getItem("studentAdmn");
 
-      updateAppRoleIcon(role);
+  document.getElementById("mainContainer").classList.remove("login-mode");
+  document.getElementById("loginScreen").classList.remove("active");
+  document.getElementById("topBar").style.display = "flex";
+  document.getElementById("bottomNav").style.display = "flex";
 
-      const bottomNav = document.getElementById("bottomNav");
+  updateAppRoleIcon(role);
 
-      if(role === "student") {
-        document.body.classList.remove("teacher-mode");
-        document.body.classList.add("student-mode");
-        document.getElementById("portalRoleSubHeader").innerText = "STUDENT DASHBOARD PRO";
-        document.getElementById("classBadgeContainer").style.display = "none";
-        document.getElementById("studentStarsContainer").style.display = "inline-flex";
+  const bottomNav = document.getElementById("bottomNav");
 
-        document.querySelectorAll(".admin-only").forEach(e => e.style.display = "none");
-        document.querySelectorAll(".teacher-only").forEach(e => e.style.display = "none");
-        document.querySelectorAll(".student-only").forEach(e => e.style.display = "block");
+  if(role === "student") {
+    document.body.classList.remove("teacher-mode");
+    document.body.classList.add("student-mode");
+    document.getElementById("portalRoleSubHeader").innerText = "STUDENT DASHBOARD PRO";
+    document.getElementById("classBadgeContainer").style.display = "none";
+    document.getElementById("studentStarsContainer").style.display = "inline-flex";
 
-        bottomNav.innerHTML = `
-          <div class="nav-item active" onclick="switchTab('studentTabHome', this, event)"><div class="nav-icon">🏠</div>Home</div>
-          <div class="nav-item" onclick="switchTab('studentTabAttend', this, event)"><div class="nav-icon">📅</div>Attend</div>
-          <div class="nav-item" onclick="switchTab('studentTabStudy', this, event)"><div class="nav-icon">📖</div>Study</div>
-          <div class="nav-item" onclick="switchTab('studentTabPerform', this, event)"><div class="nav-icon">⭐</div>Perform</div>
-          <div class="nav-item" onclick="switchTab('studentTabTest', this, event)"><div class="nav-icon">📋</div>Test</div>
-        `;
-        refreshStudentDashboard();
-        window.switchTab('studentTabHome', bottomNav.children[0]);
+    document.querySelectorAll(".admin-only").forEach(e => e.style.display = "none");
+    document.querySelectorAll(".teacher-only").forEach(e => e.style.display = "none");
+    document.querySelectorAll(".student-only").forEach(e => e.style.display = "block");
 
-      } else if(role === "teacher") {
-        document.body.classList.remove("student-mode");
-        document.body.classList.add("teacher-mode");
-        document.getElementById("portalRoleSubHeader").innerText = "TEACHERS DASHBOARD PRO";
-        document.getElementById("classBadgeContainer").style.display = "inline-block";
-        document.getElementById("classBadgeContainer").innerText = `Class: ${assignedClass}`;
-        document.getElementById("studentStarsContainer").style.display = "none";
+    bottomNav.innerHTML = `
+      <div class="nav-item active" onclick="switchTab('studentTabHome', this, event)"><div class="nav-icon">🏠</div>Home</div>
+      <div class="nav-item" onclick="switchTab('studentTabAttend', this, event)"><div class="nav-icon">📅</div>Attend</div>
+      <div class="nav-item" onclick="switchTab('studentTabStudy', this, event)"><div class="nav-icon">📖</div>Study</div>
+      <div class="nav-item" onclick="switchTab('studentTabPerform', this, event)"><div class="nav-icon">⭐</div>Perform</div>
+      <div class="nav-item" onclick="switchTab('studentTabTest', this, event)"><div class="nav-icon">📋</div>Test</div>
+    `;
+    refreshStudentDashboard();
+    window.switchTab('studentTabHome', bottomNav.children[0]);
 
-        document.querySelectorAll(".admin-only").forEach(e => e.style.display = "none");
-        document.querySelectorAll(".student-only").forEach(e => e.style.display = "none");
-        document.querySelectorAll(".teacher-only").forEach(e => e.style.display = "block");
+  } else if(role === "teacher") {
+    document.body.classList.remove("student-mode");
+    document.body.classList.add("teacher-mode");
+    document.getElementById("portalRoleSubHeader").innerText = "TEACHERS DASHBOARD PRO";
+    document.getElementById("classBadgeContainer").style.display = "inline-block";
+    document.getElementById("classBadgeContainer").innerText = `Class: ${assignedClass}`;
+    document.getElementById("studentStarsContainer").style.display = "none";
 
-        bottomNav.innerHTML = `
-          <div class="nav-item active" onclick="switchTab('teacherTabHome', this, event)"><div class="nav-icon">🏠</div>Home</div>
-          <div class="nav-item" onclick="switchTab('teacherTabAttend', this, event)"><div class="nav-icon">📅</div>Attend</div>
-          <div class="nav-item" onclick="switchTab('teacherTabTrackAtt', this, event)"><div class="nav-icon">🔍</div>Track</div>
-          <div class="nav-item" onclick="switchTab('teacherTabStudents', this, event)"><div class="nav-icon">👤</div>Students</div>
-          <div class="nav-item" onclick="switchTab('teacherTabPerform', this, event)"><div class="nav-icon">⭐</div>Perform</div>
-          <div class="nav-item" onclick="switchTab('teacherTabTest', this, event)"><div class="nav-icon">📋</div>Test</div>
-        `;
-        document.getElementById("tWelcomeClassText").innerText = `Class ${assignedClass}`;
-        
+    document.querySelectorAll(".admin-only").forEach(e => e.style.display = "none");
+    document.querySelectorAll(".student-only").forEach(e => e.style.display = "none");
+    document.querySelectorAll(".teacher-only").forEach(e => e.style.display = "block");
+
+    bottomNav.innerHTML = `
+      <div class="nav-item active" onclick="switchTab('teacherTabHome', this, event)"><div class="nav-icon">🏠</div>Home</div>
+      <div class="nav-item" onclick="switchTab('teacherTabAttend', this, event)"><div class="nav-icon">📅</div>Attend</div>
+      <div class="nav-item" onclick="switchTab('teacherTabTrackAtt', this, event)"><div class="nav-icon">🔍</div>Track</div>
+      <div class="nav-item" onclick="switchTab('teacherTabStudents', this, event)"><div class="nav-icon">👤</div>Students</div>
+      <div class="nav-item" onclick="switchTab('teacherTabPerform', this, event)"><div class="nav-icon">⭐</div>Perform</div>
+      <div class="nav-item" onclick="switchTab('teacherTabTest', this, event)"><div class="nav-icon">📋</div>Test</div>
+    `;
+    document.getElementById("tWelcomeClassText").innerText = `Class ${assignedClass}`;
+    
+    // Switch to home tab directly to render DOM elements
+    window.switchTab('teacherTabHome', bottomNav.children[0]);
+
+    setTimeout(() => {
+      if(typeof window.refreshTeacherDashboardData === 'function') {
         window.refreshTeacherDashboardData();
-        refreshAllTeacherData();
-        window.switchTab('teacherTabHome', bottomNav.children[0]);
-      } else {
-        document.body.classList.remove("teacher-mode", "student-mode");
-        document.getElementById("portalRoleSubHeader").innerText = "ADMINISTRATOR DASHBOARD PRO";
-        document.getElementById("classBadgeContainer").style.display = "none";
-        document.getElementById("studentStarsContainer").style.display = "none";
-
-        document.querySelectorAll(".teacher-only").forEach(e => e.style.display = "none");
-        document.querySelectorAll(".student-only").forEach(e => e.style.display = "none");
-        document.querySelectorAll(".admin-only").forEach(e => e.style.display = "block");
-
-        bottomNav.innerHTML = `
-          <div class="nav-item active" onclick="switchTab('adminTabHome', this, event)"><div class="nav-icon">🏠</div>Home</div>
-          <div class="nav-item" onclick="switchTab('adminTabStudents', this, event)"><div class="nav-icon">👤</div>Students</div>
-          <div class="nav-item" onclick="switchTab('adminTabEntry', this, event)"><div class="nav-icon">📝</div>Entry</div>
-          <div class="nav-item" onclick="switchTab('adminTabTrack', this, event)"><div class="nav-icon">🔍</div>Track</div>
-          <div class="nav-item" onclick="switchTab('adminTabAttend', this, event)"><div class="nav-icon">📅</div>Attend</div>
-          <div class="nav-item" onclick="switchTab('adminTabCard', this, event)"><div class="nav-icon">💳</div>Card</div>
-          <div class="nav-item" onclick="switchTab('adminTabExpns', this, event)"><div class="nav-icon">📊</div>Expns</div>
-        `;
-        renderAdminStudentsDirectory();
-        window.switchTab('adminTabHome', bottomNav.children[0]);
       }
-    }
+      refreshAllTeacherData();
+    }, 100);
+
+  } else {
+    document.body.classList.remove("teacher-mode", "student-mode");
+    document.getElementById("portalRoleSubHeader").innerText = "ADMINISTRATOR DASHBOARD PRO";
+    document.getElementById("classBadgeContainer").style.display = "none";
+    document.getElementById("studentStarsContainer").style.display = "none";
+
+    document.querySelectorAll(".teacher-only").forEach(e => e.style.display = "none");
+    document.querySelectorAll(".student-only").forEach(e => e.style.display = "none");
+    document.querySelectorAll(".admin-only").forEach(e => e.style.display = "block");
+
+    bottomNav.innerHTML = `
+      <div class="nav-item active" onclick="switchTab('adminTabHome', this, event)"><div class="nav-icon">🏠</div>Home</div>
+      <div class="nav-item" onclick="switchTab('adminTabStudents', this, event)"><div class="nav-icon">👤</div>Students</div>
+      <div class="nav-item" onclick="switchTab('adminTabEntry', this, event)"><div class="nav-icon">📝</div>Entry</div>
+      <div class="nav-item" onclick="switchTab('adminTabTrack', this, event)"><div class="nav-icon">🔍</div>Track</div>
+      <div class="nav-item" onclick="switchTab('adminTabAttend', this, event)"><div class="nav-icon">📅</div>Attend</div>
+      <div class="nav-item" onclick="switchTab('adminTabCard', this, event)"><div class="nav-icon">💳</div>Card</div>
+      <div class="nav-item" onclick="switchTab('adminTabExpns', this, event)"><div class="nav-icon">📊</div>Expns</div>
+    `;
+    renderAdminStudentsDirectory();
+    window.switchTab('adminTabHome', bottomNav.children[0]);
+  }
+}
+
 
     window.renderAdminClassLeaderboard = function(cls) {
       const cleanCls = cleanClassStr(cls);
@@ -4880,19 +4891,13 @@ onValue(ref(db), (snap) => {
       }
     };
 
-  const savedUser = localStorage.getItem("loggedUser");
+const savedUser = localStorage.getItem("loggedUser");
 const savedRole = localStorage.getItem("loggedRole");
 const savedClass = localStorage.getItem("assignedClass");
 const savedAdmn = localStorage.getItem("studentAdmn");
 
 if(savedUser && savedRole) {
   renderDashboardForRole(savedRole, savedClass, savedAdmn);
-  if(savedRole === "teacher") {
-    setTimeout(() => {
-      window.refreshTeacherDashboardData();
-      refreshAllTeacherData();
-    }, 500);
-  }
 }
 
 
@@ -6045,6 +6050,9 @@ if(savedUser && savedRole) {
         window.loadTeacherBoardNotifications();
       }
     };
+
+
+    
   </script>
 </body>
 </html>
