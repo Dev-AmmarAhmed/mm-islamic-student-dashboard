@@ -2368,30 +2368,24 @@ body.dark-mode.teacher-mode {
       if(appleIcon) appleIcon.href = selectedIcon;
     }
 
-   function cleanClassStr(str) {
-  if (!str) return "";
-  let cleaned = String(str).replace(/class\s*/i, "").trim();
-  return cleaned;
-}
-
-
+    function cleanClassStr(str) {
+      if (!str) return "";
+      return String(str).replace(/class\s*/i, "").trim();
+    }
 
     // Realtime Listener for Entire DB Cache
-// Realtime Listener for Entire DB Cache
-onValue(ref(db), (snap) => {
-  if (snap.exists()) {
-    fullDbCache = snap.val();
-    if (fullDbCache.students) {
-      inMemoryStudentsData = fullDbCache.students;
-      if(currentRole === "admin") renderAdminStudentsDirectory();
-      if(currentRole === "teacher") refreshAllTeacherData();
-    }
-  } else {
-    fullDbCache = {};
-    inMemoryStudentsData = {};
-  }
-});
-
+    onValue(ref(db), (snap) => {
+      if (snap.exists()) {
+        fullDbCache = snap.val();
+        if (fullDbCache.students) {
+          inMemoryStudentsData = fullDbCache.students;
+          if(currentRole === "admin") renderAdminStudentsDirectory();
+        }
+      } else {
+        fullDbCache = {};
+        inMemoryStudentsData = {};
+      }
+    });
 
     async function safeDataFetch(refPath) {
       try {
@@ -2828,17 +2822,14 @@ onValue(ref(db), (snap) => {
       });
     });
 
- function getLiveStudents() {
-  try { 
-    if (!inMemoryStudentsData) return [];
-    if (Array.isArray(inMemoryStudentsData)) return inMemoryStudentsData.filter(Boolean);
-    return Object.values(inMemoryStudentsData).filter(item => item && typeof item === 'object'); 
-  } catch(e) { 
-    return []; 
-  }
-}
-
-
+    function getLiveStudents() {
+      try { 
+        if(Array.isArray(inMemoryStudentsData)) return inMemoryStudentsData;
+        return Object.values(inMemoryStudentsData).filter(item => item && typeof item === 'object'); 
+      } catch(e) { 
+        return []; 
+      }
+    }
 
     async function getStudentRecord(admnId) {
       if (!admnId) return null;
