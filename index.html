@@ -616,6 +616,7 @@
       <div class="menu-item admin-only" onclick="openModal('registerTeacherModal')">👩‍🏫 Register Teacher</div>
       <div class="menu-item admin-only" onclick="openModal('credentialsModal')">🔑 Login IDs & Passwords</div>
       <div class="menu-item logout" id="logoutBtn">🚪 Logout</div>
+     
     </div>
   </header>
 
@@ -660,18 +661,21 @@
         <div class="drawer-item" onclick="openModal('manageStudyMaterialModal')">📚 Manage Study Material</div>
       </div>
 
-      <div class="admin-only" style="padding: 10px 18px 4px 18px; font-size:11px; font-weight:800; color:var(--text-muted);">ADMIN MASTER PANEL</div>
-      <div class="drawer-item admin-only" onclick="openModal('adminLeaderboardModal')">🏆 Class Leaderboards</div>
-      <div class="drawer-item admin-only" onclick="exportFullDatabaseJson()">📥 Export Full JSON Backup</div>
-      <div class="drawer-item admin-only" onclick="openModal('bulkStudentModal')">📋 Add Bulk Students</div>
-      <div class="drawer-item admin-only" onclick="openModal('removeFeesModal')">💳 Remove Fees Entry</div>
-      <div class="drawer-item admin-only" onclick="openModal('removeAttendModal')">📅 Remove Attendance Data</div>
-      <div class="drawer-item admin-only" onclick="openModal('removeStudentModal')">👤 Remove Student</div>
-      <div class="drawer-item admin-only" onclick="openModal('removeTeacherModal')">👩‍🏫 Remove Teacher</div>
-      <div class="drawer-item admin-only" onclick="openModal('removeExpenseModal')">📊 Remove Expense</div>
-      <div class="drawer-item admin-only" onclick="window.openLogsTab(event)">📜 Logs & Entries</div>
-
-      <div class="drawer-item admin-only" onclick="openModal('registerStudentModal')">👤 Register Student</div>
+         <!-- ADMIN DRAWER OPTIONS -->
+      <div class="admin-only" style="display:none;">
+        <div style="padding: 10px 18px 4px 18px; font-size:11px; font-weight:800; color:var(--text-muted);">ADMIN MASTER PANEL</div>
+        <div class="drawer-item" onclick="openModal('adminLeaderboardModal')">🏆 Class Leaderboards</div>
+        <div class="drawer-item" onclick="openModal('adminTeacherLeaderboardModal')">👩‍🏫 Teacher Leaderboard & Points</div>
+        <div class="drawer-item" onclick="exportFullDatabaseJson()">📥 Export Full JSON Backup</div>
+        <div class="drawer-item" onclick="openModal('bulkStudentModal')">📋 Add Bulk Students</div>
+        <div class="drawer-item" onclick="openModal('removeFeesModal')">💳 Remove Fees Entry</div>
+        <div class="drawer-item" onclick="openModal('removeAttendModal')">📅 Remove Attendance Data</div>
+        <div class="drawer-item" onclick="openModal('removeStudentModal')">👤 Remove Student</div>
+        <div class="drawer-item" onclick="openModal('removeTeacherModal')">👩‍🏫 Remove Teacher</div>
+        <div class="drawer-item" onclick="openModal('removeExpenseModal')">📊 Remove Expense</div>
+        <div class="drawer-item" onclick="window.openLogsTab(event)">📜 Logs & Entries</div>
+        <div class="drawer-item" onclick="openModal('registerStudentModal')">👤 Register Student</div>
+      </div>
 
       <div class="drawer-update-bottom">
         <div style="font-size:11px; font-weight:800; color:var(--text-muted); margin-bottom:6px;">SYSTEM MAINTENANCE</div>
@@ -1052,6 +1056,15 @@
         <p style="font-size:12px; color:var(--text-muted); margin-top:6px; margin-bottom:14px;">Use bottom tabs to mark attendance, view class students, manage performance points, and add test marks.</p>
         <button id="refreshTeacherDashboardBtn" class="btn-primary btn-purple">🔄 Refresh Dashboard</button>
       </div>
+
+            <!-- TEACHER POINTS NOTIFICATIONS BOARD -->
+      <div class="card" style="margin-top: 16px;">
+        <div class="card-title">📢 Teacherboard & Points Log</div>
+        <div id="teacherBoardContainer" style="max-height: 400px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px;">
+          <div style="font-size:12px; color:var(--text-muted); text-align:center; padding:10px;">Loading Teacherboard...</div>
+        </div>
+      </div>
+
     </section>
 
     <section id="teacherTabAttend" class="tab-section teacher-tab">
@@ -1315,7 +1328,8 @@
        SECTION 4: MODALS (POPUPS) SYSTEM INCLUDING STUDY MATERIAL MODALS
        ==================================================================== -->
 
-  <!-- TEACHER ONLINE TEST HISTORY & STUDENT RESULT MODAL -->
+
+    <!-- TEACHER ONLINE TEST HISTORY & STUDENT RESULT MODAL -->
   <div id="onlineTestHistoryModal" class="modal-overlay">
     <div class="modal-content" style="max-width: 600px;">
       <div class="modal-header">
@@ -1340,7 +1354,7 @@
             </tbody>
           </table>
         </div>
-        
+
         <!-- STUDENT WISE RESULT TABLE (Hidden initially, opens on click) -->
         <div id="tTestAttemptDetailsBox" style="display:none; margin-top: 18px; border-top: 2px solid var(--border-color); padding-top: 16px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
@@ -1365,6 +1379,62 @@
       </div>
     </div>
   </div>
+
+  <!-- ADMIN TEACHER LEADERBOARD & POINTS MODAL -->
+  <div id="adminTeacherLeaderboardModal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 520px;">
+      <div class="modal-header">
+        <span>👩‍🏫 Teacher Leaderboard & Points Manager</span>
+        <span class="close-modal" onclick="closeModal('adminTeacherLeaderboardModal')">✕</span>
+      </div>
+      <div class="modal-body">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <div style="font-size:13px; font-weight:800;">Teachers Standings</div>
+          <button onclick="openModal('addTeacherPointsModal')" class="btn-primary btn-green" style="width:auto; padding:6px 14px; font-size:11px; margin-top:0;">➕ Add / Deduct Points</button>
+        </div>
+
+        <div class="table-container" style="max-height: 50vh; overflow-y: auto;">
+          <table style="min-width: 100%;">
+            <thead>
+              <tr>
+                <th style="width:36px;">#</th>
+                <th style="text-align:left; padding-left:10px;">Teacher Name</th>
+                <th>Class</th>
+                <th style="width:110px;">Total Points</th>
+              </tr>
+            </thead>
+            <tbody id="adminTeacherLbTableBody">
+              <tr><td colspan="4">Loading Leaderboard...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADMIN ADD TEACHER POINTS MODAL -->
+  <div id="addTeacherPointsModal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span>⭐ Award / Deduct Teacher Points</span>
+        <span class="close-modal" onclick="closeModal('addTeacherPointsModal')">✕</span>
+      </div>
+      <div class="modal-body">
+        <label>Select Teacher *:</label>
+        <select id="adminTeacherSelect"><option value="">-- Select Teacher --</option></select>
+
+        <label>Points (+ / -) *:</label>
+        <input type="number" id="adminTeacherPointsInput" placeholder="e.g. 50 or -20">
+
+        <label>Reason / Note *:</label>
+        <input type="text" id="adminTeacherReasonInput" placeholder="e.g. Excellent Monthly Attendance / Late Submission">
+
+        <button id="submitTeacherPointsBtn" onclick="window.saveTeacherPointsFromAdmin()" class="btn-primary btn-orange" style="margin-top:16px;">⭐ Submit Points</button>
+      </div>
+    </div>
+  </div>
+
+
 
 
   
@@ -2348,7 +2418,10 @@
       if (mainClaimBtn) mainClaimBtn.click();
     };
 
-    window.openModal = function(id) {
+
+
+
+          window.openModal = function(id) {
       window.closeDrawer();
       const modal = document.getElementById(id);
       if(modal) modal.classList.add("active");
@@ -2359,9 +2432,24 @@
 
       if(id === "adminLeaderboardModal") {
         isAdminLbEditMode = false;
-        const clsVal = document.getElementById("adminLbClassSelect").value || "1";
+        const clsVal = document.getElementById("adminLbClassSelect") ? document.getElementById("adminLbClassSelect").value : "1";
         window.renderAdminClassLeaderboard(clsVal);
       }
+
+      if(id === "adminTeacherLeaderboardModal") {
+        if (typeof window.loadAdminTeacherLeaderboard === 'function') {
+          window.loadAdminTeacherLeaderboard();
+        }
+      }
+
+      if(id === "addTeacherPointsModal") {
+        if (typeof window.populateAdminTeacherDropdown === 'function') {
+          window.populateAdminTeacherDropdown();
+        }
+      }
+
+                 
+
 
       if(id === "registerStudentModal") {
         const liveSts = getLiveStudents();
@@ -2377,7 +2465,6 @@
         });
 
         const nextNum = (maxAdmn > 0 ? maxAdmn : liveSts.length) + 1;
-        
         const srField = document.getElementById("regSrNo");
         const admnField = document.getElementById("regAdmn");
         
@@ -2467,7 +2554,10 @@
 
       if(id === "credentialsModal") loadCredentialsVault();
       if(id === "removeTeacherModal") loadTeachersForRemoval();
+      if(id === "onlineTestHistoryModal") window.loadTeacherTestHistory();
     };
+
+            
 
     window.closeModal = function(id) {
       const modal = document.getElementById(id);
@@ -2561,7 +2651,7 @@
           for (let key of keys) { await caches.delete(key); }
         }
 
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise(r => setTimeout(r, 500))
         statusText.style.color = "#16a34a";
         statusText.innerText = "✔ Application updated to latest version! Reloading...";
         setTimeout(() => location.reload(true), 1000);
@@ -5426,14 +5516,7 @@ window.removeOnlineTest = async function(testId) {
     };
 
     // 5. Trigger Functions automatically
-    // Update OpenModal to load history when modal opens
-    const originalOpenModal = window.openModal;
-    window.openModal = function(id) {
-      originalOpenModal(id);
-      if(id === "onlineTestHistoryModal") {
-        window.loadTeacherTestHistory();
-      }
-    };
+
 
     // Auto-load Active Tests when Teacher Test Tab is clicked
     document.addEventListener("click", (e) => {
@@ -5475,6 +5558,160 @@ addSafeListener("adminGenerateAttPdfBtn", "click", () => {
         }
       });
     });
+
+
+
+          // ====================================================================
+    // TEACHERBOARD & POINTS NOTIFICATION ENGINE
+    // ====================================================================
+
+    // Populates teachers dropdown in Admin Add Points Modal
+    window.populateAdminTeacherDropdown = async function() {
+      const select = document.getElementById("adminTeacherSelect");
+      if(!select) return;
+      const teachers = await safeDataFetch("teachers");
+      select.innerHTML = '<option value="">-- Select Teacher --</option>';
+      if(teachers) {
+        Object.values(teachers).forEach(t => {
+          if(t && t.username) {
+            select.innerHTML += `<option value="${t.username}">${t.name} (Class ${t.assignedClass})</option>`;
+          }
+        });
+      }
+    };
+
+    // Admin awards or deducts points for teachers
+    window.saveTeacherPointsFromAdmin = function() {
+      const btn = document.getElementById("submitTeacherPointsBtn");
+      runWithBtnSpinner(btn, "⭐ Submit Points", async () => {
+        const username = document.getElementById("adminTeacherSelect").value;
+        const ptsVal = parseInt(document.getElementById("adminTeacherPointsInput").value);
+        const reason = document.getElementById("adminTeacherReasonInput").value.trim();
+
+        if(!username || isNaN(ptsVal) || ptsVal === 0 || !reason) {
+          alert("Please select a teacher, enter valid points, and provide a reason.");
+          return;
+        }
+
+        const teacherObj = await safeDataFetch(`teachers/${username}`);
+        if(!teacherObj) {
+          alert("Teacher details not found.");
+          return;
+        }
+
+        const currentPts = teacherObj.points || 0;
+        const newPts = currentPts + ptsVal;
+        const timestamp = Date.now();
+        const dateStr = getTodayFormattedDate();
+
+        const updates = {};
+        updates[`teachers/${username}/points`] = newPts;
+        updates[`teacher_points_logs/${timestamp}`] = {
+          id: timestamp,
+          username: username,
+          teacherName: teacherObj.name,
+          assignedClass: teacherObj.assignedClass,
+          points: ptsVal,
+          totalPoints: newPts,
+          reason: reason,
+          date: dateStr
+        };
+
+        await update(ref(db), updates);
+
+        alert(`✔ Updated Points for ${teacherObj.name}: ${ptsVal >= 0 ? '+' : ''}${ptsVal} Points!`);
+        document.getElementById("adminTeacherPointsInput").value = "";
+        document.getElementById("adminTeacherReasonInput").value = "";
+        
+        window.closeModal("addTeacherPointsModal");
+        window.loadAdminTeacherLeaderboard();
+      });
+    };
+
+    // Renders Teacher Leaderboard in Admin Modal
+    window.loadAdminTeacherLeaderboard = async function() {
+      const tbody = document.getElementById("adminTeacherLbTableBody");
+      if(!tbody) return;
+      tbody.innerHTML = `<tr><td colspan="4">Loading...</td></tr>`;
+
+      const teachersData = await safeDataFetch("teachers") || {};
+      const teachersList = Object.values(teachersData).filter(t => t && t.name);
+
+      teachersList.sort((a,b) => (b.points || 0) - (a.points || 0));
+
+      tbody.innerHTML = "";
+      if(teachersList.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" style="color:var(--text-muted); padding:12px;">No teachers registered yet.</td></tr>`;
+        return;
+      }
+
+      teachersList.forEach((t, idx) => {
+        tbody.innerHTML += `
+          <tr>
+            <td><b>${idx + 1}</b></td>
+            <td style="text-align:left; padding-left:10px; font-weight:700;">${t.name}</td>
+            <td>Class ${t.assignedClass || '-'}</td>
+            <td><span class="pts-chip" style="background:#7c3aed;">${t.points || 0} PTS</span></td>
+          </tr>
+        `;
+      });
+    };
+
+    // Renders Realtime Notification Cards Feed on Teacher Dashboard Home Page
+    window.loadTeacherBoardNotifications = function() {
+      const container = document.getElementById("teacherBoardContainer");
+      if(!container) return;
+
+      const logsRef = ref(db, "teacher_points_logs");
+      onValue(logsRef, (snap) => {
+        container.innerHTML = "";
+        if(!snap.exists()) {
+          container.innerHTML = `<div style="font-size:12px; color:var(--text-muted); text-align:center; padding:12px;">No point updates or notifications yet.</div>`;
+          return;
+        }
+
+        const logs = Object.values(snap.val());
+        // Reverse array so latest appears on top and older ones move down
+        logs.reverse();
+
+        logs.forEach(log => {
+          const isPositive = log.points >= 0;
+          const bgStyle = isPositive 
+            ? "background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.3);" 
+            : "background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3);";
+          const badgeColor = isPositive ? "#16a34a" : "#dc2626";
+
+          container.innerHTML += `
+            <div style="padding:12px 14px; border-radius:14px; ${bgStyle} display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <div style="font-size:13px; font-weight:800; color:var(--text-color);">
+                  👩‍🏫 ${log.teacherName} <span style="font-size:11px; font-weight:700; color:var(--text-muted);">(Class ${log.assignedClass})</span>
+                </div>
+                <div style="font-size:11px; font-weight:700; color:var(--text-muted); margin-top:2px;">
+                  📌 ${log.reason}
+                </div>
+                <div style="font-size:10px; color:var(--text-muted); margin-top:4px;">🕒 ${log.date}</div>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-size:16px; font-weight:900; color:${badgeColor};">
+                  ${isPositive ? '+' : ''}${log.points} PTS
+                </div>
+                <div style="font-size:10px; font-weight:800; color:var(--text-muted);">Total: ${log.totalPoints}</div>
+              </div>
+            </div>
+          `;
+        });
+      });
+    };
+
+    // Auto trigger teacher notifications listener when Teacher logs in
+    const originalRenderDashboardForRole = renderDashboardForRole;
+    renderDashboardForRole = function(role, aClass, sAdmn) {
+      originalRenderDashboardForRole(role, aClass, sAdmn);
+      if(role === "teacher") {
+        window.loadTeacherBoardNotifications();
+      }
+    };
 
     
   </script>
