@@ -4878,6 +4878,9 @@ const savedAdmn = localStorage.getItem("studentAdmn");
 
 if(savedUser && savedRole) {
   renderDashboardForRole(savedRole, savedClass, savedAdmn);
+  if(savedRole === "teacher") {
+    window.refreshTeacherDashboardData();
+  }
 }
 
     addSafeListener("generatePdfBtn", "click", () => {
@@ -5859,7 +5862,26 @@ window.triggerNotificationCardEntrance = function() {
 };
 
 // 5. Unified Dashboard Refresh Engine
+window.checkTeacherDailyClaimStatus = async function() {
+  const loggedUser = localStorage.getItem("loggedUser");
+  if(!loggedUser) return;
+  const todayKey = getTodayKey();
+  const claims = await safeDataFetch(`teacher_daily_claims/${loggedUser}/${todayKey}`);
+  
+  const claimBtn = document.getElementById("tClaimDailyPointsBtn");
+  const claimedBadge = document.getElementById("tDailyClaimedBadge");
+  
+  if (claims === true) {
+    if(claimBtn) claimBtn.style.display = "none";
+    if(claimedBadge) claimedBadge.style.display = "block";
+  } else {
+    if(claimBtn) claimBtn.style.display = "block";
+    if(claimedBadge) claimedBadge.style.display = "none";
+  }
+};
+
 window.refreshTeacherDashboardData = async function() {
+  await window.checkTeacherDailyClaimStatus();
   await window.renderTeacherboardCardsTable();
   if (typeof window.loadTeacherBoardNotifications === 'function') {
     window.loadTeacherBoardNotifications();
