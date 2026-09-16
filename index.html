@@ -2368,15 +2368,16 @@ body.dark-mode.teacher-mode {
       if(appleIcon) appleIcon.href = selectedIcon;
     }
 
-    function cleanClassStr(str) {
+   function cleanClassStr(str) {
   if (!str) return "";
   let cleaned = String(str).replace(/class\s*/i, "").trim();
   return cleaned;
 }
 
 
+
     // Realtime Listener for Entire DB Cache
-  // Realtime Listener for Entire DB Cache
+// Realtime Listener for Entire DB Cache
 onValue(ref(db), (snap) => {
   if (snap.exists()) {
     fullDbCache = snap.val();
@@ -2390,6 +2391,7 @@ onValue(ref(db), (snap) => {
     inMemoryStudentsData = {};
   }
 });
+
 
     async function safeDataFetch(refPath) {
       try {
@@ -2826,7 +2828,7 @@ onValue(ref(db), (snap) => {
       });
     });
 
-   function getLiveStudents() {
+ function getLiveStudents() {
   try { 
     if (!inMemoryStudentsData) return [];
     if (Array.isArray(inMemoryStudentsData)) return inMemoryStudentsData.filter(Boolean);
@@ -2835,6 +2837,7 @@ onValue(ref(db), (snap) => {
     return []; 
   }
 }
+
 
 
     async function getStudentRecord(admnId) {
