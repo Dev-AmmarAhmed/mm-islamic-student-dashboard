@@ -789,21 +789,22 @@ body.dark-mode.teacher-mode {
         <div class="drawer-item" onclick="openModal('manageStudyMaterialModal')">📚 Manage Study Material</div>
       </div>
 
-         <!-- ADMIN DRAWER OPTIONS -->
-      <div class="admin-only" style="display:none;">
-        <div style="padding: 10px 18px 4px 18px; font-size:11px; font-weight:800; color:var(--text-muted);">ADMIN MASTER PANEL</div>
-        <div class="drawer-item" onclick="openModal('adminLeaderboardModal')">🏆 Class Leaderboards</div>
-        <div class="drawer-item" onclick="openModal('adminTeacherLeaderboardModal')">👩‍🏫 Teacher Leaderboard & Points</div>
-        <div class="drawer-item" onclick="exportFullDatabaseJson()">📥 Export Full JSON Backup</div>
-        <div class="drawer-item" onclick="openModal('bulkStudentModal')">📋 Add Bulk Students</div>
-        <div class="drawer-item" onclick="openModal('removeFeesModal')">💳 Remove Fees Entry</div>
-        <div class="drawer-item" onclick="openModal('removeAttendModal')">📅 Remove Attendance Data</div>
-        <div class="drawer-item" onclick="openModal('removeStudentModal')">👤 Remove Student</div>
-        <div class="drawer-item" onclick="openModal('removeTeacherModal')">👩‍🏫 Remove Teacher</div>
-        <div class="drawer-item" onclick="openModal('removeExpenseModal')">📊 Remove Expense</div>
-        <div class="drawer-item" onclick="window.openLogsTab(event)">📜 Logs & Entries</div>
-        <div class="drawer-item" onclick="openModal('registerStudentModal')">👤 Register Student</div>
-      </div>
+            <!-- ADMIN DRAWER OPTIONS -->
+<div class="admin-only" style="display:none;">
+  <div style="padding: 10px 18px 4px 18px; font-size:11px; font-weight:800; color:var(--text-muted);">ADMIN MASTER PANEL</div>
+  <div class="drawer-item" onclick="openModal('adminLeaderboardModal')">🏆 Class Leaderboards</div>
+  <div class="drawer-item" onclick="openModal('adminTeacherLeaderboardModal')">👩‍🏫 Teacher Leaderboard & Points</div>
+  <div class="drawer-item" onclick="exportFullDatabaseJson()">📥 Export Full JSON Backup</div>
+  <div class="drawer-item" onclick="openModal('bulkStudentModal')">📋 Add Bulk Students</div>
+  <div class="drawer-item" onclick="openModal('manageTeacherListModal')">👩‍🏫 Teacher List & Management</div>
+  <div class="drawer-item" onclick="openModal('removeAttendModal')">📅 Remove Attendance Data</div>
+  <div class="drawer-item" onclick="openModal('removeStudentModal')">👤 Remove Student</div>
+  <div class="drawer-item" onclick="openModal('removeExpenseModal')">📊 Remove Expense</div>
+  <div class="drawer-item" onclick="window.openLogsTab(event)">📜 Logs & Entries</div>
+  <div class="drawer-item" onclick="openModal('registerStudentModal')">👤 Register Student</div>
+</div>
+
+
 
       <div class="drawer-update-bottom">
         <div style="font-size:11px; font-weight:800; color:var(--text-muted); margin-bottom:6px;">SYSTEM MAINTENANCE</div>
@@ -1519,6 +1520,78 @@ body.dark-mode.teacher-mode {
        SECTION 4: MODALS (POPUPS) SYSTEM INCLUDING STUDY MATERIAL MODALS
        ==================================================================== -->
 
+  <!-- NEW: TEACHER LIST & MANAGEMENT MODAL -->
+<div id="manageTeacherListModal" class="modal-overlay">
+  <div class="modal-content" style="max-width: 650px;">
+    <div class="modal-header">
+      <span>👩‍🏫 Teachers List & Management</span>
+      <span class="close-modal" onclick="closeModal('manageTeacherListModal')">✕</span>
+    </div>
+    <div class="modal-body">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <div style="font-size: 13px; font-weight: 800; color: var(--text-color);">Registered Teachers</div>
+        <button onclick="openModal('registerTeacherModal')" class="btn-primary btn-green" style="margin-top: 0; width: auto; padding: 6px 14px; font-size: 11px;">
+          ➕ Add Teacher
+        </button>
+      </div>
+
+      <div class="table-container" style="max-height: 55vh; overflow-y: auto;">
+        <table style="min-width: 100%;">
+          <thead>
+            <tr>
+              <th style="width: 40px;">Sr. No</th>
+              <th style="text-align: left; padding-left: 8px;">Name</th>
+              <th>Assigned Class</th>
+              <th>Username</th>
+              <th>Password</th>
+              <th style="width: 130px;">Action</th>
+            </tr>
+          </thead>
+          <tbody id="manageTeacherTableBody">
+            <tr><td colspan="6" style="padding: 12px; color: var(--text-muted);">Loading teachers...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- NEW: EDIT TEACHER DETAILS MODAL -->
+<div id="editTeacherModal" class="modal-overlay">
+  <div class="modal-content">
+    <div class="modal-header">
+      <span>✏️ Edit Teacher Details</span>
+      <span class="close-modal" onclick="closeModal('editTeacherModal')">✕</span>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editTeacherOldUsername">
+
+      <label>Teacher Name *:</label>
+      <input type="text" id="editTeacherName">
+
+      <label>Username (Read-only):</label>
+      <input type="text" id="editTeacherUser" disabled style="background-color: rgba(0,0,0,0.06) !important; font-weight: 800; cursor: not-allowed;">
+
+      <label>Password *:</label>
+      <input type="text" id="editTeacherPass">
+
+      <label>Assigned Class *:</label>
+      <select id="editTeacherClass">
+        <option value="1">Class 1</option>
+        <option value="2">Class 2</option>
+        <option value="3">Class 3</option>
+        <option value="4">Class 4</option>
+        <option value="5">Class 5</option>
+        <option value="6">Class 6</option>
+      </select>
+
+      <button id="updateTeacherBtn" onclick="window.saveUpdatedTeacherDetails()" class="btn-primary btn-green" style="margin-top: 16px;">
+        💾 Update Teacher
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- CUSTOM SYSTEM ALERT MODAL -->
 <div id="customAlertModal" class="modal-overlay" style="z-index: 99999;">
   <div class="modal-content" style="max-width: 320px; text-align: center; padding: 22px; border-radius: 20px;">
@@ -2200,16 +2273,79 @@ body.dark-mode.teacher-mode {
     </div>
   </div>
 
-  <div id="removeTeacherModal" class="modal-overlay">
-    <div class="modal-content">
-      <div class="modal-header"><span>👩‍🏫 Remove Teacher</span><span class="close-modal" onclick="closeModal('removeTeacherModal')">✕</span></div>
+    <!-- NEW: TEACHER LIST & MANAGEMENT MODAL -->
+  <div id="manageTeacherListModal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 650px;">
+      <div class="modal-header">
+        <span>👩‍🏫 Teachers List & Management</span>
+        <span class="close-modal" onclick="closeModal('manageTeacherListModal')">✕</span>
+      </div>
       <div class="modal-body">
-        <div class="table-container">
-          <table style="min-width: 100%;"><thead><tr><th>Username</th><th>Teacher Name</th><th>Class</th><th>Action</th></tr></thead><tbody id="rmTeacherBody"></tbody></table>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <div style="font-size: 13px; font-weight: 800; color: var(--text-color);">Registered Teachers</div>
+          <button onclick="openModal('registerTeacherModal')" class="btn-primary btn-green" style="margin-top: 0; width: auto; padding: 6px 14px; font-size: 11px;">
+            ➕ Add Teacher
+          </button>
+        </div>
+
+        <div class="table-container" style="max-height: 55vh; overflow-y: auto;">
+          <table style="min-width: 100%;">
+            <thead>
+              <tr>
+                <th style="width: 40px;">Sr. No</th>
+                <th style="text-align: left; padding-left: 8px;">Name</th>
+                <th>Assigned Class</th>
+                <th>Username</th>
+                <th>Password</th>
+                <th style="width: 120px;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="manageTeacherTableBody">
+              <tr><td colspan="6" style="padding: 12px; color: var(--text-muted);">Loading teachers...</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
   </div>
+
+  <!-- NEW: EDIT TEACHER DETAILS MODAL -->
+  <div id="editTeacherModal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span>✏️ Edit Teacher Details</span>
+        <span class="close-modal" onclick="closeModal('editTeacherModal')">✕</span>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="editTeacherOldUsername">
+
+        <label>Teacher Name *:</label>
+        <input type="text" id="editTeacherName">
+
+        <label>Username (Read-only):</label>
+        <input type="text" id="editTeacherUser" disabled style="background-color: rgba(0,0,0,0.06) !important; font-weight: 800; cursor: not-allowed;">
+
+        <label>Password *:</label>
+        <input type="text" id="editTeacherPass">
+
+        <label>Assigned Class *:</label>
+        <select id="editTeacherClass">
+          <option value="1">Class 1</option>
+          <option value="2">Class 2</option>
+          <option value="3">Class 3</option>
+          <option value="4">Class 4</option>
+          <option value="5">Class 5</option>
+          <option value="6">Class 6</option>
+        </select>
+
+        <button id="updateTeacherBtn" onclick="window.saveUpdatedTeacherDetails()" class="btn-primary btn-green" style="margin-top: 16px;">
+          💾 Update Teacher
+        </button>
+      </div>
+    </div>
+  </div>
+
+  
 
   <div id="registerTeacherModal" class="modal-overlay">
     <div class="modal-content">
@@ -2849,7 +2985,7 @@ window.claimTeacherPointsFromModal = function() {
       }
 
       if(id === "credentialsModal") loadCredentialsVault();
-      if(id === "removeTeacherModal") loadTeachersForRemoval();
+      if(id === "manageTeacherListModal") window.loadManageTeacherList();
       if(id === "onlineTestHistoryModal") window.loadTeacherTestHistory();
     };
 
