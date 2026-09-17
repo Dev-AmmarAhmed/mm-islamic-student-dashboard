@@ -832,10 +832,9 @@ body.dark-mode.teacher-mode {
       </div>
     </section>
 
- <!-- DEDICATED TEACHERS MANAGEMENT SECTION -->
+<!-- DEDICATED TEACHERS MANAGEMENT SECTION -->
 <section id="adminTabTeachers" class="tab-section admin-tab">
   <div class="card">
-
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; border-bottom: 2px solid var(--border-color); padding-bottom: 8px;">
       <div class="card-title" style="border: none; margin-bottom: 0;">👩‍🏫 Registered Teachers List & Management</div>
       <button onclick="openModal('registerTeacherModal')" class="btn-primary btn-green" style="margin-top: 0; width: auto; padding: 6px 14px; font-size: 11px;">
@@ -843,7 +842,25 @@ body.dark-mode.teacher-mode {
       </button>
     </div>
 
-
+    <!-- YE TABLE PEHLE MISSING THI, AB ADD HO GAYI HAI -->
+    <div class="table-container">
+      <table style="min-width: 100%;">
+        <thead>
+          <tr>
+            <th style="width: 36px;">#</th>
+            <th style="text-align: left; padding-left: 8px;">Teacher Name</th>
+            <th>Class</th>
+            <th>Username</th>
+            <th>Password</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="manageTeacherTableBody">
+          <tr><td colspan="6" style="padding: 14px; text-align: center;">⏳ Loading teachers data...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 </section>
 
      <!-- ADMIN DASHBOARD SECTIONS -->
