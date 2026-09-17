@@ -1127,7 +1127,7 @@ body.dark-mode.teacher-mode {
         </button>
       </div>
 
-      <!-- REALTIME DEFAULT SUMMARY CARD (CURRENT MONTH ANALYTICS) -->
+          <!-- REALTIME DEFAULT SUMMARY CARD (CURRENT MONTH ANALYTICS) -->
       <div class="card" style="margin-top: 14px;">
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-color); padding-bottom: 8px; margin-bottom: 12px;">
           <div class="card-title" style="border: none; margin-bottom: 0;">📅 Current Month Summary</div>
@@ -1137,19 +1137,21 @@ body.dark-mode.teacher-mode {
         </div>
 
         <div class="stats-grid">
-          <!-- BLUE CARD: ONLY CURRENT MONTH COLLECTED AMOUNT -->
-          <div class="stat-card blue" style="padding: 14px; border-radius: 16px;">
-            <span style="font-size: 11px; font-weight: 800; opacity: 0.9;">Collected Amount (<span id="entryCurrentMonthName1">-</span>)</span>
-            <h3 id="entryCollectedAmountText" style="font-size: 18px; margin-top: 6px; font-weight: 900;">₹0</h3>
+          <!-- BLUE CARD: GRADIENT & RIPPLE -->
+          <div class="stat-card blue ripple-card" style="padding: 16px; border-radius: 18px; background: linear-gradient(135deg, #0288d1 0%, #01579b 100%) !important; box-shadow: 0 6px 18px rgba(2, 136, 209, 0.35); position: relative; overflow: hidden; cursor: pointer;">
+            <span style="font-size: 11px; font-weight: 800; opacity: 0.95;">Collected Amount (<span id="entryCurrentMonthName1">-</span>)</span>
+            <h3 id="entryCollectedAmountText" style="font-size: 20px; margin-top: 6px; font-weight: 900; color: #ffffff !important;">₹0</h3>
           </div>
 
-          <!-- RED CARD: TOTAL DUE FEES UPTO CURRENT MONTH -->
-          <div class="stat-card red" style="padding: 14px; border-radius: 16px;">
-            <span style="font-size: 11px; font-weight: 800; opacity: 0.9;">Total Due Fees (Upto <span id="entryCurrentMonthName2">-</span>)</span>
-            <h3 id="entryTotalDueAmountText" style="font-size: 18px; margin-top: 6px; font-weight: 900;">₹0</h3>
+          <!-- RED CARD: GRADIENT, RIPPLE & TRIPLE-TAP ACTION -->
+          <div id="entryRedDueCard" class="stat-card red ripple-card" onclick="window.handleRedCardTouchTap()" style="padding: 16px; border-radius: 18px; background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%) !important; box-shadow: 0 6px 18px rgba(220, 38, 38, 0.35); position: relative; overflow: hidden; cursor: pointer;">
+            <span style="font-size: 11px; font-weight: 800; opacity: 0.95;">Total Due Fees (Upto <span id="entryCurrentMonthName2">-</span>)</span>
+            <h3 id="entryTotalDueAmountText" style="font-size: 20px; margin-top: 6px; font-weight: 900; color: #ffffff !important;">₹0</h3>
+            <div style="font-size: 9px; opacity: 0.8; margin-top: 4px; font-weight: 700; text-align: right;">💡 Triple tap for list</div>
           </div>
         </div>
       </div>
+
 
     </section>
 
@@ -1667,6 +1669,51 @@ body.dark-mode.teacher-mode {
   <!-- ====================================================================
        SECTION 4: MODALS (POPUPS) SYSTEM INCLUDING STUDY MATERIAL MODALS
        ==================================================================== -->
+  <!-- DETAILED FEES DUE BREAKDOWN MODAL (TRIPLE TAP TRIGGERED) -->
+  <div id="feesDueDetailModal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 620px;">
+      <div class="modal-header">
+        <span>⚠️ Detailed Fees Due Breakdown</span>
+        <span class="close-modal" onclick="closeModal('feesDueDetailModal')">✕</span>
+      </div>
+      <div class="modal-body">
+        <label>Filter by Standard / Class:</label>
+        <select id="dueModalStdSelect" onchange="window.renderFeesDueDetailTable(this.value)">
+          <option value="ALL">All Classes (Standard-wise Order)</option>
+          <option value="Nursery">Nursery</option>
+          <option value="Jr. KG">Jr. KG</option>
+          <option value="Sr. KG">Sr. KG</option>
+          <option value="1">Class 1</option>
+          <option value="2">Class 2</option>
+          <option value="3">Class 3</option>
+          <option value="4">Class 4</option>
+          <option value="5">Class 5</option>
+          <option value="6">Class 6</option>
+        </select>
+
+        <div style="font-size:12px; font-weight:800; color:var(--text-muted); margin-top:10px; margin-bottom:8px;" id="dueModalTotalSummaryText">
+          Loading Due Records...
+        </div>
+
+        <div class="table-container" style="max-height: 55vh; overflow-y: auto;">
+          <table style="min-width: 100%;">
+            <thead>
+              <tr>
+                <th style="width:36px;">Sr.</th>
+                <th style="text-align:left; padding-left:8px;">Name</th>
+                <th>Std</th>
+                <th style="text-align:left; padding-left:8px;">Due Months</th>
+                <th style="width:110px;">Total Due (₹)</th>
+              </tr>
+            </thead>
+            <tbody id="dueModalTableBody">
+              <tr><td colspan="5" style="padding:14px;">Loading due records...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
 
 
 
@@ -6617,7 +6664,27 @@ window.deleteTeacherAccount = async function(username) {
   }
 };
 
-      // REALTIME ENTRY TAB SUMMARY CALCULATION (PAID & DUE ACCORDING TO CLASS & TICKS)
+       // TRIPLE-TAP COUNTER VARIABLE
+    let redCardTapCount = 0;
+    let redCardTapTimer = null;
+
+    window.handleRedCardTouchTap = function() {
+      redCardTapCount++;
+      if (redCardTapTimer) clearTimeout(redCardTapTimer);
+
+      if (redCardTapCount === 3) {
+        redCardTapCount = 0;
+        document.getElementById("dueModalStdSelect").value = "ALL";
+        window.renderFeesDueDetailTable("ALL");
+        window.openModal("feesDueDetailModal");
+      } else {
+        redCardTapTimer = setTimeout(() => {
+          redCardTapCount = 0;
+        }, 1000); // 1 second window for 3 rapid taps
+      }
+    };
+
+    // REALTIME ENTRY TAB SUMMARY CALCULATION (OPTION B - ACCUMULATED DUE UPTO CURRENT MONTH)
     window.calculateAdminEntryTabAnalytics = async function() {
       const liveDateEl = document.getElementById("entryTabLiveDate");
       const collectedEl = document.getElementById("entryCollectedAmountText");
@@ -6634,16 +6701,15 @@ window.deleteTeacherAccount = async function(username) {
 
       // Current Month Details
       const monthNamesOrdered = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-      const currentMonthIndex = today.getMonth(); // 0 to 11
+      const currentMonthIndex = today.getMonth();
       const currentMonthName = monthNamesOrdered[currentMonthIndex];
       const currentYear = today.getFullYear();
-      const currentMonthYearStr = `${String(currentMonthIndex + 1).padStart(2, '0')}/${currentYear}`; // e.g. "09/2026"
+      const currentMonthYearStr = `${String(currentMonthIndex + 1).padStart(2, '0')}/${currentYear}`;
 
       if(monthLabel1) monthLabel1.innerText = currentMonthName;
       if(monthLabel2) monthLabel2.innerText = currentMonthName;
 
       // 2. BLUE CARD (Collected Amount in Current Month):
-      // Direct fees_entries check karega - sirf wahi entries count hongi jo September/current month me pay hui hain
       const allEntries = await safeDataFetch("fees_entries") || {};
       let totalCollectedCurrentMonth = 0;
 
@@ -6651,7 +6717,6 @@ window.deleteTeacherAccount = async function(username) {
         if(studentEntries && typeof studentEntries === 'object') {
           Object.values(studentEntries).forEach(entry => {
             if(entry && entry.date) {
-              // Date format check (DD/MM/YYYY)
               const parts = entry.date.split('/');
               if(parts.length === 3) {
                 const entryMonthYear = `${parts[1]}/${parts[2]}`;
@@ -6664,8 +6729,7 @@ window.deleteTeacherAccount = async function(username) {
         }
       });
 
-      // 3. RED CARD (Total Due Fees Upto Current Month):
-      // Har bacche ke unpaid months ka total calculation
+      // 3. RED CARD (OPTION B: Total Due Fees Upto Current Month - Active Registered Students Only)
       const academicMonths = ["June", "July", "August", "September", "October", "November", "December", "January", "February", "March", "April", "May"];
       const activeMonthsToEvaluate = [];
       for(let m of academicMonths) {
@@ -6673,22 +6737,19 @@ window.deleteTeacherAccount = async function(username) {
         if(m === currentMonthName) break;
       }
 
-      const students = getLiveStudents();
+      const liveStudents = getLiveStudents(); // Excludes deleted students
       const matrix = await safeDataFetch("fees_matrix") || {};
       let totalDueUptoCurrentMonth = 0;
 
-      students.forEach(st => {
+      liveStudents.forEach(st => {
         if(!st || !st.class || !st.admn) return;
 
-        // Class-wise Monthly Fee Rate (Nursery/KG = 400, Baaki = 500)
         const isNurseryOrKG = ["Nursery", "Jr. KG", "Sr. KG"].includes(cleanClassStr(st.class));
         const monthlyRate = isNurseryOrKG ? 400 : 500;
-
         const stMatrix = matrix[st.admn] || {};
 
         activeMonthsToEvaluate.forEach(mName => {
           const monthData = stMatrix[mName];
-          // Agar paid NAHI hai (Unpaid), tabhi add hoga
           if(!monthData || !monthData.paid) {
             totalDueUptoCurrentMonth += monthlyRate;
           }
@@ -6698,6 +6759,106 @@ window.deleteTeacherAccount = async function(username) {
       // UI Update
       collectedEl.innerText = `₹${totalCollectedCurrentMonth.toLocaleString('en-IN')}`;
       dueEl.innerText = `₹${totalDueUptoCurrentMonth.toLocaleString('en-IN')}`;
+    };
+
+    // RENDER DETAILED FEES DUE BREAKDOWN TABLE IN MODAL
+    window.renderFeesDueDetailTable = async function(selectedClass) {
+      const tbody = document.getElementById("dueModalTableBody");
+      const summaryText = document.getElementById("dueModalTotalSummaryText");
+      if (!tbody) return;
+
+      tbody.innerHTML = `<tr><td colspan="5" style="padding:14px; text-align:center;">⏳ Calculating due records...</td></tr>`;
+
+      const today = new Date();
+      const monthNamesOrdered = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+      const currentMonthName = monthNamesOrdered[today.getMonth()];
+
+      const academicMonths = ["June", "July", "August", "September", "October", "November", "December", "January", "February", "March", "April", "May"];
+      const activeMonthsToEvaluate = [];
+      for(let m of academicMonths) {
+        activeMonthsToEvaluate.push(m);
+        if(m === currentMonthName) break;
+      }
+
+      const liveStudents = getLiveStudents();
+      const matrix = await safeDataFetch("fees_matrix") || {};
+
+      let dueList = [];
+      let grandTotalDue = 0;
+
+      liveStudents.forEach(st => {
+        if(!st || !st.class || !st.admn) return;
+
+        const cleanCls = cleanClassStr(st.class);
+        if (selectedClass !== "ALL" && cleanCls !== cleanClassStr(selectedClass)) {
+          return;
+        }
+
+        const isNurseryOrKG = ["Nursery", "Jr. KG", "Sr. KG"].includes(cleanCls);
+        const monthlyRate = isNurseryOrKG ? 400 : 500;
+        const stMatrix = matrix[st.admn] || {};
+
+        let dueMonths = [];
+        let studentTotalDue = 0;
+
+        activeMonthsToEvaluate.forEach(mName => {
+          const monthData = stMatrix[mName];
+          if(!monthData || !monthData.paid) {
+            dueMonths.push(mName);
+            studentTotalDue += monthlyRate;
+          }
+        });
+
+        if (studentTotalDue > 0) {
+          grandTotalDue += studentTotalDue;
+          dueList.push({
+            admn: st.admn,
+            name: st.name || "Unknown",
+            std: cleanCls,
+            dueMonthsStr: dueMonths.join(", "),
+            totalDue: studentTotalDue
+          });
+        }
+      });
+
+      // SORTING LOGIC:
+      if (selectedClass === "ALL") {
+        // Standard-wise Order Hierarchy
+        const stdOrder = ["Nursery", "Jr. KG", "Sr. KG", "1", "2", "3", "4", "5", "6"];
+        dueList.sort((a, b) => {
+          const idxA = stdOrder.indexOf(a.std) !== -1 ? stdOrder.indexOf(a.std) : 99;
+          const idxB = stdOrder.indexOf(b.std) !== -1 ? stdOrder.indexOf(b.std) : 99;
+          if (idxA !== idxB) return idxA - idxB;
+          return a.name.localeCompare(b.name);
+        });
+      } else {
+        // Class-wise Alphabetical Order (A-Z)
+        dueList.sort((a, b) => a.name.localeCompare(b.name));
+      }
+
+      // Render Rows
+      tbody.innerHTML = "";
+      if (dueList.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" style="color:#16a34a; padding:14px; text-align:center; font-weight:800;">✔ All fees cleared for ${selectedClass === "ALL" ? "All Classes" : "Class " + selectedClass}!</td></tr>`;
+        if (summaryText) summaryText.innerText = `Total Pending Students: 0 | Total Due: ₹0`;
+        return;
+      }
+
+      if (summaryText) {
+        summaryText.innerText = `Total Pending Students: ${dueList.length} | Grand Total Due: ₹${grandTotalDue.toLocaleString('en-IN')}`;
+      }
+
+      dueList.forEach((st, idx) => {
+        tbody.innerHTML += `
+          <tr>
+            <td><b>${idx + 1}</b></td>
+            <td style="text-align:left; padding-left:8px; font-weight:700;">${st.name}</td>
+            <td><span class="class-badge" style="background:#0288d1; font-size:10px;">${st.std}</span></td>
+            <td style="text-align:left; padding-left:8px; font-size:10px; color:#dc2626; font-weight:700;">${st.dueMonthsStr}</td>
+            <td><b style="color:#dc2626;">₹${st.totalDue.toLocaleString('en-IN')}</b></td>
+          </tr>
+        `;
+      });
     };
 
 
