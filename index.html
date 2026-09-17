@@ -2518,75 +2518,95 @@ onValue(ref(db), (snap) => {
       }
     }
 
+   
+    
     window.renderWeeklyScheduleModal = async function() {
-      const student = await getStudentRecord(currentStudentAdmn);
-      if (!student) return;
+  const loggedUser = localStorage.getItem("loggedUser");
+  const loggedRole = localStorage.getItem("loggedRole");
+  
+  if (!loggedUser) return;
 
-      const userClaims = await safeDataFetch(`daily_claims/${student.admn}`) || {};
-      const today = new Date();
-      
-      const dayOfWeek = today.getDay(); 
-      const distanceToMon = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-      const mondayDate = new Date(today);
-      mondayDate.setDate(today.getDate() + distanceToMon);
+  let userClaims = {};
+  if (loggedRole === "teacher") {
+    userClaims = await safeDataFetch(`teacher_daily_claims/${loggedUser}`) || {};
+  } else {
+    const student = await getStudentRecord(currentStudentAdmn);
+    if (student) {
+      userClaims = await safeDataFetch(`daily_claims/${student.admn}`) || {};
+    }
+  }
 
-      const daysConfig = [
-        { name: "Monday", idx: 0, pts: 50, isWeekend: false },
-        { name: "Tuesday", idx: 1, pts: 50, isWeekend: false },
-        { name: "Wednesday", idx: 2, pts: 50, isWeekend: false },
-        { name: "Thursday", idx: 3, pts: 50, isWeekend: false },
-        { name: "Friday", idx: 4, pts: 50, isWeekend: false },
-        { name: "Saturday", idx: 5, pts: 80, isWeekend: true },
-        { name: "Sunday", idx: 6, pts: 80, isWeekend: true }
-      ];
+  const today = new Date();
+  const dayOfWeek = today.getDay(); 
+  const distanceToMon = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const mondayDate = new Date(today);
+  mondayDate.setDate(today.getDate() + distanceToMon);
 
-      const topGrid = document.getElementById("weekdaysGridTop");
-      const bottomGrid = document.getElementById("weekendsGridBottom");
+  const daysConfig = [
+    { name: "Mon", idx: 0, pts: 50, isWeekend: false },
+    { name: "Tue", idx: 1, pts: 50, isWeekend: false },
+    { name: "Wed", idx: 2, pts: 50, isWeekend: false },
+    { name: "Thu", idx: 3, pts: 50, isWeekend: false },
+    { name: "Fri", idx: 4, pts: 50, isWeekend: false },
+    { name: "Sat", idx: 5, pts: 80, isWeekend: true },
+    { name: "Sun", idx: 6, pts: 80, isWeekend: true }
+  ];
 
-      if (topGrid) topGrid.innerHTML = "";
-      if (bottomGrid) bottomGrid.innerHTML = "";
+  const topGrid = document.getElementById("weekdaysGridTop");
+  const bottomGrid = document.getElementById("weekendsGridBottom");
 
-      const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  if (topGrid) topGrid.innerHTML = "";
+  if (bottomGrid) bottomGrid.innerHTML = "";
 
-      daysConfig.forEach(day => {
-        const dayDate = new Date(mondayDate);
-        dayDate.setDate(mondayDate.getDate() + day.idx);
-        dayDate.setHours(0,0,0,0);
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
-        const dayKey = `${dayDate.getFullYear()}_${dayDate.getMonth() + 1}_${dayDate.getDate()}`;
-        const isClaimed = userClaims[dayKey] === true;
-        
-        const isToday = dayDate.getTime() === todayMidnight.getTime();
-        const isFuture = dayDate.getTime() > todayMidnight.getTime();
-        const isPast = dayDate.getTime() < todayMidnight.getTime();
+  daysConfig.forEach(day => {
+    const dayDate = new Date(mondayDate);
+    dayDate.setDate(mondayDate.getDate() + day.idx);
+    dayDate.setHours(0,0,0,0);
 
-        let statusBtnHtml = "";
+    const dayKey = `${dayDate.getFullYear()}_${dayDate.getMonth() + 1}_${dayDate.getDate()}`;
+    const isClaimed = userClaims[dayKey] === true;
+    
+    const isToday = dayDate.getTime() === todayMidnight.getTime();
+    const isFuture = dayDate.getTime() > todayMidnight.getTime();
+    const isPast = dayDate.getTime() < todayMidnight.getTime();
 
-        if (isClaimed) {
-          statusBtnHtml = `<button class="btn-status-claimed" onclick="window.shakeButton(this)">Claimed</button>`;
-        } else if (isToday) {
-          statusBtnHtml = `<button class="btn-primary btn-orange" style="margin-top:0; padding:4px 2px; font-size:10px;" onclick="window.claimPointsFromModal()">Claim</button>`;
-        } else if (isFuture) {
-          statusBtnHtml = `<button class="btn-status-wait" onclick="window.shakeButton(this)">Wait</button>`;
-        } else if (isPast) {
-          statusBtnHtml = `<button class="btn-status-expired" onclick="window.shakeButton(this)">Expired</button>`;
-        }
+    let statusBtnHtml = "";
 
-        const cardHtml = `
-          <div class="day-card ${day.isWeekend ? 'weekend-card' : ''} ${isClaimed ? 'claimed-box' : ''}" style="${isToday && !isClaimed ? 'border: 1.5px solid #0288d1; background: rgba(2, 136, 209, 0.12); box-shadow: 0 0 10px rgba(2, 136, 209, 0.3);' : ''}">
-            <div class="day-card-title">${day.name}</div>
-            <div class="day-card-pts">+${day.pts}</div>
-            ${statusBtnHtml}
-          </div>
-        `;
+    if (isClaimed) {
+      statusBtnHtml = `<button class="btn-status-claimed" onclick="window.shakeButton(this)">Claimed</button>`;
+    } else if (isToday) {
+      const claimHandler = loggedRole === "teacher" ? "window.claimTeacherPointsFromModal()" : "window.claimPointsFromModal()";
+      statusBtnHtml = `<button class="btn-primary btn-orange" style="margin-top:0; padding:4px 2px; font-size:10px;" onclick="${claimHandler}">Claim</button>`;
+    } else if (isFuture) {
+      statusBtnHtml = `<button class="btn-status-wait" onclick="window.shakeButton(this)">Wait</button>`;
+    } else if (isPast) {
+      statusBtnHtml = `<button class="btn-status-expired" onclick="window.shakeButton(this)">Expired</button>`;
+    }
 
-        if (day.isWeekend) {
-          if (bottomGrid) bottomGrid.innerHTML += cardHtml;
-        } else {
-          if (topGrid) topGrid.innerHTML += cardHtml;
-        }
-      });
-    };
+    const cardHtml = `
+      <div class="day-card ${day.isWeekend ? 'weekend-card' : ''} ${isClaimed ? 'claimed-box' : ''}" style="${isToday && !isClaimed ? 'border: 1.5px solid #0288d1; background: rgba(2, 136, 209, 0.12); box-shadow: 0 0 10px rgba(2, 136, 209, 0.3);' : ''}">
+        <div class="day-card-title">${day.name}</div>
+        <div class="day-card-pts">+${day.pts}</div>
+        ${statusBtnHtml}
+      </div>
+    `;
+
+    if (day.isWeekend) {
+      if (bottomGrid) bottomGrid.innerHTML += cardHtml;
+    } else {
+      if (topGrid) topGrid.innerHTML += cardHtml;
+    }
+  });
+};
+
+window.claimTeacherPointsFromModal = function() {
+  window.closeModal("weeklyRewardDetailsModal");
+  const mainClaimBtn = document.getElementById("tClaimDailyPointsBtn");
+  if (mainClaimBtn) mainClaimBtn.click();
+};
+
 
     window.shakeButton = function(btn) {
       btn.classList.add("shake-btn");
@@ -5743,58 +5763,83 @@ if(savedUser && savedRole) {
 
     let teacherLastRank = null;
 
-    window.claimTeacherDailyPoints = async function() {
-      const btn = document.getElementById("tClaimDailyPointsBtn");
-      const loggedUser = localStorage.getItem("loggedUser");
-      if(!loggedUser) return;
 
-      btn.disabled = true;
-      const todayKey = getTodayKey();
+    
+   window.claimTeacherDailyPoints = async function() {
+  const btn = document.getElementById("tClaimDailyPointsBtn");
+  const loggedUser = localStorage.getItem("loggedUser");
+  if(!loggedUser || !btn) return;
+
+  // Immediate UI Lock to prevent multiple clicks
+  btn.disabled = true;
+  btn.innerText = "⌛ Verifying Database...";
+
+  const todayKey = getTodayKey();
+
+  try {
+    // Direct Async Verification with Database first
+    const claimSnap = await safeDataFetch(`teacher_daily_claims/${loggedUser}/${todayKey}`);
+
+    if (claimSnap === true) {
+      alert("You have already collected today's point!");
+      btn.style.display = "none";
+      const claimedBadge = document.getElementById("tDailyClaimedBadge");
+      if (claimedBadge) claimedBadge.style.display = "block";
+      return;
+    }
+
+    // Flying Point Visual Effect Execution
+    const btnRect = btn.getBoundingClientRect();
+    const flyEl = document.createElement("div");
+    flyEl.className = "flying-point";
+    flyEl.innerText = "+50 PTS";
+    flyEl.style.left = `${btnRect.left + 20}px`;
+    flyEl.style.top = `${btnRect.top}px`;
+    document.body.appendChild(flyEl);
+
+    const targetCard = document.getElementById(`tbCard_${loggedUser}`);
+    let targetX = window.innerWidth / 2;
+    let targetY = 100;
+    
+    if (targetCard) {
+      const cardRect = targetCard.getBoundingClientRect();
+      targetX = cardRect.left + cardRect.width - 40;
+      targetY = cardRect.top + 10;
+    }
+
+    setTimeout(() => {
+      flyEl.style.left = `${targetX}px`;
+      flyEl.style.top = `${targetY}px`;
+      flyEl.style.opacity = "0";
+      flyEl.style.transform = "scale(1.4)";
+    }, 100);
+
+    setTimeout(async () => {
+      flyEl.remove();
       
-      const btnRect = btn.getBoundingClientRect();
-      const flyEl = document.createElement("div");
-      flyEl.className = "flying-point";
-      flyEl.innerText = "+50 PTS";
-      flyEl.style.left = `${btnRect.left + 20}px`;
-      flyEl.style.top = `${btnRect.top}px`;
-      document.body.appendChild(flyEl);
+      const teacherData = await safeDataFetch(`teachers/${loggedUser}`) || {};
+      const currentPts = teacherData.points || 0;
+      const newPts = currentPts + 50;
 
-      const targetCard = document.getElementById(`tbCard_${loggedUser}`);
-      let targetX = window.innerWidth / 2;
-      let targetY = 100;
-      
-      if (targetCard) {
-        const cardRect = targetCard.getBoundingClientRect();
-        targetX = cardRect.left + cardRect.width - 40;
-        targetY = cardRect.top + 10;
-      }
+      const updates = {};
+      updates[`teachers/${loggedUser}/points`] = newPts;
+      updates[`teacher_daily_claims/${loggedUser}/${todayKey}`] = true;
 
-      setTimeout(() => {
-        flyEl.style.left = `${targetX}px`;
-        flyEl.style.top = `${targetY}px`;
-        flyEl.style.opacity = "0";
-        flyEl.style.transform = "scale(1.4)";
-      }, 100);
+      await update(ref(db), updates);
 
-      setTimeout(async () => {
-        flyEl.remove();
-        
-        const teacherData = await safeDataFetch(`teachers/${loggedUser}`) || {};
-        const currentPts = teacherData.points || 0;
-        const newPts = currentPts + 50;
+      btn.style.display = "none";
+      const claimedBadge = document.getElementById("tDailyClaimedBadge");
+      if (claimedBadge) claimedBadge.style.display = "block";
 
-        const updates = {};
-        updates[`teachers/${loggedUser}/points`] = newPts;
-        updates[`teacher_daily_claims/${loggedUser}/${todayKey}`] = true;
+      window.refreshTeacherDashboardData();
+    }, 1200);
 
-        await update(ref(db), updates);
-
-        document.getElementById("tClaimDailyPointsBtn").style.display = "none";
-        document.getElementById("tDailyClaimedBadge").style.display = "block";
-
-        window.refreshTeacherDashboardData();
-      }, 1500);
-    };
+  } catch (err) {
+    console.error("Point Verification Error:", err);
+    btn.disabled = false;
+    btn.innerText = "🎁 Claim Today's Points";
+  }
+};
 
     window.renderTeacherboardCardsTable = async function() {
       const container = document.getElementById("teacherboardTableCardsContainer");
