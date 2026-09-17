@@ -833,7 +833,7 @@ body.dark-mode.teacher-mode {
       transition: all 1.2s cubic-bezier(0.25, 1, 0.5, 1);
     }
 
-    /* ONLINE TEST INTERFACE STYLES */
+    /*  INTERFACE STYLES */
     .test-card-pending {
       border: 2px solid #f59e0b !important;
       background: rgba(245, 158, 11, 0.08) !important;
@@ -2578,7 +2578,8 @@ body.dark-mode.teacher-mode {
     </div>
   </div>
 
-  <!-- CREATE ONLINE TEST MODAL -->
+
+    <!-- CREATE ONLINE TEST MODAL -->
   <div id="createOnlineTestModal" class="modal-overlay">
     <div class="modal-content" style="max-width:550px;">
       <div class="modal-header">
@@ -2607,7 +2608,11 @@ body.dark-mode.teacher-mode {
           <label>Assignment Completion Date & Time (Auto-Delete Expiry) *:</label>
           <input type="datetime-local" id="cTestExpiryDateTime">
 
-          <button id="continueTestBuilderBtn" class="btn-primary btn-purple" style="margin-top:16px;">Continue ➔</button>
+          <!-- FLEX CONTAINER FOR LEFT CONTRIBUTE & RIGHT CONTINUE BUTTONS -->
+          <div style="display: flex; gap: 10px; margin-top: 16px;">
+            <button type="button" class="btn-primary btn-orange" style="flex: 1; margin-top: 0;" onclick="openModal('contributeJsonModal')">📥 Contribute Test</button>
+            <button type="button" id="continueTestBuilderBtn" class="btn-primary btn-purple" style="flex: 1; margin-top: 0;">Continue ➔</button>
+          </div>
         </div>
 
         <div id="testQuestionsBuilderStep" style="display:none; margin-top:10px;">
@@ -2622,6 +2627,23 @@ body.dark-mode.teacher-mode {
       </div>
     </div>
   </div>
+
+  <!-- CONTRIBUTE TEST JSON MODAL -->
+  <div id="contributeJsonModal" class="modal-overlay">
+    <div class="modal-content" style="max-width:500px;">
+      <div class="modal-header">
+        <span>📥 Paste Test JSON Code</span>
+        <span class="close-modal" onclick="closeModal('contributeJsonModal')">✕</span>
+      </div>
+      <div class="modal-body">
+        <label>Paste JSON Code Here *:</label>
+        <textarea id="jsonCodeInput" rows="10" placeholder='[&#10;  {&#10;    "q": "Question here?",&#10;    "options": ["Opt A", "Opt B", "Opt C", "Opt D"],&#10;    "correct": 0&#10;  }&#10;]' style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; font-family: monospace; font-size: 12px; background: var(--input-bg); color: var(--text-color); outline: none;"></textarea>
+        
+        <button id="checkJsonBtn" class="btn-primary btn-blue" style="margin-top: 14px;" onclick="window.processAndCheckJsonCode()">🔍 Check & Parse JSON</button>
+      </div>
+    </div>
+  </div>
+
 
   <!-- STUDENT LIVE TEST PORTAL MODAL -->
   <div id="studentLiveTestModal" class="modal-overlay">
@@ -2648,6 +2670,67 @@ body.dark-mode.teacher-mode {
        SECTION 5: CORE ENGINE LOGIC & FIREBASE REALTIME SYNC (FIXED)
        ==================================================================== -->
   <script type="module">
+
+
+        // Global Variable to Hold Auto-Filled Questions from JSON
+    let autoFilledJsonQuestions = null;
+
+    // JSON Parse and Check Function
+    window.processAndCheckJsonCode = function() {
+      const btn = document.getElementById("checkJsonBtn");
+      const jsonText = document.getElementById("jsonCodeInput").value.trim();
+
+      if (!jsonText) {
+        alert("Please paste valid JSON code inside the text box.");
+        return;
+      }
+
+      runWithBtnSpinner(btn, "🔍 Check & Parse JSON", async () => {
+        try {
+          const parsed = JSON.parse(jsonText);
+
+          if (!Array.isArray(parsed) || parsed.length === 0) {
+            alert("Invalid JSON format! The JSON must be a non-empty array of questions.");
+            return;
+          }
+
+          // Validation of JSON Structure
+          let isValid = true;
+          parsed.forEach(item => {
+            if (!item.q || !Array.isArray(item.options) || item.options.length !== 4 || typeof item.correct !== 'number') {
+              isValid = false;
+            }
+          });
+
+          if (!isValid) {
+            alert("JSON format error! Ensure every item contains 'q', 'options' (array of 4 items), and 'correct' (index 0-3).");
+            return;
+          }
+
+          // Store JSON data globally
+          autoFilledJsonQuestions = parsed;
+          const questionCount = parsed.length;
+
+          // Set and Grayed Out No. of Questions Field
+          const numQInput = document.getElementById("cTestNumQuestions");
+          if (numQInput) {
+            numQInput.value = questionCount;
+            numQInput.disabled = true;
+            numQInput.style.backgroundColor = "rgba(0,0,0,0.12)";
+            numQInput.style.cursor = "not-allowed";
+          }
+
+          alert(`✔ JSON Validated Successfully!\nTotal Questions Counted: ${questionCount}`);
+
+          // Close JSON Modal and Re-show Main Create Test Card
+          window.closeModal("contributeJsonModal");
+          window.openModal("createOnlineTestModal");
+
+        } catch (err) {
+          alert("JSON Parsing Error! Please check your code syntax (e.g., quotes, commas).\nError: " + err.message);
+        }
+      });
+    };
 
         // ====================================================================
     // UNIVERSAL NATIVE CUSTOM SELECT ENGINE
@@ -3254,11 +3337,22 @@ window.claimTeacherPointsFromModal = function() {
         document.getElementById("bulkTotalMarksInput").value = "";
       }
 
-      if(id === "createOnlineTestModal") {
-        populateClassSubjectsDropdown();
-        document.getElementById("testFormConfigStep").style.display = "block";
-        document.getElementById("testQuestionsBuilderStep").style.display = "none";
-      }
+        if(id === "createOnlineTestModal") {
+     populateClassSubjectsDropdown();
+     document.getElementById("testFormConfigStep").style.display = "block";
+     document.getElementById("testQuestionsBuilderStep").style.display = "none";
+
+     // Agar JSON source nahi h, toh input field normal reset karein
+     if(!autoFilledJsonQuestions) {
+       const numQInput = document.getElementById("cTestNumQuestions");
+       if(numQInput) {
+         numQInput.disabled = false;
+         numQInput.style.backgroundColor = "";
+         numQInput.style.cursor = "";
+         numQInput.value = "";
+       }
+     }
+   }
 
       if(id === "credentialsModal") loadCredentialsVault();
       if(id === "manageTeacherListModal") window.loadManageTeacherList();
@@ -5870,61 +5964,73 @@ if(savedUser && savedRole) {
       }
     }
 
-    addSafeListener("continueTestBuilderBtn", "click", () => {
-      const name = document.getElementById("cTestName").value.trim();
-      const subject = document.getElementById("cTestSubjectSelect").value;
-      const numQ = parseInt(document.getElementById("cTestNumQuestions").value);
-      const marksPerQ = parseFloat(document.getElementById("cTestMarksPerQ").value);
-      const timeMins = parseInt(document.getElementById("cTestTimeMinutes").value);
-      const expiry = document.getElementById("cTestExpiryDateTime").value;
+   addSafeListener("continueTestBuilderBtn", "click", () => {
+   const name = document.getElementById("cTestName").value.trim();
+   const subject = document.getElementById("cTestSubjectSelect").value;
+   const numQ = parseInt(document.getElementById("cTestNumQuestions").value);
+   const marksPerQ = parseFloat(document.getElementById("cTestMarksPerQ").value);
+   const timeMins = parseInt(document.getElementById("cTestTimeMinutes").value);
+   const expiry = document.getElementById("cTestExpiryDateTime").value;
 
-      if(!name || !subject || isNaN(numQ) || isNaN(marksPerQ) || isNaN(timeMins) || !expiry) {
-        alert("Please fill all details correctly before continuing.");
-        return;
-      }
+   if(!name || !subject || isNaN(numQ) || isNaN(marksPerQ) || isNaN(timeMins) || !expiry) {
+     alert("Please fill all details correctly before continuing.");
+     return;
+   }
 
-      if(numQ <= 0 || numQ > 50) {
-        alert("Number of questions must be between 1 and 50.");
-        return;
-      }
+   if(numQ <= 0 || numQ > 50) {
+     alert("Number of questions must be between 1 and 50.");
+     return;
+   }
 
-      const qContainer = document.getElementById("questionsContainer");
-      qContainer.innerHTML = "";
+   const qContainer = document.getElementById("questionsContainer");
+   qContainer.innerHTML = "";
 
-      for(let i = 1; i <= numQ; i++) {
-        qContainer.innerHTML += `
-          <div class="q-box" style="padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; margin-bottom: 12px; background: rgba(0,0,0,0.02);">
-            <label style="font-weight: 800; color: #0288d1;">Question ${i}:</label>
-            <input type="text" class="q-text-input" placeholder="Type question statement here..." style="margin-bottom: 8px;">
-            
-            <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); margin-top: 4px;">Options & Correct Answer:</div>
-            
-            <div class="opt-row" style="display:flex; align-items:center; gap:8px; margin-top:4px;">
-              <input type="radio" name="correct_opt_${i}" value="0" checked>
-              <input type="text" class="q-opt-input-${i}" placeholder="Option A">
-            </div>
-            
-            <div class="opt-row" style="display:flex; align-items:center; gap:8px; margin-top:4px;">
-              <input type="radio" name="correct_opt_${i}" value="1">
-              <input type="text" class="q-opt-input-${i}" placeholder="Option B">
-            </div>
-            
-            <div class="opt-row" style="display:flex; align-items:center; gap:8px; margin-top:4px;">
-              <input type="radio" name="correct_opt_${i}" value="2">
-              <input type="text" class="q-opt-input-${i}" placeholder="Option C">
-            </div>
-            
-            <div class="opt-row" style="display:flex; align-items:center; gap:8px; margin-top:4px;">
-              <input type="radio" name="correct_opt_${i}" value="3">
-              <input type="text" class="q-opt-input-${i}" placeholder="Option D">
-            </div>
-          </div>
-        `;
-      }
+   // Check if questions are coming from JSON
+   const isJsonMode = autoFilledJsonQuestions && autoFilledJsonQuestions.length === numQ;
 
-      document.getElementById("testFormConfigStep").style.display = "none";
-      document.getElementById("testQuestionsBuilderStep").style.display = "block";
-    });
+   for(let i = 1; i <= numQ; i++) {
+     const jsonQ = isJsonMode ? autoFilledJsonQuestions[i - 1] : null;
+     const qStatement = jsonQ ? jsonQ.q : "";
+     const optA = jsonQ ? jsonQ.options[0] : "";
+     const optB = jsonQ ? jsonQ.options[1] : "";
+     const optC = jsonQ ? jsonQ.options[2] : "";
+     const optD = jsonQ ? jsonQ.options[3] : "";
+     const correctIndex = jsonQ ? jsonQ.correct : 0;
+
+     qContainer.innerHTML += `
+       <div class="q-box" style="padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; margin-bottom: 12px; background: rgba(0,0,0,0.02);">
+         <label style="font-weight: 800; color: #0288d1;">Question ${i}:</label>
+         <input type="text" class="q-text-input" value="${qStatement}" placeholder="Type question statement here..." style="margin-bottom: 8px;">
+
+         <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); margin-top: 4px;">Options & Correct Answer:</div>
+
+         <div class="opt-row" style="display:flex; align-items:center; gap:8px; margin-top:4px;">
+           <input type="radio" name="correct_opt_${i}" value="0" ${correctIndex === 0 ? 'checked' : ''}>
+           <input type="text" class="q-opt-input-${i}" value="${optA}" placeholder="Option A">
+         </div>
+
+         <div class="opt-row" style="display:flex; align-items:center; gap:8px; margin-top:4px;">
+           <input type="radio" name="correct_opt_${i}" value="1" ${correctIndex === 1 ? 'checked' : ''}>
+           <input type="text" class="q-opt-input-${i}" value="${optB}" placeholder="Option B">
+         </div>
+
+         <div class="opt-row" style="display:flex; align-items:center; gap:8px; margin-top:4px;">
+           <input type="radio" name="correct_opt_${i}" value="2" ${correctIndex === 2 ? 'checked' : ''}>
+           <input type="text" class="q-opt-input-${i}" value="${optC}" placeholder="Option C">
+         </div>
+
+         <div class="opt-row" style="display:flex; align-items:center; gap:8px; margin-top:4px;">
+           <input type="radio" name="correct_opt_${i}" value="3" ${correctIndex === 3 ? 'checked' : ''}>
+           <input type="text" class="q-opt-input-${i}" value="${optD}" placeholder="Option D">
+         </div>
+       </div>
+     `;
+   }
+
+   document.getElementById("testFormConfigStep").style.display = "none";
+   document.getElementById("testQuestionsBuilderStep").style.display = "block";
+ });
+
 
     addSafeListener("submitFinalTestBtn", "click", () => {
       const btn = document.getElementById("submitFinalTestBtn");
@@ -5980,10 +6086,14 @@ if(savedUser && savedRole) {
         };
 
         await set(ref(db, `online_tests/${cleanClass}/${testId}`), testObject);
+alert(`✔ Online Test "${name}" published successfully for Class ${assignedClass}!`);
 
-        alert(`✔ Online Test "${name}" published successfully for Class ${assignedClass}!`);
-        window.closeModal("createOnlineTestModal");
-      });
+// Variable Reset
+autoFilledJsonQuestions = null;
+document.getElementById("jsonCodeInput").value = "";
+
+window.closeModal("createOnlineTestModal");
+ });
     });
 
     async function loadStudentDueTests() {
