@@ -832,9 +832,10 @@ body.dark-mode.teacher-mode {
       </div>
     </section>
 
-    <!-- DEDICATED TEACHERS MANAGEMENT SECTION -->
+ <!-- DEDICATED TEACHERS MANAGEMENT SECTION -->
 <section id="adminTabTeachers" class="tab-section admin-tab">
   <div class="card">
+
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; border-bottom: 2px solid var(--border-color); padding-bottom: 8px;">
       <div class="card-title" style="border: none; margin-bottom: 0;">👩‍🏫 Registered Teachers List & Management</div>
       <button onclick="openModal('registerTeacherModal')" class="btn-primary btn-green" style="margin-top: 0; width: auto; padding: 6px 14px; font-size: 11px;">
@@ -842,24 +843,7 @@ body.dark-mode.teacher-mode {
       </button>
     </div>
 
-    <div class="table-container" style="max-height: 70vh; overflow-y: auto;">
-      <table style="min-width: 100%;">
-        <thead>
-          <tr>
-            <th style="width: 45px;">Sr. No</th>
-            <th style="text-align: left; padding-left: 8px;">Name</th>
-            <th>Assigned Class</th>
-            <th>Username</th>
-            <th>Password</th>
-            <th style="width: 130px;">Action</th>
-          </tr>
-        </thead>
-        <tbody id="manageTeacherTableBody">
-          <tr><td colspan="6" style="padding: 14px; color: var(--text-muted);">Loading teachers...</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
+
 </section>
 
      <!-- ADMIN DASHBOARD SECTIONS -->
@@ -2219,42 +2203,14 @@ body.dark-mode.teacher-mode {
   <div id="removeStudentModal" class="modal-overlay">
     <div class="modal-content">
       <div class="modal-header"><span>👤 Remove Student</span><span class="close-modal" onclick="closeModal('removeStudentModal')">✕</span></div>
-      <div class="modal-body">
-        <label>Select Class:</label>
-        <select id="rmStdClassSelect">
-          <option value="">-- Select Class --</option>
-          <option value="Nursery">Nursery</option><option value="Jr. KG">Jr. KG</option><option value="Sr. KG">Sr. KG</option>
-          <option value="1">Class 1</option><option value="2">Class 2</option><option value="3">Class 3</option><option value="4">Class 4</option><option value="5">Class 5</option><option value="6">Class 6</option>
-        </select>
-        <div id="rmStudentArea" class="table-container" style="display:none; margin-top:10px;">
-          <table style="min-width: 100%;"><thead><tr><th>Admn</th><th>Student Name</th><th>Action</th></tr></thead><tbody id="rmStudentBody"></tbody></table>
-        </div>
+
       </div>
     </div>
-  </div>
-
-
-        <div class="table-container" style="max-height: 55vh; overflow-y: auto;">
-          <table style="min-width: 100%;">
-            <thead>
-              <tr>
-                <th style="width: 40px;">Sr. No</th>
-                <th style="text-align: left; padding-left: 8px;">Name</th>
-                <th>Assigned Class</th>
-                <th>Username</th>
-                <th>Password</th>
-                <th style="width: 120px;">Action</th>
-              </tr>
-            </thead>
-            <tbody id="manageTeacherTableBody">
-              <tr><td colspan="6" style="padding: 12px; color: var(--text-muted);">Loading teachers...</td></tr>
-            </tbody>
-          </table>
-        </div>
+  
       
 
   <!-- NEW: EDIT TEACHER DETAILS MODAL -->
-  < id="editTeacherModal" class="modal-overlay">
+  <div id="editTeacherModal" class="modal-overlay">
     <div class="modal-content">
       <div class="modal-header">
         <span>✏️ Edit Teacher Details</span>
@@ -2287,7 +2243,8 @@ body.dark-mode.teacher-mode {
         </button>
       </div>
     </div>
-  
+  </div>
+
 
   
 
