@@ -598,9 +598,23 @@ body.dark-mode.teacher-mode {
     #editMatrixTable th:not(:first-child), #editMatrixTable td:not(:first-child) { width: 42px; min-width: 42px; max-width: 42px; text-align: center; }
 
     .paid-cell { color: #22c55e !important; font-weight: 800; background-color: rgba(34, 197, 94, 0.12); }
-    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
-    .stat-card { padding: 16px; border-radius: 14px; color: white !important; text-align: center; box-shadow: 0 4px 14px rgba(0,0,0,0.12); }
-    .stat-card.blue { background: linear-gradient(135deg, #0288d1 0%, #01579b 100%); }
+       .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+    .stat-card { 
+      padding: 16px; 
+      border-radius: 18px; 
+      color: white !important; 
+      text-align: center; 
+      box-shadow: 0 6px 18px rgba(0,0,0,0.15);
+      transition: transform 0.15s cubic-bezier(0.2, 0, 0.13, 2), box-shadow 0.15s ease !important;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      cursor: pointer;
+    }
+    .stat-card:active {
+      transform: scale(0.94) translateY(3px) !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2) !important;
+    }
+ .stat-card.blue { background: linear-gradient(135deg, #0288d1 0%, #01579b 100%); }
     .stat-card.red { background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%); }
     .stat-card h3 { font-size: 20px; font-weight: 900; margin-top: 4px; color: white !important; }
 
@@ -1191,20 +1205,22 @@ body.dark-mode.teacher-mode {
           </div>
         </div>
 
-        <div class="stats-grid">
-          <!-- BLUE CARD: GRADIENT & RIPPLE -->
-          <div class="stat-card blue ripple-card" style="padding: 16px; border-radius: 18px; background: linear-gradient(135deg, #0288d1 0%, #01579b 100%) !important; box-shadow: 0 6px 18px rgba(2, 136, 209, 0.35); position: relative; overflow: hidden; cursor: pointer;">
+               <div class="stats-grid">
+          <!-- BLUE CARD: GRADIENT & TRIPLE-TAP ACTION FOR PAID LIST -->
+          <div id="entryBlueCollectedCard" class="stat-card blue ripple-card" onclick="window.handleBlueCardTouchTap()" style="padding: 16px; border-radius: 18px; background: linear-gradient(135deg, #0288d1 0%, #01579b 100%) !important; box-shadow: 0 6px 18px rgba(2, 136, 209, 0.35); position: relative; overflow: hidden;">
             <span style="font-size: 11px; font-weight: 800; opacity: 0.95;">Collected Amount (<span id="entryCurrentMonthName1">-</span>)</span>
             <h3 id="entryCollectedAmountText" style="font-size: 20px; margin-top: 6px; font-weight: 900; color: #ffffff !important;">₹0</h3>
+            <div style="font-size: 9px; opacity: 0.85; margin-top: 4px; font-weight: 700; text-align: right;">💡 Triple tap for Paid list</div>
           </div>
 
-          <!-- RED CARD: GRADIENT, RIPPLE & TRIPLE-TAP ACTION -->
-          <div id="entryRedDueCard" class="stat-card red ripple-card" onclick="window.handleRedCardTouchTap()" style="padding: 16px; border-radius: 18px; background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%) !important; box-shadow: 0 6px 18px rgba(220, 38, 38, 0.35); position: relative; overflow: hidden; cursor: pointer;">
+          <!-- RED CARD: GRADIENT & TRIPLE-TAP ACTION FOR UNPAID LIST -->
+          <div id="entryRedDueCard" class="stat-card red ripple-card" onclick="window.handleRedCardTouchTap()" style="padding: 16px; border-radius: 18px; background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%) !important; box-shadow: 0 6px 18px rgba(220, 38, 38, 0.35); position: relative; overflow: hidden;">
             <span style="font-size: 11px; font-weight: 800; opacity: 0.95;">Total Due Fees (Upto <span id="entryCurrentMonthName2">-</span>)</span>
             <h3 id="entryTotalDueAmountText" style="font-size: 20px; margin-top: 6px; font-weight: 900; color: #ffffff !important;">₹0</h3>
-            <div style="font-size: 9px; opacity: 0.8; margin-top: 4px; font-weight: 700; text-align: right;">💡 Triple tap for list</div>
+            <div style="font-size: 9px; opacity: 0.85; margin-top: 4px; font-weight: 700; text-align: right;">💡 Triple tap for Unpaid list</div>
           </div>
         </div>
+
       </div>
 
 
@@ -1741,12 +1757,13 @@ body.dark-mode.teacher-mode {
   
   
   <!-- DETAILED FEES DUE BREAKDOWN MODAL (TRIPLE TAP TRIGGERED) -->
-  <div id="feesDueDetailModal" class="modal-overlay">
+  <  <div id="feesDueDetailModal" class="modal-overlay">
     <div class="modal-content" style="max-width: 620px;">
       <div class="modal-header">
-        <span>⚠️ Detailed Fees Due Breakdown</span>
+        <span id="feesModalHeaderTitle">⚠️ Detailed Fees Breakdown</span>
         <span class="close-modal" onclick="closeModal('feesDueDetailModal')">✕</span>
       </div>
+
       <div class="modal-body">
         <label>Filter by Standard / Class:</label>
         <select id="dueModalStdSelect" onchange="window.renderFeesDueDetailTable(this.value)">
@@ -6816,25 +6833,157 @@ window.deleteTeacherAccount = async function(username) {
   }
 };
 
-       // TRIPLE-TAP COUNTER VARIABLE
+          // TRIPLE-TAP COUNTER VARIABLES
     let redCardTapCount = 0;
     let redCardTapTimer = null;
+    let blueCardTapCount = 0;
+    let blueCardTapTimer = null;
+    let currentFeeListMode = "UNPAID"; // "UNPAID" or "PAID"
 
+    // 1. RED CARD TRIPLE TAP HANDLER (UNPAID LIST)
     window.handleRedCardTouchTap = function() {
       redCardTapCount++;
       if (redCardTapTimer) clearTimeout(redCardTapTimer);
 
       if (redCardTapCount === 3) {
         redCardTapCount = 0;
+        currentFeeListMode = "UNPAID";
+        document.getElementById("feesModalHeaderTitle").innerText = "⚠️ Detailed Unpaid Fees Breakdown";
         document.getElementById("dueModalStdSelect").value = "ALL";
         window.renderFeesDueDetailTable("ALL");
         window.openModal("feesDueDetailModal");
       } else {
         redCardTapTimer = setTimeout(() => {
           redCardTapCount = 0;
-        }, 1000); // 1 second window for 3 rapid taps
+        }, 800); // 800ms threshold for 3 rapid taps
       }
     };
+
+    // 2. BLUE CARD TRIPLE TAP HANDLER (PAID LIST)
+    window.handleBlueCardTouchTap = function() {
+      blueCardTapCount++;
+      if (blueCardTapTimer) clearTimeout(blueCardTapTimer);
+
+      if (blueCardTapCount === 3) {
+        blueCardTapCount = 0;
+        currentFeeListMode = "PAID";
+        document.getElementById("feesModalHeaderTitle").innerText = "✔ Detailed Paid Fees Breakdown";
+        document.getElementById("dueModalStdSelect").value = "ALL";
+        window.renderFeesDueDetailTable("ALL");
+        window.openModal("feesDueDetailModal");
+      } else {
+        blueCardTapTimer = setTimeout(() => {
+          blueCardTapCount = 0;
+        }, 800);
+      }
+    };
+
+    // 3. RENDER DETAILED FEES BREAKDOWN TABLE (PAID AND UNPAID BOTH)
+    window.renderFeesDueDetailTable = async function(selectedClass) {
+      const tbody = document.getElementById("dueModalTableBody");
+      const summaryText = document.getElementById("dueModalTotalSummaryText");
+      if (!tbody) return;
+
+      tbody.innerHTML = `<tr><td colspan="5" style="padding:14px; text-align:center;">⏳ Fetching ${currentFeeListMode.toLowerCase()} records...</td></tr>`;
+
+      const today = new Date();
+      const monthNamesOrdered = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+      const currentMonthName = monthNamesOrdered[today.getMonth()];
+
+      const academicMonths = ["June", "July", "August", "September", "October", "November", "December", "January", "February", "March", "April", "May"];
+      const activeMonthsToEvaluate = [];
+      for(let m of academicMonths) {
+        activeMonthsToEvaluate.push(m);
+        if(m === currentMonthName) break;
+      }
+
+      const liveStudents = getLiveStudents();
+      const matrix = await safeDataFetch("fees_matrix") || {};
+
+      let resultList = [];
+      let grandTotalAmount = 0;
+
+      liveStudents.forEach(st => {
+        if(!st || !st.class || !st.admn) return;
+
+        const cleanCls = cleanClassStr(st.class);
+        if (selectedClass !== "ALL" && cleanCls !== cleanClassStr(selectedClass)) {
+          return;
+        }
+
+        const isNurseryOrKG = ["Nursery", "Jr. KG", "Sr. KG"].includes(cleanCls);
+        const monthlyRate = isNurseryOrKG ? 400 : 500;
+        const stMatrix = matrix[st.admn] || {};
+
+        let matchedMonths = [];
+        let studentTotalAmount = 0;
+
+        activeMonthsToEvaluate.forEach(mName => {
+          const monthData = stMatrix[mName];
+          const isPaid = monthData && monthData.paid;
+
+          if (currentFeeListMode === "UNPAID" && !isPaid) {
+            matchedMonths.push(mName);
+            studentTotalAmount += monthlyRate;
+          } else if (currentFeeListMode === "PAID" && isPaid) {
+            matchedMonths.push(mName);
+            studentTotalAmount += (parseFloat(monthData.amount) || monthlyRate);
+          }
+        });
+
+        if (matchedMonths.length > 0) {
+          grandTotalAmount += studentTotalAmount;
+          resultList.push({
+            admn: st.admn,
+            name: st.name || "Unknown",
+            std: cleanCls,
+            monthsStr: matchedMonths.join(", "),
+            totalAmount: studentTotalAmount
+          });
+        }
+      });
+
+      // SORTING LOGIC:
+      if (selectedClass === "ALL") {
+        const stdOrder = ["Nursery", "Jr. KG", "Sr. KG", "1", "2", "3", "4", "5", "6"];
+        resultList.sort((a, b) => {
+          const idxA = stdOrder.indexOf(a.std) !== -1 ? stdOrder.indexOf(a.std) : 99;
+          const idxB = stdOrder.indexOf(b.std) !== -1 ? stdOrder.indexOf(b.std) : 99;
+          if (idxA !== idxB) return idxA - idxB;
+          return a.name.localeCompare(b.name);
+        });
+      } else {
+        resultList.sort((a, b) => a.name.localeCompare(b.name));
+      }
+
+      // Render Rows
+      tbody.innerHTML = "";
+      if (resultList.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" style="color:var(--text-muted); padding:14px; text-align:center; font-weight:800;">No ${currentFeeListMode.toLowerCase()} records found for ${selectedClass === "ALL" ? "All Classes" : "Class " + selectedClass}!</td></tr>`;
+        if (summaryText) summaryText.innerText = `Total Students: 0 | Total Amount: ₹0`;
+        return;
+      }
+
+      if (summaryText) {
+        summaryText.innerText = `Total ${currentFeeListMode === "PAID" ? "Paid" : "Pending"} Students: ${resultList.length} | Total ${currentFeeListMode === "PAID" ? "Collected" : "Due"}: ₹${grandTotalAmount.toLocaleString('en-IN')}`;
+      }
+
+      resultList.forEach((st, idx) => {
+        const isPaidMode = currentFeeListMode === "PAID";
+        const colorStyle = isPaidMode ? "#16a34a" : "#dc2626";
+
+        tbody.innerHTML += `
+          <tr>
+            <td><b>${idx + 1}</b></td>
+            <td style="text-align:left; padding-left:8px; font-weight:700;">${st.name}</td>
+            <td><span class="class-badge" style="background:#0288d1; font-size:10px;">${st.std}</span></td>
+            <td style="text-align:left; padding-left:8px; font-size:10px; color:${colorStyle}; font-weight:700;">${st.monthsStr}</td>
+            <td><b style="color:${colorStyle};">₹${st.totalAmount.toLocaleString('en-IN')}</b></td>
+          </tr>
+        `;
+      });
+    };
+
 
     // REALTIME ENTRY TAB SUMMARY CALCULATION (OPTION B - ACCUMULATED DUE UPTO CURRENT MONTH)
     window.calculateAdminEntryTabAnalytics = async function() {
