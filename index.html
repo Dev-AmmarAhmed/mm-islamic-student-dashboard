@@ -27,6 +27,61 @@
   <style>
 
     /* ====================================================================
+   NATIVE CUSTOM SELECT & SHEET STYLING
+   ==================================================================== */
+
+/* Select Elements ko Clickable Card Look Dena */
+select {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%230288d1%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 14px top 50% !important;
+  background-size: 10px auto !important;
+  padding-right: 36px !important;
+  cursor: pointer;
+}
+
+/* Custom Select Sheet Item Option */
+.custom-select-option-item {
+  padding: 13px 16px;
+  margin-bottom: 6px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-color);
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+body.dark-mode .custom-select-option-item {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.custom-select-option-item:active {
+  transform: scale(0.98);
+  background: rgba(2, 136, 209, 0.15);
+}
+
+.custom-select-option-item.selected {
+  background: rgba(2, 136, 209, 0.15) !important;
+  border-color: #0288d1 !important;
+  color: #0288d1 !important;
+}
+
+body.dark-mode .custom-select-option-item.selected {
+  color: #38bdf8 !important;
+  border-color: #38bdf8 !important;
+}
+
+
+    /* ====================================================================
    PREMIUM BUTTON STYLING, DEEP SHADOWS & RIPPLE WAVE EFFECT
    ==================================================================== */
 
@@ -1379,7 +1434,7 @@ body.dark-mode.teacher-mode {
   <div class="card unfold-card daily-reward-card" style="position: relative;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
       <div style="font-size:11px; font-weight:800; color:#d97706; text-transform:uppercase; letter-spacing:0.5px;">🎁 DAILY REWARD POINTS</div>
-      <a href="javascript:void(0)" onclick="openModal('weeklyRewardDetailsModal')" style="font-size:11px; font-weight:800; color:#7c3aed; text-decoration:none;">Details &rarr;</a>
+      <a href="java:void(0)" onclick="openModal('weeklyRewardDetailsModal')" style="font-size:11px; font-weight:800; color:#7c3aed; text-decoration:none;">Details &rarr;</a>
     </div>
     <h3 id="tDailyRewardTitleText" style="font-size:16px; font-weight:900; color:var(--text-color); margin:4px 0;">+50 Points Today</h3>
     <p id="tDailyRewardSubText" style="font-size:11px; font-weight:700; color:var(--text-muted); margin-bottom:10px;">Claim your daily bonus points!</p>  
@@ -1668,7 +1723,23 @@ body.dark-mode.teacher-mode {
 
   <!-- ====================================================================
        SECTION 4: MODALS (POPUPS) SYSTEM INCLUDING STUDY MATERIAL MODALS
-       ==================================================================== -->
+  ==================================================================== -->
+
+    <!-- UNIVERSAL NATIVE CUSTOM SELECT SHEET MODAL -->
+  <div id="customSelectModal" class="modal-overlay" style="z-index: 100000;">
+    <div class="modal-content" style="max-width: 380px; border-radius: 24px; padding: 0; overflow: hidden; animation: slideUp 0.25s cubic-bezier(0.25, 1, 0.5, 1);">
+      <div class="modal-header" style="background: var(--header-bg); padding: 16px 20px;">
+        <span id="customSelectTitle" style="font-size: 15px; font-weight: 800; color: #ffffff;">Select Option</span>
+        <span class="close-modal" onclick="window.closeCustomSelectSheet()">✕</span>
+      </div>
+      <div id="customSelectOptionsContainer" style="max-height: 50vh; overflow-y: auto; padding: 10px 14px;">
+        <!-- Options dynamically populated here -->
+      </div>
+    </div>
+  </div>
+
+  
+  
   <!-- DETAILED FEES DUE BREAKDOWN MODAL (TRIPLE TAP TRIGGERED) -->
   <div id="feesDueDetailModal" class="modal-overlay">
     <div class="modal-content" style="max-width: 620px;">
@@ -2560,6 +2631,87 @@ body.dark-mode.teacher-mode {
        SECTION 5: CORE ENGINE LOGIC & FIREBASE REALTIME SYNC (FIXED)
        ==================================================================== -->
   <script type="module">
+
+        // ====================================================================
+    // UNIVERSAL NATIVE CUSTOM SELECT ENGINE
+    // ====================================================================
+    let activeSelectTarget = null;
+
+    window.openCustomSelectSheet = function(selectEl) {
+      if(!selectEl) return;
+      activeSelectTarget = selectEl;
+
+      const modal = document.getElementById("customSelectModal");
+      const titleEl = document.getElementById("customSelectTitle");
+      const container = document.getElementById("customSelectOptionsContainer");
+
+      if(!modal || !container) return;
+
+      // Label find karne ki koshish (Select ke upar wala <label> tag)
+      let labelText = "Select Option";
+      const parent = selectEl.parentElement;
+      if (parent) {
+        const prevLabel = selectEl.previousElementSibling;
+        if (prevLabel && prevLabel.tagName === "LABEL") {
+          labelText = prevLabel.innerText.replace("*", "").trim();
+        }
+      }
+      if(titleEl) titleEl.innerText = labelText;
+
+      container.innerHTML = "";
+
+      const options = Array.from(selectEl.options);
+      options.forEach(opt => {
+        if(opt.value === "" && opt.disabled) return; // Skip placeholder headers if needed
+
+        const isSelected = selectEl.value === opt.value;
+        const item = document.createElement("div");
+        item.className = `custom-select-option-item ${isSelected ? 'selected' : ''}`;
+        item.innerHTML = `
+          <span>${opt.text}</span>
+          ${isSelected ? '<span style="font-size:14px; color:#0288d1;">✔</span>' : ''}
+        `;
+
+        item.onclick = function() {
+          selectEl.value = opt.value;
+          // Trigger standard change event for logic handlers
+          selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+          window.closeCustomSelectSheet();
+        };
+
+        container.appendChild(item);
+      });
+
+      modal.classList.add("active");
+    };
+
+    window.closeCustomSelectSheet = function() {
+      const modal = document.getElementById("customSelectModal");
+      if(modal) modal.classList.remove("active");
+      activeSelectTarget = null;
+    };
+
+    // Global Click Interceptor: Override default select behavior on mobile/desktop
+    document.addEventListener("mousedown", function(e) {
+      const selectTarget = e.target.closest("select");
+      if (selectTarget && !selectTarget.disabled) {
+        e.preventDefault();
+        selectTarget.blur(); // Prevent browser native picker
+        window.openCustomSelectSheet(selectTarget);
+      }
+    }, true);
+
+    document.addEventListener("touchstart", function(e) {
+      const selectTarget = e.target.closest("select");
+      if (selectTarget && !selectTarget.disabled) {
+        e.preventDefault();
+        selectTarget.blur();
+        window.openCustomSelectSheet(selectTarget);
+      }
+    }, { passive: false, capture: true });
+
+
+    
 // GLOBAL RIPPLE WAVE EFFECT ON BUTTON CLICK
 document.addEventListener("click", function (e) {
   const target = e.target.closest(".btn-primary, .btn-sm-del, .icon-btn, .class-chip, .nav-item, .drawer-item");
