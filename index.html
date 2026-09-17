@@ -6467,7 +6467,7 @@ window.deleteTeacherAccount = async function(username) {
   }
 };
 
-    // REALTIME ENTRY TAB SUMMARY CALCULATION (PAID & DUE ACCORDING TO CLASS & TICKS)
+      // REALTIME ENTRY TAB SUMMARY CALCULATION (PAID & DUE ACCORDING TO CLASS & TICKS)
     window.calculateAdminEntryTabAnalytics = async function() {
       const liveDateEl = document.getElementById("entryTabLiveDate");
       const collectedEl = document.getElementById("entryCollectedAmountText");
@@ -6482,17 +6482,41 @@ window.deleteTeacherAccount = async function(username) {
       const options = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' };
       liveDateEl.innerText = today.toLocaleDateString('en-IN', options);
 
-      // Current Month Auto Name (e.g. "September")
+      // Current Month Details
       const monthNamesOrdered = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-      const currentMonthName = monthNamesOrdered[today.getMonth()];
+      const currentMonthIndex = today.getMonth(); // 0 to 11
+      const currentMonthName = monthNamesOrdered[currentMonthIndex];
+      const currentYear = today.getFullYear();
+      const currentMonthYearStr = `${String(currentMonthIndex + 1).padStart(2, '0')}/${currentYear}`; // e.g. "09/2026"
 
       if(monthLabel1) monthLabel1.innerText = currentMonthName;
       if(monthLabel2) monthLabel2.innerText = currentMonthName;
 
-      // Academic Months List
+      // 2. BLUE CARD (Collected Amount in Current Month):
+      // Direct fees_entries check karega - sirf wahi entries count hongi jo September/current month me pay hui hain
+      const allEntries = await safeDataFetch("fees_entries") || {};
+      let totalCollectedCurrentMonth = 0;
+
+      Object.values(allEntries).forEach(studentEntries => {
+        if(studentEntries && typeof studentEntries === 'object') {
+          Object.values(studentEntries).forEach(entry => {
+            if(entry && entry.date) {
+              // Date format check (DD/MM/YYYY)
+              const parts = entry.date.split('/');
+              if(parts.length === 3) {
+                const entryMonthYear = `${parts[1]}/${parts[2]}`;
+                if(entryMonthYear === currentMonthYearStr) {
+                  totalCollectedCurrentMonth += (parseFloat(entry.amount) || 0);
+                }
+              }
+            }
+          });
+        }
+      });
+
+      // 3. RED CARD (Total Due Fees Upto Current Month):
+      // Har bacche ke unpaid months ka total calculation
       const academicMonths = ["June", "July", "August", "September", "October", "November", "December", "January", "February", "March", "April", "May"];
-      
-      // Active months upto Current Month
       const activeMonthsToEvaluate = [];
       for(let m of academicMonths) {
         activeMonthsToEvaluate.push(m);
@@ -6501,40 +6525,31 @@ window.deleteTeacherAccount = async function(username) {
 
       const students = getLiveStudents();
       const matrix = await safeDataFetch("fees_matrix") || {};
-
-      let totalCollectedCurrentMonth = 0;
       let totalDueUptoCurrentMonth = 0;
 
       students.forEach(st => {
         if(!st || !st.class || !st.admn) return;
 
-        // Verify Class-wise Fee Rate
+        // Class-wise Monthly Fee Rate (Nursery/KG = 400, Baaki = 500)
         const isNurseryOrKG = ["Nursery", "Jr. KG", "Sr. KG"].includes(cleanClassStr(st.class));
         const monthlyRate = isNurseryOrKG ? 400 : 500;
 
         const stMatrix = matrix[st.admn] || {};
 
-        // 2. COLLECTED AMOUNT (Blue Card): Only current month paid status & ticks amount check
-        const currentMonthData = stMatrix[currentMonthName];
-        if(currentMonthData && currentMonthData.paid) {
-          // Verify paid amount from record or default monthly rate
-          const paidAmt = parseFloat(currentMonthData.amount) || monthlyRate;
-          totalCollectedCurrentMonth += paidAmt;
-        }
-
-        // 3. TOTAL DUE FEES (Red Card): Check unticked/unpaid months upto current month
         activeMonthsToEvaluate.forEach(mName => {
           const monthData = stMatrix[mName];
+          // Agar paid NAHI hai (Unpaid), tabhi add hoga
           if(!monthData || !monthData.paid) {
             totalDueUptoCurrentMonth += monthlyRate;
           }
         });
       });
 
-      // Update UI with INR Symbol
+      // UI Update
       collectedEl.innerText = `₹${totalCollectedCurrentMonth.toLocaleString('en-IN')}`;
       dueEl.innerText = `₹${totalDueUptoCurrentMonth.toLocaleString('en-IN')}`;
     };
+
 
     
   </script>
