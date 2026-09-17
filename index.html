@@ -865,7 +865,7 @@ body.dark-mode.teacher-mode {
 
     
 
-     <!-- ADMIN DASHBOARD SECTIONS -->
+       <!-- ADMIN DASHBOARD SECTIONS -->
     <section id="adminTabHome" class="tab-section admin-tab">
       
       <!-- CARD 1: FEES OVERVIEW DASHBOARD -->
@@ -889,22 +889,7 @@ body.dark-mode.teacher-mode {
         <button id="getStatsBtn" class="btn-primary">Get Stats</button>
       </div>
 
-      <!-- CARD 2: TEACHERBOARD STANDINGS (SEPARATE CARD PATCH) -->
-      <div class="card unfold-card" style="margin-top: 16px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-color); padding-bottom: 8px; margin-bottom: 12px;">
-          <div class="card-title" style="border: none; margin-bottom: 0;">🏆 Teacherboard Standings</div>
-          <button onclick="openModal('addTeacherPointsModal')" class="btn-primary btn-orange" style="margin-top: 0; width: auto; padding: 6px 14px; font-size: 11px;">
-            ⭐ Add / Deduct Points
-          </button>
-        </div>
-
-        <!-- LIST AB HEADING KE NICHE RENDER HOGI -->
-        <div id="adminHomeTeacherboardCardsContainer">
-          <div style="font-size: 12px; color: var(--text-muted); text-align: center; padding: 10px;">Loading Teacherboard...</div>
-        </div>
-      </div>
-
-      <!-- STATS DISPLAY AREA -->
+      <!-- STATS DISPLAY AREA (AB TEACHERBOARD KE UPR SHOW HOGA) -->
       <div class="card" id="homeStatsArea" style="display:none; margin-top: 16px;">
         <div class="card-title">Class Analytics Summary</div>
         <div class="stats-grid">
@@ -920,7 +905,22 @@ body.dark-mode.teacher-mode {
         </div>
       </div>
 
+      <!-- CARD 2: TEACHERBOARD STANDINGS -->
+      <div class="card unfold-card" style="margin-top: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-color); padding-bottom: 8px; margin-bottom: 12px;">
+          <div class="card-title" style="border: none; margin-bottom: 0;">🏆 Teacherboard Standings</div>
+          <button onclick="openModal('addTeacherPointsModal')" class="btn-primary btn-orange" style="margin-top: 0; width: auto; padding: 6px 14px; font-size: 11px;">
+            ⭐ Add / Deduct Points
+          </button>
+        </div>
+
+        <div id="adminHomeTeacherboardCardsContainer">
+          <div style="font-size: 12px; color: var(--text-muted); text-align: center; padding: 10px;">Loading Teacherboard...</div>
+        </div>
+      </div>
+
     </section>
+
 
 
     <!-- LOGS & RECENT ENTRIES TAB SECTION -->
@@ -1029,15 +1029,43 @@ body.dark-mode.teacher-mode {
       </div>
     </section>
 
-    <section id="adminTabEntry" class="tab-section admin-tab">
-      <div class="card" style="text-align: center; padding: 30px 20px;">
+       <section id="adminTabEntry" class="tab-section admin-tab">
+      
+      <!-- ADD FEES ENTRY BUTTON CARD -->
+      <div class="card" style="text-align: center; padding: 20px;">
         <div class="card-title" style="border:none; margin-bottom: 8px;">Fees Entry Control</div>
-        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 20px;">Click the button below to record student fee payments & receipts.</p>
-        <button onclick="openModal('feesEntryModal')" class="btn-primary btn-green" style="font-size: 15px; padding: 15px; text-transform: uppercase;">
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">Click the button below to record student fee payments & receipts.</p>
+        <button onclick="openModal('feesEntryModal')" class="btn-primary btn-green" style="font-size: 15px; padding: 14px; text-transform: uppercase;">
           🟢 + Add Fees Entry
         </button>
       </div>
+
+      <!-- REALTIME DEFAULT SUMMARY CARD (CURRENT MONTH ANALYTICS) -->
+      <div class="card" style="margin-top: 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-color); padding-bottom: 8px; margin-bottom: 12px;">
+          <div class="card-title" style="border: none; margin-bottom: 0;">📅 Current Month Summary</div>
+          <div id="entryTabLiveDate" style="font-size: 11px; font-weight: 800; color: #0288d1; background: rgba(2, 136, 209, 0.1); padding: 4px 10px; border-radius: 12px;">
+            DD/MM/YYYY
+          </div>
+        </div>
+
+        <div class="stats-grid">
+          <!-- BLUE CARD: ONLY CURRENT MONTH COLLECTED AMOUNT -->
+          <div class="stat-card blue" style="padding: 14px; border-radius: 16px;">
+            <span style="font-size: 11px; font-weight: 800; opacity: 0.9;">Collected Amount (<span id="entryCurrentMonthName1">-</span>)</span>
+            <h3 id="entryCollectedAmountText" style="font-size: 18px; margin-top: 6px; font-weight: 900;">₹0</h3>
+          </div>
+
+          <!-- RED CARD: TOTAL DUE FEES UPTO CURRENT MONTH -->
+          <div class="stat-card red" style="padding: 14px; border-radius: 16px;">
+            <span style="font-size: 11px; font-weight: 800; opacity: 0.9;">Total Due Fees (Upto <span id="entryCurrentMonthName2">-</span>)</span>
+            <h3 id="entryTotalDueAmountText" style="font-size: 18px; margin-top: 6px; font-weight: 900;">₹0</h3>
+          </div>
+        </div>
+      </div>
+
     </section>
+
 
     <section id="adminTabTrack" class="tab-section admin-tab">
       <div class="card">
@@ -3402,6 +3430,11 @@ if (role === "admin") {
         t.classList.remove("active", "animate-in");
       });
 
+            if(tabId === 'adminTabEntry') {
+        window.calculateAdminEntryTabAnalytics();
+      }
+
+      
       if(el) {
         const rect = el.getBoundingClientRect();
         targetTab.style.transformOrigin = `${rect.left + rect.width / 2}px ${rect.top + rect.height / 2}px`;
@@ -6434,6 +6467,74 @@ window.deleteTeacherAccount = async function(username) {
   }
 };
 
+    // REALTIME ENTRY TAB SUMMARY CALCULATION (PAID & DUE ACCORDING TO CLASS & TICKS)
+    window.calculateAdminEntryTabAnalytics = async function() {
+      const liveDateEl = document.getElementById("entryTabLiveDate");
+      const collectedEl = document.getElementById("entryCollectedAmountText");
+      const dueEl = document.getElementById("entryTotalDueAmountText");
+      const monthLabel1 = document.getElementById("entryCurrentMonthName1");
+      const monthLabel2 = document.getElementById("entryCurrentMonthName2");
+
+      if(!liveDateEl || !collectedEl || !dueEl) return;
+
+      // 1. Live Realtime Date Display
+      const today = new Date();
+      const options = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' };
+      liveDateEl.innerText = today.toLocaleDateString('en-IN', options);
+
+      // Current Month Auto Name (e.g. "September")
+      const monthNamesOrdered = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+      const currentMonthName = monthNamesOrdered[today.getMonth()];
+
+      if(monthLabel1) monthLabel1.innerText = currentMonthName;
+      if(monthLabel2) monthLabel2.innerText = currentMonthName;
+
+      // Academic Months List
+      const academicMonths = ["June", "July", "August", "September", "October", "November", "December", "January", "February", "March", "April", "May"];
+      
+      // Active months upto Current Month
+      const activeMonthsToEvaluate = [];
+      for(let m of academicMonths) {
+        activeMonthsToEvaluate.push(m);
+        if(m === currentMonthName) break;
+      }
+
+      const students = getLiveStudents();
+      const matrix = await safeDataFetch("fees_matrix") || {};
+
+      let totalCollectedCurrentMonth = 0;
+      let totalDueUptoCurrentMonth = 0;
+
+      students.forEach(st => {
+        if(!st || !st.class || !st.admn) return;
+
+        // Verify Class-wise Fee Rate
+        const isNurseryOrKG = ["Nursery", "Jr. KG", "Sr. KG"].includes(cleanClassStr(st.class));
+        const monthlyRate = isNurseryOrKG ? 400 : 500;
+
+        const stMatrix = matrix[st.admn] || {};
+
+        // 2. COLLECTED AMOUNT (Blue Card): Only current month paid status & ticks amount check
+        const currentMonthData = stMatrix[currentMonthName];
+        if(currentMonthData && currentMonthData.paid) {
+          // Verify paid amount from record or default monthly rate
+          const paidAmt = parseFloat(currentMonthData.amount) || monthlyRate;
+          totalCollectedCurrentMonth += paidAmt;
+        }
+
+        // 3. TOTAL DUE FEES (Red Card): Check unticked/unpaid months upto current month
+        activeMonthsToEvaluate.forEach(mName => {
+          const monthData = stMatrix[mName];
+          if(!monthData || !monthData.paid) {
+            totalDueUptoCurrentMonth += monthlyRate;
+          }
+        });
+      });
+
+      // Update UI with INR Symbol
+      collectedEl.innerText = `₹${totalCollectedCurrentMonth.toLocaleString('en-IN')}`;
+      dueEl.innerText = `₹${totalDueUptoCurrentMonth.toLocaleString('en-IN')}`;
+    };
 
     
   </script>
