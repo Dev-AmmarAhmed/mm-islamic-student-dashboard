@@ -831,8 +831,10 @@ body.dark-mode.teacher-mode {
       </div>
     </section>
 
-    <!-- ADMIN DASHBOARD SECTIONS -->
+     <!-- ADMIN DASHBOARD SECTIONS -->
     <section id="adminTabHome" class="tab-section admin-tab">
+      
+      <!-- CARD 1: FEES OVERVIEW DASHBOARD -->
       <div class="card">
         <div class="card-title">Fees Overview Dashboard</div>
         <label>Select Standard:</label>
@@ -842,14 +844,6 @@ body.dark-mode.teacher-mode {
           <option value="1">Class 1</option><option value="2">Class 2</option><option value="3">Class 3</option><option value="4">Class 4</option><option value="5">Class 5</option><option value="6">Class 6</option>
         </select>
 
-     
-  
-  <div id="adminHomeTeacherboardCardsContainer">
-    <div style="font-size: 12px; color: var(--text-muted); text-align: center; padding: 10px;">Loading Teacherboard...</div>
-  </div>
-</div>
-
-        
         <label>Select Month:</label>
         <select id="homeMonthSelect">
           <option value="June">June</option><option value="July">July</option><option value="August">August</option>
@@ -861,16 +855,23 @@ body.dark-mode.teacher-mode {
         <button id="getStatsBtn" class="btn-primary">Get Stats</button>
       </div>
 
-         <!-- ADMIN HOME: TEACHERBOARD STANDINGS CARD -->
-<div class="card unfold-card" style="margin-top: 16px;">
-  <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-color); padding-bottom: 8px; margin-bottom: 12px;">
-    <div class="card-title" style="border: none; margin-bottom: 0;">🏆 Teacherboard Standings</div>
-    <button onclick="openModal('addTeacherPointsModal')" class="btn-primary btn-orange" style="margin-top: 0; width: auto; padding: 6px 14px; font-size: 11px;">
-      ⭐ Add / Deduct Points
-    </button>
-  </div>
+      <!-- CARD 2: TEACHERBOARD STANDINGS (SEPARATE CARD PATCH) -->
+      <div class="card unfold-card" style="margin-top: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-color); padding-bottom: 8px; margin-bottom: 12px;">
+          <div class="card-title" style="border: none; margin-bottom: 0;">🏆 Teacherboard Standings</div>
+          <button onclick="openModal('addTeacherPointsModal')" class="btn-primary btn-orange" style="margin-top: 0; width: auto; padding: 6px 14px; font-size: 11px;">
+            ⭐ Add / Deduct Points
+          </button>
+        </div>
 
-      <div class="card" id="homeStatsArea" style="display:none;">
+        <!-- LIST AB HEADING KE NICHE RENDER HOGI -->
+        <div id="adminHomeTeacherboardCardsContainer">
+          <div style="font-size: 12px; color: var(--text-muted); text-align: center; padding: 10px;">Loading Teacherboard...</div>
+        </div>
+      </div>
+
+      <!-- STATS DISPLAY AREA -->
+      <div class="card" id="homeStatsArea" style="display:none; margin-top: 16px;">
         <div class="card-title">Class Analytics Summary</div>
         <div class="stats-grid">
           <div class="stat-card blue"><span>Paid Students</span><h3 id="statPaidCount">0</h3></div>
@@ -884,7 +885,9 @@ body.dark-mode.teacher-mode {
           </table>
         </div>
       </div>
+
     </section>
+
 
     <!-- LOGS & RECENT ENTRIES TAB SECTION -->
     <section id="adminTabLogs" class="tab-section admin-tab">
