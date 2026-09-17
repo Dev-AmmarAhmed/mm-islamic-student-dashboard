@@ -842,6 +842,21 @@ body.dark-mode.teacher-mode {
           <option value="1">Class 1</option><option value="2">Class 2</option><option value="3">Class 3</option><option value="4">Class 4</option><option value="5">Class 5</option><option value="6">Class 6</option>
         </select>
 
+        <!-- ADMIN HOME: TEACHERBOARD STANDINGS CARD -->
+<div class="card unfold-card" style="margin-top: 16px;">
+  <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-color); padding-bottom: 8px; margin-bottom: 12px;">
+    <div class="card-title" style="border: none; margin-bottom: 0;">🏆 Teacherboard Standings</div>
+    <button onclick="openModal('addTeacherPointsModal')" class="btn-primary btn-orange" style="margin-top: 0; width: auto; padding: 6px 14px; font-size: 11px;">
+      ⭐ Add / Deduct Points
+    </button>
+  </div>
+  
+  <div id="adminHomeTeacherboardCardsContainer">
+    <div style="font-size: 12px; color: var(--text-muted); text-align: center; padding: 10px;">Loading Teacherboard...</div>
+  </div>
+</div>
+
+        
         <label>Select Month:</label>
         <select id="homeMonthSelect">
           <option value="June">June</option><option value="July">July</option><option value="August">August</option>
@@ -2323,6 +2338,42 @@ body.dark-mode.teacher-mode {
        ==================================================================== -->
   <script type="module">
 
+    // Admin Home Page Teacherboard Render Function (With Shuffle Animation & Colors)
+window.renderAdminHomeTeacherboardCards = async function() {
+  const container = document.getElementById("adminHomeTeacherboardCardsContainer");
+  if (!container) return;
+
+  const teachersData = await safeDataFetch("teachers") || {};
+  const list = Object.values(teachersData).filter(t => t && t.name);
+
+  // Highest Points pehle aayenge
+  list.sort((a, b) => (b.points || 0) - (a.points || 0));
+  container.innerHTML = "";
+
+  if (list.length === 0) {
+    container.innerHTML = `<div style="font-size:12px; color:var(--text-muted); text-align:center; padding:12px;">No teachers registered yet.</div>`;
+    return;
+  }
+
+  list.forEach((t, idx) => {
+    container.innerHTML += `
+      <div class="tb-table-card shuffle-anim" id="adminTbCard_${t.username}">
+        <div>
+          <span style="font-weight: 900; color: #7c3aed; margin-right: 8px;">#${idx + 1}</span>
+          <span style="font-weight: 800; font-size: 13px;">${t.name}</span>
+          <span style="font-size: 11px; color: var(--text-muted); margin-left: 6px;">(Class ${t.assignedClass || '-'})</span>
+        </div>
+        <div style="font-size: 14px; font-weight: 900; color: #10b981;">
+          ${t.points || 0} PTS
+        </div>
+      </div>
+    `;
+  });
+};
+
+
+    
+
    // Native Alert Override Logic
 window.showCustomAlert = function(msg) {
   const modal = document.getElementById("customAlertModal");
@@ -2994,6 +3045,15 @@ window.claimTeacherPointsFromModal = function() {
 
   const bottomNav = document.getElementById("bottomNav");
 
+    // Inside renderDashboardForRole (Admin Section)
+if (role === "admin") {
+  // Existing Admin Setup Code...
+  
+  // Render Teacherboard on Admin Home Page
+  window.renderAdminHomeTeacherboardCards();
+}
+
+    
   if(role === "student") {
     document.body.classList.remove("teacher-mode");
     document.body.classList.add("student-mode");
@@ -6013,52 +6073,66 @@ if(savedUser && savedRole) {
       }
     };
 
-    window.saveTeacherPointsFromAdmin = function() {
-      const btn = document.getElementById("submitTeacherPointsBtn");
-      runWithBtnSpinner(btn, "⭐ Submit Points", async () => {
-        const username = document.getElementById("adminTeacherSelect").value;
-        const ptsVal = parseInt(document.getElementById("adminTeacherPointsInput").value);
-        const reason = document.getElementById("adminTeacherReasonInput").value.trim();
+   window.saveTeacherPointsFromAdmin = function() {
+  const btn = document.getElementById("submitTeacherPointsBtn");
+  runWithBtnSpinner(btn, "⭐ Submit Points", async () => {
+    const username = document.getElementById("adminTeacherSelect").value;
+    const ptsVal = parseInt(document.getElementById("adminTeacherPointsInput").value);
+    const reason = document.getElementById("adminTeacherReasonInput").value.trim();
 
-        if(!username || isNaN(ptsVal) || ptsVal === 0 || !reason) {
-          alert("Please select a teacher, enter valid points, and provide a reason.");
-          return;
-        }
+    if(!username || isNaN(ptsVal) || ptsVal === 0 || !reason) {
+      alert("Please select a teacher, enter valid points, and provide a reason.");
+      return;
+    }
 
-        const teacherObj = await safeDataFetch(`teachers/${username}`);
-        if(!teacherObj) {
-          alert("Teacher details not found.");
-          return;
-        }
+    const teacherObj = await safeDataFetch(`teachers/${username}`);
+    if(!teacherObj) {
+      alert("Teacher details not found.");
+      return;
+    }
 
-        const currentPts = teacherObj.points || 0;
-        const newPts = currentPts + ptsVal;
-        const timestamp = Date.now();
-        const dateStr = getTodayFormattedDate();
+    const currentPts = teacherObj.points || 0;
+    const newPts = currentPts + ptsVal;
+    const timestamp = Date.now();
+    const dateStr = getTodayFormattedDate();
 
-        const updates = {};
-        updates[`teachers/${username}/points`] = newPts;
-        updates[`teacher_points_logs/${timestamp}`] = {
-          id: timestamp,
-          username: username,
-          teacherName: teacherObj.name,
-          assignedClass: teacherObj.assignedClass,
-          points: ptsVal,
-          totalPoints: newPts,
-          reason: reason,
-          date: dateStr
-        };
-
-        await update(ref(db), updates);
-
-        alert(`✔ Updated Points for ${teacherObj.name}: ${ptsVal >= 0 ? '+' : ''}${ptsVal} Points!`);
-        document.getElementById("adminTeacherPointsInput").value = "";
-        document.getElementById("adminTeacherReasonInput").value = "";
-        
-        window.closeModal("addTeacherPointsModal");
-        window.loadAdminTeacherLeaderboard();
-      });
+    const updates = {};
+    updates[`teachers/${username}/points`] = newPts;
+    updates[`teacher_points_logs/${timestamp}`] = {
+      id: timestamp,
+      username: username,
+      teacherName: teacherObj.name,
+      assignedClass: teacherObj.assignedClass,
+      points: ptsVal,
+      totalPoints: newPts,
+      reason: reason,
+      date: dateStr
     };
+
+    // Firebase Database me Automatic 10 limit maintenance logic
+    const existingLogsSnap = await safeDataFetch("teacher_points_logs") || {};
+    const logKeys = Object.keys(existingLogsSnap);
+
+    // Agar 10 ya 10 se zyada logs pehle se hain, to sabse purana auto delete kar do
+    if (logKeys.length >= 10) {
+      logKeys.sort((a, b) => Number(a) - Number(b)); // Ascending sort (Oldest first)
+      const logsToDeleteCount = logKeys.length - 9; // Naya add hone ke baad total 10 bachenge
+      
+      for (let i = 0; i < logsToDeleteCount; i++) {
+        updates[`teacher_points_logs/${logKeys[i]}`] = null; // Delete Oldest Entry
+      }
+    }
+
+    await update(ref(db), updates);
+
+    alert(`✔ Updated Points for ${teacherObj.name}: ${ptsVal >= 0 ? '+' : ''}${ptsVal} Points!`);
+    document.getElementById("adminTeacherPointsInput").value = "";
+    document.getElementById("adminTeacherReasonInput").value = "";
+    
+    window.closeModal("addTeacherPointsModal");
+    window.loadAdminTeacherLeaderboard();
+  });
+};
 
     window.loadAdminTeacherLeaderboard = async function() {
       const tbody = document.getElementById("adminTeacherLbTableBody");
@@ -6088,50 +6162,57 @@ if(savedUser && savedRole) {
       });
     };
 
-    window.loadTeacherBoardNotifications = function() {
-      const container = document.getElementById("teacherBoardContainer");
-      if(!container) return;
+window.loadTeacherBoardNotifications = function() {
+  const container = document.getElementById("teacherBoardContainer");
+  if(!container) return;
 
-      const logsRef = ref(db, "teacher_points_logs");
-      onValue(logsRef, (snap) => {
-        container.innerHTML = "";
-        if(!snap.exists()) {
-          container.innerHTML = `<div style="font-size:12px; color:var(--text-muted); text-align:center; padding:12px;">No point updates or notifications yet.</div>`;
-          return;
-        }
+  const logsRef = ref(db, "teacher_points_logs");
+  onValue(logsRef, (snap) => {
+    container.innerHTML = "";
+    if(!snap.exists()) {
+      container.innerHTML = `<div style="font-size:12px; color:var(--text-muted); text-align:center; padding:12px;">No point updates or notifications yet.</div>`;
+      return;
+    }
 
-        const logs = Object.values(snap.val());
-        logs.reverse();
+    // Saari entries get karke array me convert karein
+    let logsArr = Object.values(snap.val());
 
-        logs.forEach(log => {
-          const isPositive = log.points >= 0;
-          const bgStyle = isPositive 
-            ? "background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.3);" 
-            : "background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3);";
-          const badgeColor = isPositive ? "#16a34a" : "#dc2626";
+    // Latest notification pehle dikhane ke liye reverse karein
+    logsArr.reverse();
 
-          container.innerHTML += `
-            <div style="padding:12px 14px; border-radius:14px; ${bgStyle} display:flex; justify-content:space-between; align-items:center;">
-              <div>
-                <div style="font-size:13px; font-weight:800; color:var(--text-color);">
-                  👩‍🏫 ${log.teacherName} <span style="font-size:11px; font-weight:700; color:var(--text-muted);">(Class ${log.assignedClass})</span>
-                </div>
-                <div style="font-size:11px; font-weight:700; color:var(--text-muted); margin-top:2px;">
-                  📌 ${log.reason}
-                </div>
-                <div style="font-size:10px; color:var(--text-muted); margin-top:4px;">🕒 ${log.date}</div>
-              </div>
-              <div style="text-align:right;">
-                <div style="font-size:16px; font-weight:900; color:${badgeColor};">
-                  ${isPositive ? '+' : ''}${log.points} PTS
-                </div>
-                <div style="font-size:10px; font-weight:800; color:var(--text-muted);">Total: ${log.totalPoints}</div>
-              </div>
+    // Max 10 latest notifications hi UI par render honge
+    const latest10Logs = logsArr.slice(0, 10);
+
+    latest10Logs.forEach(log => {
+      const isPositive = log.points >= 0;
+      const bgStyle = isPositive 
+        ? "background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.3);" 
+        : "background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3);";
+      const badgeColor = isPositive ? "#16a34a" : "#dc2626";
+
+      container.innerHTML += `
+        <div style="padding:12px 14px; border-radius:14px; ${bgStyle} display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div style="font-size:13px; font-weight:800; color:var(--text-color);">
+              👩‍🏫 ${log.teacherName} <span style="font-size:11px; font-weight:700; color:var(--text-muted);">(Class ${log.assignedClass})</span>
             </div>
-          `;
-        });
-      });
-    };
+            <div style="font-size:11px; font-weight:700; color:var(--text-muted); margin-top:2px;">
+              📌 ${log.reason}
+            </div>
+            <div style="font-size:10px; color:var(--text-muted); margin-top:4px;">🕒 ${log.date}</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:16px; font-weight:900; color:${badgeColor};">
+              ${isPositive ? '+' : ''}${log.points} PTS
+            </div>
+            <div style="font-size:10px; font-weight:800; color:var(--text-muted);">Total: ${log.totalPoints}</div>
+          </div>
+        </div>
+      `;
+    });
+  });
+};
+
 
     const originalRenderDashboardForRole = renderDashboardForRole;
     renderDashboardForRole = function(role, aClass, sAdmn) {
