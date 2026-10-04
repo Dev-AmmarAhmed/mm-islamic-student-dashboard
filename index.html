@@ -688,8 +688,31 @@ body.more-animations .nav-item.active .nav-icon {
 body.more-animations .stat-card {
   transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1) !important;
 }
-body.more-animations .stat-card:active {
+
+       body.more-animations .stat-card:active {
   transform: translate3d(0, 2px, 0) scale(0.96) !important;
+}
+
+/* BUTTON-TO-MODAL GENIE / MORPH POP ANIMATION (WHEN MORE ANIMATIONS IS ON) */
+@keyframes modalGenieFromBtn {
+  0% {
+    opacity: 0;
+    transform: translate3d(var(--btn-origin-x, 0px), var(--btn-origin-y, 40px), 0) scale(0.08);
+    border-radius: 50px;
+  }
+  70% {
+    opacity: 1;
+    transform: translate3d(0, -4px, 0) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+body.more-animations .modal-overlay.active .modal-content:not(.bottom-sheet-content) {
+  animation: modalGenieFromBtn 0.44s cubic-bezier(0.22, 1, 0.36, 1) forwards !important;
+  will-change: transform, opacity;
 }
 
 
@@ -2601,7 +2624,7 @@ canvas { touch-action: pan-y !important; }
             
             <!-- Table will be generated here in Phase 3 -->
             <div id="sStudentSyllabusTableContainer" style="margin-top: 14px; text-align: center; color: var(--text-muted); font-size: 12px; font-weight: 700;">
-               Phase 3 Table Loading...
+               Table Loading...
             </div>
           </div>
           
@@ -3266,7 +3289,7 @@ Exact Output JSON Format Required:
   </div>
 
   
-    <!-- ADD STUDY MATERIAL MODAL -->
+        <!-- ADD STUDY MATERIAL MODAL -->
   <div id="addStudyMaterialModal" class="modal-overlay">
     <div class="modal-content">
       <div class="modal-header">
@@ -3276,7 +3299,7 @@ Exact Output JSON Format Required:
       <div class="modal-body">
         <div id="adminMatClassBox" style="display:none;">
           <label>Select Target Class *:</label>
-          <select id="matAdminClassSelect">
+          <select id="matAdminClassSelect" onchange="window.populateStudyMaterialSubjects(this.value)">
             <option value="Nursery">Nursery</option><option value="Jr. KG">Jr. KG</option><option value="Sr. KG">Sr. KG</option>
             <option value="1">Class 1</option><option value="2">Class 2</option><option value="3">Class 3</option><option value="4">Class 4</option>
             <option value="5">Class 5</option><option value="6">Class 6</option><option value="7">Class 7</option><option value="8">Class 8</option>
@@ -3289,8 +3312,16 @@ Exact Output JSON Format Required:
           <input type="text" id="matAssignedClassDisplay" disabled style="font-weight:800; color:#7c3aed;">
         </div>
 
+        <label>Subject *:</label>
+        <select id="matSubjectSelect">
+          <option value="">-- Select Subject --</option>
+        </select>
+
+        <label>Chapter No. *:</label>
+        <input type="number" id="matChapterNoInput" placeholder="e.g. 1" min="1">
+
         <label>Material Title *:</label>
-        <input type="text" id="matTitleInput" placeholder="e.g. Chapter 1 Notes / Math Video">
+        <input type="text" id="matTitleInput" placeholder="e.g.Force & Pressure Notes / Math Video">
 
         <label>Material Type *:</label>
         <select id="matTypeSelect">
@@ -4846,22 +4877,29 @@ Exact Output JSON Format Required:
           }
       }
 
-      
+
+
             if(id === "addStudyMaterialModal") {
+        let targetClsForSub = assignedClass;
         if(currentRole === "admin") { 
             document.getElementById("adminMatClassBox").style.display = "block"; 
-            document.getElementById("teacherMatClassBox").style.display = "none"; 
+            document.getElementById("teacherMatClassBox").style.display = "none";
+            targetClsForSub = document.getElementById("matAdminClassSelect").value || "1";
         } else { 
             document.getElementById("adminMatClassBox").style.display = "none"; 
             document.getElementById("teacherMatClassBox").style.display = "block"; 
             document.getElementById("matAssignedClassDisplay").value = `Class ${assignedClass}`; 
         }
         
+        window.populateStudyMaterialSubjects(targetClsForSub);
+
         // Reset inputs
+        if(document.getElementById("matChapterNoInput")) document.getElementById("matChapterNoInput").value = "";
         if(document.getElementById("matTypeSelect")) document.getElementById("matTypeSelect").value = "PDF LINK";
         if(document.getElementById("matTitleInput")) document.getElementById("matTitleInput").value = "";
         if(document.getElementById("matLinkInput")) document.getElementById("matLinkInput").value = "";
       }
+
 
 
       
@@ -5829,7 +5867,7 @@ localStorage.setItem("loggedPass", p);
       };
 
       
-       async function loadStudentStudyMaterials() {
+           async function loadStudentStudyMaterials() {
       const container = document.getElementById("sStudyMatContainer");
       if(!container) return;
       const classKey = cleanClassStr(assignedClass);
@@ -5839,24 +5877,29 @@ localStorage.setItem("loggedPass", p);
       let count = 0;
       if(materials && Object.keys(materials).length > 0) {
         Object.values(materials).forEach(mat => {
-          // Hide check - Agar material hidden hai toh list me add mat kro
           if (mat.isHidden) return; 
-          
           count++;
+
+          const subBadge = mat.subject ? `<span style="background:rgba(2, 136, 209, 0.14); color:#0288d1; padding:2px 8px; border-radius:6px; font-size:10px; font-weight:800;">📘 ${mat.subject}</span>` : '';
+          const chapBadge = mat.chapterNo ? `<span style="background:rgba(124, 58, 237, 0.14); color:#7c3aed; padding:2px 8px; border-radius:6px; font-size:10px; font-weight:800;">Ch. ${mat.chapterNo}</span>` : '';
+          const badgesRow = (subBadge || chapBadge) ? `<div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:5px;">${subBadge}${chapBadge}</div>` : '';
+
           container.innerHTML += `
-            <div style="padding:12px; border:1px solid var(--border-color); border-radius:14px; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between;">
-              <div>
+            <div style="padding:12px; border:1px solid var(--border-color); border-radius:14px; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; gap:10px;">
+              <div style="flex:1;">
+                ${badgesRow}
                 <div style="font-size:13px; font-weight:800;">${mat.title}</div>
                 <div style="font-size:10px; color:var(--text-muted); margin-top:2px;">${mat.date} | ${mat.type ? mat.type.toUpperCase() : 'PDF'}</div>
               </div>
-              ${mat.file ? `<a href="${mat.file}" target="_blank" class="btn-primary btn-blue" style="width:auto; padding:6px 14px; font-size:11px; margin-top:0; text-decoration:none;">View / Download</a>` : `<span style="font-size:11px; font-weight:800; color:#d97706;">ACTIVE TEST</span>`}
+              ${mat.file ? `<a href="${mat.file}" target="_blank" class="btn-primary btn-blue" style="width:auto; padding:6px 14px; font-size:11px; margin-top:0; text-decoration:none; flex-shrink:0;">View / Download</a>` : `<span style="font-size:11px; font-weight:800; color:#d97706;">ACTIVE TEST</span>`}
             </div>
           `;
         });
-            } 
+      } 
       if(count === 0) { container.innerHTML = `<p style="font-size:12px; color:var(--text-muted);">No study materials available.</p>`; }
-      setTimeout(() => window.syncStudentStudyHeight(), 150); // Height Update Engine
+      setTimeout(() => window.syncStudentStudyHeight(), 150);
     }
+
 
 
     async function loadStudentHomework() {
@@ -6059,20 +6102,82 @@ localStorage.setItem("loggedPass", p);
 
 
         
+    // ==========================================
+    // BUTTON-TO-MODAL ORIGIN TRACKER & STUDY MATERIAL SUBJECTS ENGINE
+    // ==========================================
+    window.lastClickedTriggerRect = null;
+    document.addEventListener("pointerdown", (e) => {
+      const trigger = e.target.closest("button, .btn-primary, .drawer-item, .menu-item, .student-grid-card, a, .stat-card, .icon-btn, select");
+      if (trigger) {
+        window.lastClickedTriggerRect = trigger.getBoundingClientRect();
+      }
+    }, { capture: true, passive: true });
 
-       // ==========================================
-    // STUDY MATERIAL DIRECT LINK SAVE LOGIC
+    window.applyModalGenieOrigin = function(modalEl) {
+      if (!modalEl || !window.lastClickedTriggerRect) return;
+      const content = modalEl.querySelector(".modal-content");
+      if (!content) return;
+      const rect = window.lastClickedTriggerRect;
+      const btnCenterX = rect.left + rect.width / 2;
+      const btnCenterY = rect.top + rect.height / 2;
+      const viewportCenterX = window.innerWidth / 2;
+      const viewportCenterY = window.innerHeight / 2;
+      content.style.setProperty("--btn-origin-x", `${Math.round(btnCenterX - viewportCenterX)}px`);
+      content.style.setProperty("--btn-origin-y", `${Math.round(btnCenterY - viewportCenterY)}px`);
+    };
+
+    // Automatically apply button origin to ANY modal that becomes active
+    const modalOriginObserver = new MutationObserver((mutations) => {
+      mutations.forEach((m) => {
+        if (m.type === "attributes" && m.attributeName === "class") {
+          const el = m.target;
+          if (el.classList.contains("modal-overlay") && el.classList.contains("active")) {
+            window.applyModalGenieOrigin(el);
+          }
+        }
+      });
+    });
+    document.querySelectorAll(".modal-overlay").forEach((m) => {
+      modalOriginObserver.observe(m, { attributes: true, attributeFilter: ["class"] });
+    });
+
+    // Populate Class-Specific Subjects for Study Material Modal
+    window.populateStudyMaterialSubjects = async function(clsVal) {
+      const select = document.getElementById("matSubjectSelect");
+      if (!select) return;
+      select.innerHTML = '<option value="">-- Loading Subjects... --</option>';
+      const classKey = cleanClassStr(clsVal || assignedClass || "1");
+      const subjectsData = await safeDataFetch(`subjects/${classKey}`);
+      select.innerHTML = '<option value="">-- Select Subject --</option>';
+      let hasCustom = false;
+      if (subjectsData && typeof subjectsData === "object") {
+        Object.values(subjectsData).forEach((s) => {
+          if (s && s.name) {
+            hasCustom = true;
+            select.innerHTML += `<option value="${s.name}">${s.name}</option>`;
+          }
+        });
+      }
+      if (!hasCustom) {
+        select.innerHTML += `<option value="English">English</option><option value="Mathematics">Mathematics</option><option value="Science">Science</option><option value="Urdu">Urdu</option><option value="General">General</option>`;
+      }
+    };
+
+    // ==========================================
+    // STUDY MATERIAL DIRECT LINK SAVE LOGIC (WITH SUBJECT & CHAPTER NO)
     // ==========================================
     addSafeListener("saveStudyMaterialBtn", "click", () => {
       const btn = document.getElementById("saveStudyMaterialBtn");
       runWithBtnSpinner(btn, "🚀 Save Material", async () => {
+        const subject = document.getElementById("matSubjectSelect") ? document.getElementById("matSubjectSelect").value.trim() : "";
+        const chapterNo = document.getElementById("matChapterNoInput") ? document.getElementById("matChapterNoInput").value.trim() : "";
         const title = document.getElementById("matTitleInput").value.trim();
         const type = document.getElementById("matTypeSelect").value;
         const linkInput = document.getElementById("matLinkInput").value.trim();
         let targetClass = currentRole === "admin" ? document.getElementById("matAdminClassSelect").value : assignedClass;
 
-        if(!title || !linkInput) { 
-            alert("Please enter a title and paste the valid link."); 
+        if(!subject || !chapterNo || !title || !linkInput) { 
+            alert("Please select Subject, enter Chapter No., Title, and paste the valid link."); 
             return; 
         }
 
@@ -6086,6 +6191,8 @@ localStorage.setItem("loggedPass", p);
 
         const matObj = { 
             id: matId, 
+            subject: subject,
+            chapterNo: chapterNo,
             title: title, 
             type: type,
             file: linkInput, 
@@ -6097,11 +6204,11 @@ localStorage.setItem("loggedPass", p);
         await set(ref(db, `study_material/${cleanClass}/${matId}`), matObj);
 
         alert("✔ Study material saved successfully.");
+        if(document.getElementById("matChapterNoInput")) document.getElementById("matChapterNoInput").value = "";
         document.getElementById("matTitleInput").value = ""; 
         document.getElementById("matLinkInput").value = "";
         window.closeModal("addStudyMaterialModal");
 
-        // Save hote hi piche ki list ko turant refresh karo
         if(currentRole === "admin") {
             const adminSelect = document.getElementById("matAdminManageClassSelectTab");
             if(adminSelect) adminSelect.value = cleanClass;
@@ -6111,12 +6218,7 @@ localStorage.setItem("loggedPass", p);
       });
     });
 
-
-
-      
-
-          // FIX: Added window. prefix so the dropdown can trigger it properly
-      window.loadTeacherStudyMaterials = async function(targetCls) {
+    window.loadTeacherStudyMaterials = async function(targetCls) {
       const tbody = document.getElementById("manageMaterialTableBody");
       const classKey = cleanClassStr(targetCls || assignedClass);
       const materials = await safeDataFetch(`study_material/${classKey}`);
@@ -6127,17 +6229,13 @@ localStorage.setItem("loggedPass", p);
           const isHidden = mat.isHidden === true;
           const hideBtnText = isHidden ? "👁️ Unhide" : "🚫 Hide";
           const hideBtnColor = isHidden ? "#16a34a" : "#ea580c";
+          const subChapInfo = (mat.subject || mat.chapterNo) 
+            ? `<div style="font-size:10px; color:#0288d1; font-weight:800; margin-bottom:2px;">${mat.subject ? mat.subject : ''}${mat.subject && mat.chapterNo ? ' • ' : ''}${mat.chapterNo ? 'Ch. ' + mat.chapterNo : ''}</div>` 
+            : '';
           
           tbody.innerHTML += `<tr>
             <td style="text-align:left; padding-left:8px; font-weight:700;">
-              ${mat.title} ${isHidden ? '<span style="color:#dc2626; font-size:9px; display:block;">(Hidden)</span>' : ''}
-            </td>
-            <td>${mat.type ? mat.type.toUpperCase() : 'FILE'}</td>
-            <td>
-              <div style="display:flex; gap:6px; justify-content:center; flex-wrap:wrap;">
-                <button class="btn-primary" style="background:${hideBtnColor}; padding:4px 8px; font-size:10px; margin-top:0; width:auto;" onclick="window.toggleStudyMaterialVisibility('${classKey}', '${key}', ${isHidden})">${hideBtnText}</button>
-                <button class="btn-sm-del" style="padding:4px 8px; font-size:10px; margin-top:0;" onclick="window.deleteStudyMaterial('${classKey}', '${key}')">🗑️ Delete</button>
-              </div>
+              ${subChapInfo}${mat.title}${isHidden ? '<span style="color:#dc2626; font-size:9px; display:block;">(Hidden)</span>' : ''}
             </td>
           </tr>`;
         });
