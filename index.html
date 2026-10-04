@@ -4474,11 +4474,13 @@ Exact Output JSON Format Required:
     };
 
 
-
-          import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js";
     import { getDatabase, ref, onValue, set, update, remove, child, get } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+    import { getFirestore, doc, setDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
+      
     // M.M ISLAMIC ENGLISH SCHOOL FIREBASE CREDENTIALS
     const firebaseConfig = {
       apiKey: "AIzaSyBHpbgoGs7HFQ3-1tBn9BpGT4YYDaKkZB8",
@@ -4500,10 +4502,39 @@ Exact Output JSON Format Required:
       }
     } catch (err) { console.warn("App Check bypass:", err); }
 
-    const db = getDatabase(app);
+       const db = getDatabase(app);
+    const auth = getAuth(app);
+    const fsDb = getFirestore(app);
+
+    // Ensure background Firebase Auth token is always active for Security Rules
+    window.ensureFirebaseAuth = async function() {
+      if (auth.currentUser) return auth.currentUser;
+      try {
+        const cred = await signInAnonymously(auth);
+        return cred.user;
+      } catch (e) {
+        console.warn("Auth init warning:", e);
+        return null;
+      }
+    };
+    window.ensureFirebaseAuth();
+
+    window.syncAuthSessionRole = async function(role, userId, cls) {
+      const user = await window.ensureFirebaseAuth();
+      if (user && role && userId) {
+        try {
+          await set(ref(db, `auth_sessions/${user.uid}`), {
+            role: role,
+            userId: String(userId),
+            assignedClass: String(cls || "1"),
+            updatedAt: Date.now()
+          });
+        } catch (e) { console.warn("Session sync warning:", e); }
+      }
+    };
 
     let currentRole = "admin";
-    let assignedClass = "1";
+ let assignedClass = "1";
     let currentStudentAdmn = null;
     let lastGeneratedReceipt = null;
     let studentStarDisplayMode = "star";
@@ -4739,15 +4770,97 @@ Exact Output JSON Format Required:
       } catch(err) { return null; }
     }
 
-    function readFileAsDataURL(file) {
+        // Smart Image Compressor ( Keeps under ~120KB for fast Firestore storage )
+    function readFileAsDataURL(file, maxWidth = 900, quality = 0.72) {
       return new Promise((resolve) => {
         if (!file) return resolve(null);
+        if (!file.type || !file.type.startsWith("image/")) {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(e.target.result);
+          reader.onerror = () => resolve(null);
+          return reader.readAsDataURL(file);
+        }
         const reader = new FileReader();
-        reader.onload = (e) => resolve(e.target.result);
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement("canvas");
+            let w = img.width;
+            let h = img.height;
+            if (w > maxWidth) {
+              h = Math.round((maxWidth / w) * h);
+              w = maxWidth;
+            }
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL("image/jpeg", quality));
+          };
+          img.onerror = () => resolve(e.target.result);
+          img.src = e.target.result;
+        };
         reader.onerror = () => resolve(null);
         reader.readAsDataURL(file);
       });
     }
+
+    // Cloud Firestore Media Storage Engine (Saves Base64 in Firestore & returns pointer)
+    const firestoreMediaCache = {};
+
+    window.saveMediaToFirestore = async function(collectionName, docId, base64Data, meta = {}) {
+      await window.ensureFirebaseAuth();
+      await setDoc(doc(fsDb, collectionName, String(docId)), {
+        dataUrl: base64Data,
+        updatedAt: Date.now(),
+        ...meta
+      });
+      const pointer = `firestore://${collectionName}/${docId}`;
+      firestoreMediaCache[pointer] = base64Data;
+      return pointer;
+    };
+
+    window.resolveMediaUrl = async function(urlOrPointer) {
+      if (!urlOrPointer) return "https://via.placeholder.com/150";
+      if (!String(urlOrPointer).startsWith("firestore://")) return urlOrPointer;
+      if (firestoreMediaCache[urlOrPointer]) return firestoreMediaCache[urlOrPointer];
+      try {
+        const parts = String(urlOrPointer).replace("firestore://", "").split("/");
+        const snap = await getDoc(doc(fsDb, parts[0], parts[1]));
+        if (snap.exists() && snap.data().dataUrl) {
+          firestoreMediaCache[urlOrPointer] = snap.data().dataUrl;
+          return snap.data().dataUrl;
+        }
+      } catch (e) { console.warn("Firestore media load error:", e); }
+      return "https://via.placeholder.com/150";
+    };
+
+    // Automatically resolve any <img src="firestore://..."> across the entire app!
+    const fsImgObserver = new MutationObserver((mutations) => {
+      mutations.forEach((m) => {
+        m.addedNodes.forEach((node) => {
+          if (node.nodeType === 1) {
+            const imgs = node.tagName === "IMG" ? [node] : Array.from(node.querySelectorAll("img"));
+            imgs.forEach((img) => {
+              const srcAttr = img.getAttribute("src");
+              if (srcAttr && srcAttr.startsWith("firestore://")) {
+                img.src = "https://via.placeholder.com/150";
+                window.resolveMediaUrl(srcAttr).then((realData) => { img.src = realData; });
+              }
+            });
+          }
+        });
+        if (m.type === "attributes" && m.target.tagName === "IMG") {
+          const srcAttr = m.target.getAttribute("src");
+          if (srcAttr && srcAttr.startsWith("firestore://")) {
+            m.target.src = "https://via.placeholder.com/150";
+            window.resolveMediaUrl(srcAttr).then((realData) => { m.target.src = realData; });
+          }
+        }
+      });
+    });
+    fsImgObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["src"] });
+
 
     async function compressVideoFile(file) {
       return new Promise((resolve) => {
@@ -5349,9 +5462,10 @@ localStorage.setItem("loggedPass", p);
            function renderDashboardForRole(role, aClass, sAdmn) {
       currentRole = role; 
       
-      // 🛡️ GHOST LOGIN FIX: Bulletproof Session Invalidation
+           // 🛡️ GHOST LOGIN FIX & FIREBASE AUTH SESSION SYNC
       const loggedUser = localStorage.getItem("loggedUser");
       const loggedPass = localStorage.getItem("loggedPass");
+      window.syncAuthSessionRole(role, loggedUser || sAdmn, aClass);
 
       if(loggedUser) {
         onValue(ref(db, `users/${loggedUser}`), (snap) => {
@@ -5965,66 +6079,42 @@ localStorage.setItem("loggedPass", p);
       setTimeout(() => window.syncStudentStudyHeight(), 150); // Height Update Engine
     }
 
-
-        addSafeListener("uploadHomeworkBtn", "click", () => {
+    addSafeListener("uploadHomeworkBtn", "click", () => {
       const btn = document.getElementById("uploadHomeworkBtn");
-      runWithBtnSpinner(btn, "🚀 Uploading to Drive...", async () => {
+      runWithBtnSpinner(btn, "🚀 Upload Homework", async () => {
         const title = document.getElementById("hwTitleInput").value.trim();
         const fileInput = document.getElementById("hwFileInput");
 
         if(!title || !fileInput.files.length) { alert("Please enter title and select homework image."); return; }
 
-        const file = fileInput.files[0];
-        
-        // Base64 conversion for Google Drive
-        const reader = new FileReader();
-        reader.onload = async function(e) {
-            const base64Data = e.target.result.split(',')[1];
-            
-            try {
-                // YAHAN APNI GOOGLE APPS SCRIPT KI LINK PASTE KRNA (Same as Phase 4)
-                const appsScriptUrl = "https://script.google.com/macros/s/AKfycbwbgxe7xuj6yJzTHdhueLsvueLewzBfQfES_e55x8c097hgn59ZHQuXt8RPnkCN0IDu-A/exec";
-                
-                const response = await fetch(appsScriptUrl, {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        base64: base64Data,
-                        filename: file.name,
-                        mimeType: file.type,
-                        type: "homework" 
-                    })
-                });
-                
-                const result = await response.json();
-                if(result.status !== "success") throw new Error("Upload failed");
+        const compressedDataUrl = await readFileAsDataURL(fileInput.files[0], 1100, 0.75);
+        if(!compressedDataUrl) { alert("Failed to process image."); return; }
 
-                const hwId = Date.now().toString();
-                const classKey = cleanClassStr(assignedClass);
-                
-                const hwObj = { 
-                    id: hwId, 
-                    title: `[Homework] ${title}`, 
-                    file: result.url, // Firebase me ab sirf Drive ka URL save hoga
-                    date: getTodayFormattedDate(), 
-                    class: classKey, 
-                    type: 'homework' 
-                };
+        const hwId = Date.now().toString();
+        const classKey = cleanClassStr(assignedClass);
 
-                await set(ref(db, `homework/${classKey}/${hwId}`), hwObj);
-                
-                // Cross-post to study material if needed (as per original logic)
-                await set(ref(db, `study_material/${classKey}/${hwId}`), hwObj);
+        // Save compressed homework image directly in Cloud Firestore
+        const firestorePointer = await window.saveMediaToFirestore("homework_media", `${classKey}_${hwId}`, compressedDataUrl, {
+          title: title,
+          class: classKey,
+          date: getTodayFormattedDate()
+        });
 
-                alert("Homework uploaded to Google Drive successfully.");
-                document.getElementById("hwTitleInput").value = ""; 
-                document.getElementById("hwFileInput").value = "";
-                window.closeModal("uploadHomeworkModal");
-
-            } catch (err) {
-                alert("Upload failed. Make sure your Apps Script link is correct.");
-            }
+        const hwObj = { 
+          id: hwId, 
+          title: `[Homework] ${title}`, 
+          file: firestorePointer, 
+          date: getTodayFormattedDate(), 
+          class: classKey, 
+          type: 'homework' 
         };
-        reader.readAsDataURL(file);
+
+        await set(ref(db, `homework/${classKey}/${hwId}`), hwObj);
+
+        alert("✔ Homework uploaded to Cloud Firestore successfully!");
+        document.getElementById("hwTitleInput").value = ""; 
+        document.getElementById("hwFileInput").value = "";
+        window.closeModal("uploadHomeworkModal");
       });
     });
 
@@ -7112,8 +7202,66 @@ localStorage.setItem("loggedPass", p);
       alert(`Attendance record cleared for Class ${std} (${month}).`);
     });
 
+        addSafeListener("updateStudentProfileBtn", "click", () => {
+      const btn = document.getElementById("updateStudentProfileBtn");
+      runWithBtnSpinner(btn, "💾 Update Profile", async () => {
+        const oldAdmn = document.getElementById("profStudentAdmn").value;
+        const newAdmn = document.getElementById("profAdmnDisplay").value.trim();
+        const name = document.getElementById("profNameInput").value.trim();
+        const pass = document.getElementById("profPasswordInput").value.trim();
+        const cls = document.getElementById("profClassSelect").value;
+        const phone = document.getElementById("profPhoneInput").value.trim();
+        const dob = document.getElementById("profDobInput").value.trim();
+        const pts = parseInt(document.getElementById("profPointsInput").value) || 0;
+        const photoFile = document.getElementById("profPhotoFileInput");
+
+        if(!newAdmn || !name) { alert("Student Name and Admission No are required."); return; }
+
+        const currentStudent = await getStudentRecord(oldAdmn);
+        let photoUrl = currentStudent ? (currentStudent.photo || "https://via.placeholder.com/150") : "https://via.placeholder.com/150";
+
+        if(photoFile && photoFile.files.length > 0) {
+          const uploadedPhoto = await readFileAsDataURL(photoFile.files[0], 500, 0.72);
+          if(uploadedPhoto) {
+            photoUrl = await window.saveMediaToFirestore("student_photos", newAdmn, uploadedPhoto, { name: name, class: cls });
+          }
+        }
+
+        const updatedStudentObj = {
+          ...(currentStudent || {}),
+          srNo: newAdmn,
+          admn: newAdmn,
+          name: name,
+          class: cls,
+          phone: phone,
+          dob: dob || "-",
+          points: pts,
+          photo: photoUrl,
+          regDate: currentStudent ? (currentStudent.regDate || getTodayFormattedDate()) : getTodayFormattedDate()
+        };
+
+        const updates = {};
+        if(String(oldAdmn) !== String(newAdmn)) {
+          updates[`students/${oldAdmn}`] = null;
+          updates[`users/${oldAdmn}`] = null;
+        }
+        updates[`students/${newAdmn}`] = updatedStudentObj;
+        updates[`users/${newAdmn}`] = { password: pass || "MM", role: "student", admn: newAdmn, assignedClass: cls };
+
+        await update(ref(db), updates);
+        if(currentRole === "teacher") await refreshAllTeacherData(); else renderAdminStudentsDirectory();
+        alert("✔ Student Profile & Photo updated in Cloud Firestore!");
+        window.closeModal("studentProfileModal");
+      });
+    });
+
+    addSafeListener("deleteAdminStudentBtn", "click", () => {
+      const admn = document.getElementById("profStudentAdmn").value;
+      if(admn) window.deleteStudent(admn);
+    });
+
     addSafeListener("saveStudentBtn", "click", () => {
-      const btn = document.getElementById("saveStudentBtn");
+  const btn = document.getElementById("saveStudentBtn");
       runWithBtnSpinner(btn, "Submit Registration", async () => {
         const finalAdmn = document.getElementById("regAdmn").value.trim();
         const name = document.getElementById("regName").value.trim();
@@ -7123,8 +7271,13 @@ localStorage.setItem("loggedPass", p);
         const fileInput = document.getElementById("regPhotoFile");
 
         if(!name || !std || !rawPhone) { alert("Please fill Name, Class, and Phone number."); return; }
-        let photoUrl = "https://via.placeholder.com/150";
-        if(fileInput && fileInput.files.length > 0) { const uploadedPhoto = await readFileAsDataURL(fileInput.files[0]); if(uploadedPhoto) photoUrl = uploadedPhoto; }
+              let photoUrl = "https://via.placeholder.com/150";
+        if(fileInput && fileInput.files.length > 0) {
+          const uploadedPhoto = await readFileAsDataURL(fileInput.files[0], 500, 0.72);
+          if(uploadedPhoto) {
+            photoUrl = await window.saveMediaToFirestore("student_photos", finalAdmn, uploadedPhoto, { name: name, class: std });
+          }
+        }
 
         const updates = {};
         updates[`students/${finalAdmn}`] = { srNo: finalAdmn, admn: finalAdmn, name: name, class: std, phone: rawPhone.replace(/[^0-9]/g, ''), dob: dob || "-", photo: photoUrl, regDate: getTodayFormattedDate(), points: 0 };
