@@ -5690,6 +5690,8 @@ localStorage.setItem("loggedPass", p);
       }, 90);
     };
 
+
+
     async function renderAdminStudentsDirectory(skipNetworkFetch = false) {
       const container = document.getElementById("adminStudentsDirectoryContainer");
       if(!container) return;
@@ -5738,7 +5740,7 @@ localStorage.setItem("loggedPass", p);
         return;
       }
 
-      // Single-pass HTML batch render (10x faster than 147 appendChild calls!)
+      // Single-pass HTML batch render (10x faster than appendChild calls!)
       let cardsHtml = "";
       filteredList.forEach(s => {
         const pass = cachedUsersMap[s.admn] ? cachedUsersMap[s.admn].password : "MM";
@@ -5752,72 +5754,10 @@ localStorage.setItem("loggedPass", p);
       });
       container.innerHTML = cardsHtml;
     }
- const container = document.getElementById("adminStudentsDirectoryContainer");
-      if(!container) return;
 
-      const usersData = await safeDataFetch("users") || {};
-      // Await ke baad fresh students lo aur container ko 100% clean karo (Race-condition glitch fix)
-      const students = getLiveStudents();
-      container.innerHTML = "";
+  
 
-      const searchInput = document.getElementById("adminStudentSearchInput");
-      const query = searchInput ? searchInput.value.toLowerCase().trim() : "";
-
-      if(students.length === 0) {
-        container.innerHTML = `<p style="font-size:12px; color:var(--text-muted);">No students registered yet.</p>`;
-        document.getElementById("adminStudentCountText").innerText = "0"; return;
-      }
-
-      // 1. Pehle selected Class Filter lagao
-      let filteredList = students.filter(s => 
-        selectedAdminClassFilter === "All" || cleanClassStr(s.class) === cleanClassStr(selectedAdminClassFilter)
-      );
-
-      // 2. Agar search box me kuch likha hai, toh matching walo ko sabse upar (Top) par le aao
-      if(query !== "") {
-        filteredList.sort((a, b) => {
-          const aName = (a.name || "").toLowerCase();
-          const bName = (b.name || "").toLowerCase();
-          const aAdmn = String(a.admn || "").toLowerCase();
-          const bAdmn = String(b.admn || "").toLowerCase();
-
-          const aMatch = aName.includes(query) || aAdmn.includes(query);
-          const bMatch = bName.includes(query) || bAdmn.includes(query);
-
-          if (aMatch && !bMatch) return -1;
-          if (!aMatch && bMatch) return 1;
-
-          // Exact match ya starting match ko aur upar rakho
-          const aStarts = aName.startsWith(query) || aAdmn === query;
-          const bStarts = bName.startsWith(query) || bAdmn === query;
-          if (aStarts && !bStarts) return -1;
-          if (!aStarts && bStarts) return 1;
-
-          return 0;
-        });
-      }
-
-      let count = filteredList.length;
-      filteredList.forEach(s => {
-        const pass = usersData[s.admn] ? usersData[s.admn].password : "MM";
-        const isMatched = query !== "" && ((s.name || "").toLowerCase().includes(query) || String(s.admn || "").toLowerCase().includes(query));
-        const card = document.createElement("div");
-        card.className = "student-grid-card";
-        if(isMatched) {
-          card.style.border = "2px solid #0288d1";
-          card.style.background = "rgba(2, 136, 209, 0.08)";
-        }
-        card.onclick = () => window.openStudentProfileModal(s.admn);
-               const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(s.name || 'S')}&background=0288d1&color=fff&bold=true`;
-        const avatarSrc = (s.photo && !s.photo.includes("via.placeholder.com")) ? s.photo : defaultAvatar;
-        card.innerHTML = `<img src="${avatarSrc}" onerror="this.src='${defaultAvatar}'" class="student-avatar" alt="Avatar"><div style="flex:1;"><div style="font-size:13px; font-weight:800;">${s.name} ${isMatched ? '<span style="font-size:10px; background:#0288d1; color:white; padding:2px 6px; border-radius:6px; margin-left:4px;">Match</span>' : ''}</div><div style="font-size:11px; color:var(--text-muted);">ID: ${s.admn} | Class: ${s.class} | Pass: <b>${pass}</b></div><div style="font-size:10px; font-weight:700; color:#0288d1; margin-top:2px;">Phone: ${s.phone || '-'} | PTS: ${s.points || 0}</div></div><div style="font-size:16px;">✏️</div>`;
- container.appendChild(card);
-      });
-
-      document.getElementById("adminStudentCountText").innerText = count;
-      if(count === 0) container.innerHTML = `<p style="font-size:12px; color:var(--text-muted);">No students found in ${selectedAdminClassFilter}.</p>`;
-    }
-
+      
       
 
     function generateBulkStudentTable() {
@@ -5993,17 +5933,16 @@ localStorage.setItem("loggedPass", p);
       });
     });
 
-        async function calculateRealtimeStudentDues(student) {
+         async function calculateRealtimeStudentDues(student) {
       if(!student) return;
       const studentMatrix = await safeDataFetch(`fees_matrix/${student.admn}`) || {};
-      const studentMatrix = matrix[student.admn] || {};
       const struct = window.getFeeStructure(student.class);
 
       let totalDue = 0;
       const pendingItems = [];
 
-          const feeRate = student.customFee !== undefined ? parseFloat(student.customFee) : struct.rate;
-      
+      const feeRate = student.customFee !== undefined ? parseFloat(student.customFee) : struct.rate;
+
       if (struct.type === "monthly") {
         const academicMonths = ["June", "July", "August", "September", "October", "November", "December", "January", "February", "March", "April", "May"];
         const currentMonthName = getAutoMonthName();
@@ -6106,8 +6045,6 @@ localStorage.setItem("loggedPass", p);
         card.style.display = "none";
       }
     };
-
-
     addSafeListener("sViewAttendanceBtn", "click", () => {
       const month = document.getElementById("sAttMonthSelect").value;
       generateAttendanceReport(assignedClass, currentStudentAdmn, month, "sAttReportContent");
@@ -6115,17 +6052,9 @@ localStorage.setItem("loggedPass", p);
     });
 
       
-    window.switchStudentStudySubTab = function(type) {
-      document.getElementById("subTabMatBtn").classList.toggle("active", type === 'mat');
-      document.getElementById("subTabHwBtn").classList.toggle("active", type === 'hw');
-      document.getElementById("sStudyMatSubSection").style.display = type === 'mat' ? 'block' : 'none';
-      document.getElementById("sHomeworkSubSection").style.display = type === 'hw' ? 'block' : 'none';
-      };
-
-      
            async function loadStudentStudyMaterials() {
       const container = document.getElementById("sStudyMatContainer");
-      if(!container) return;
+ if(!container) return;
       const classKey = cleanClassStr(assignedClass);
       const materials = await safeDataFetch(`study_material/${classKey}`);
 
@@ -6632,16 +6561,19 @@ localStorage.setItem("loggedPass", p);
       });
     });
 
-    addSafeListener("markHolidayTodayBtn", "click", () => {
+      addSafeListener("markHolidayTodayBtn", "click", () => {
       if(confirm("Are you sure you want to mark today as a Holiday for this class?")) {
         const currentMonth = getAutoMonthName();
         const todayNum = new Date().getDate();
         const students = getLiveStudents().filter(s => cleanClassStr(s.class) === cleanClassStr(assignedClass));
         const updates = {};
         students.forEach(st => { updates[`attendance/${st.admn}/${currentMonth}/day_${todayNum}`] = "H"; });
-        update(ref(db), updates).then(() => { alert("Marked today as Holiday."); loadTeacherTodayAttendance(); });
+        update(ref(db), updates)
+          .then(() => { alert("Marked today as Holiday."); loadTeacherTodayAttendance(); })
+          .catch((err) => { alert("Error marking holiday: " + err.message); });
       }
     });
+
 
       window.triggerTeacherStudentSearch = function() {
       loadTeacherStudentsDirectory();
@@ -8587,7 +8519,7 @@ localStorage.setItem("loggedPass", p);
       window.openModal("editTeacherModal");
     };
 
-    window.saveUpdatedTeacherDetails = async function() {
+       window.saveUpdatedTeacherDetails = async function() {
       const username = document.getElementById("editTeacherOldUsername").value;
       const name = document.getElementById("editTeacherName").value.trim();
       const pass = document.getElementById("editTeacherPass").value.trim();
@@ -8602,13 +8534,6 @@ localStorage.setItem("loggedPass", p);
       alert("✔ Teacher details updated successfully!"); 
       window.closeModal("editTeacherModal"); 
       window.loadManageTeacherList();
-    };
-
-
-    window.deleteTeacherAccount = async function(username) {
-      if(confirm(`Are you sure you want to delete teacher account: ${username}?`)) {
-        await remove(ref(db, `teachers/${username}`)); await remove(ref(db, `users/${username}`)); alert("Teacher account deleted."); window.loadManageTeacherList();
-      }
     };
 
     window.renderTeacherboardCardsTable = async function() {
@@ -10186,15 +10111,15 @@ window.syncProfileModalHeight = function() {
                 <tbody>
         `;
         
-        chapters.forEach(ch => {
+              chapters.forEach(ch => {
             const isCompleted = progress[`ch_${ch.no}`] === true;
             html += `
                 <tr style="${isCompleted ? 'background: rgba(34, 197, 94, 0.05);' : ''}">
                     <td style="font-weight: 900; color: #0288d1;">${ch.no}</td>
-                    <td style="text-align: left; padding-left: 8px; font-weight: 700; ${isCompleted ? 'color: #16a34a; text-decoration: line-through opacity:0.7;' : ''}">${ch.name}</td>
+                    <td style="text-align: left; padding-left: 8px; font-weight: 700; ${isCompleted ? 'color: #16a34a; text-decoration: line-through; opacity:0.7;' : ''}">${ch.name}</td>
                     <td>
                         <input type="checkbox" style="width: 22px; height: 22px; accent-color: #16a34a; cursor: pointer;" 
-                               ${isCompleted ? 'checked' : ''} 
+                         ${isCompleted ? 'checked' : ''} 
                                onchange="window.updateChapterProgress('${subject}', '${ch.no}', this.checked)">
                     </td>
                 </tr>
