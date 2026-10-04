@@ -13,8 +13,17 @@
 
      <!-- DYNAMIC APP ICON LINK -->
   <link id="dynamicAppIcon" rel="icon" type="image/png" href="https://raw.githubusercontent.com/Dev-AmmarAhmed/mm-islamic-student-dashboard/d6d24f3e257c37e211f227d935af222dd37de7ca/icon%20blue.png">
-  <link id="appleAppIcon" rel="apple-touch-icon" href="https://raw.githubusercontent.com/Dev-AmmarAhmed/mm-islamic-student-dashboard/d6d24f3e257c37e211f227d935af222dd37de7ca/icon%20blue.png">
-  <link rel="manifest" href="manifest.json">
+  <link id="appleAppIcon" rel="apple-touch-icon" href="./icon%20blue.png">
+  <link rel="manifest" href="./manifest.json">
+ 
+  
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js');
+      });
+    }
+  </script>
 
    <!-- PDF EXPORT ENGINE LIBRARIES -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -693,28 +702,24 @@ body.more-animations .stat-card {
   transform: translate3d(0, 2px, 0) scale(0.96) !important;
 }
 
-/* BUTTON-TO-MODAL GENIE / MORPH POP ANIMATION (WHEN MORE ANIMATIONS IS ON) */
+/* BUTTON-TO-MODAL GENIE / MORPH POP ANIMATION (NO BOUNCE, SMOOTH STOP) */
 @keyframes modalGenieFromBtn {
   0% {
     opacity: 0;
-    transform: translate3d(var(--btn-origin-x, 0px), var(--btn-origin-y, 40px), 0) scale(0.08);
-    border-radius: 50px;
-  }
-  70% {
-    opacity: 1;
-    transform: translate3d(0, -4px, 0) scale(1.02);
+    transform: translate3d(var(--btn-origin-x, 0px), var(--btn-origin-y, 40px), 0) scale(0.12);
+    border-radius: 42px;
   }
   100% {
     opacity: 1;
     transform: translate3d(0, 0, 0) scale(1);
+    border-radius: 22px;
   }
 }
 
 body.more-animations .modal-overlay.active .modal-content:not(.bottom-sheet-content) {
-  animation: modalGenieFromBtn 0.44s cubic-bezier(0.22, 1, 0.36, 1) forwards !important;
+  animation: modalGenieFromBtn 0.38s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
   will-change: transform, opacity;
 }
-
 
 
 * {
@@ -2810,12 +2815,13 @@ canvas { touch-action: pan-y !important; }
           <option value="9">Class 9</option><option value="10">Class 10</option><option value="11">Class 11</option><option value="12">Class 12</option>
         </select>
 
-        <div style="font-size:12px; font-weight:800; color:var(--text-muted); margin-top:10px; margin-bottom:8px;" id="dueModalTotalSummaryText">
+                <div style="font-size:12px; font-weight:800; color:var(--text-muted); margin-top:10px; margin-bottom:8px;" id="dueModalTotalSummaryText">
           Loading Due Records...
         </div>
 
-        <div class="table-container" style="max-height: 55vh; overflow-y: auto;">
+        <div class="table-container" id="dueModalTableContainer" style="height: 82px; max-height: 55vh; overflow-y: auto; transition: height 0.42s cubic-bezier(0.22, 1, 0.36, 1);">
           <table style="min-width: 100%;">
+
             <thead>
               <tr>
                                <th style="width:36px;">Sr.</th>
@@ -8018,10 +8024,12 @@ localStorage.setItem("loggedPass", p);
       dueEl.innerText = `₹${totalDueUptoCurrentMonth.toLocaleString('en-IN')}`;
     };
 
-    window.renderFeesDueDetailTable = async function(selectedClass) {
+       window.renderFeesDueDetailTable = async function(selectedClass) {
       const tbody = document.getElementById("dueModalTableBody");
       const summaryText = document.getElementById("dueModalTotalSummaryText");
+      const tableWrap = document.getElementById("dueModalTableContainer");
       if (!tbody) return;
+      if (tableWrap) tableWrap.style.height = "82px";
       tbody.innerHTML = `<tr><td colspan="5" style="padding:14px; text-align:center;">⏳ Calculating due records...</td></tr>`;
 
       const currentMonthName = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][new Date().getMonth()];
@@ -8079,12 +8087,22 @@ localStorage.setItem("loggedPass", p);
       const colorStyle = currentFeeListMode === "PAID" ? "#16a34a" : "#dc2626";
       
       // 🚀 OPTIMIZATION: Same approach, collect first, update once
-      let feesHtml = "";
+            let feesHtml = "";
       dueList.forEach((st, idx) => {
         feesHtml += `<tr><td><b>${idx + 1}</b></td><td style="text-align:left; padding-left:8px; font-weight:700;">${st.name}</td><td><span class="class-badge" style="background:#0288d1; font-size:10px;">${st.std}</span></td><td style="text-align:left; padding-left:8px; font-size:10px; color:${colorStyle}; font-weight:700;">${st.dueMonthsStr}</td><td><b style="color:${colorStyle};">₹${st.totalDue.toLocaleString('en-IN')}</b></td></tr>`;
       });
       tbody.innerHTML = feesHtml;
+
+      // Smoothly animate height from small loader box to full table size (No Jerk!)
+      if (tableWrap) {
+        requestAnimationFrame(() => {
+          const fullTableHeight = tableWrap.scrollHeight;
+          const maxAllowedHeight = window.innerHeight * 0.55;
+          tableWrap.style.height = Math.min(fullTableHeight + 4, maxAllowedHeight) + "px";
+        });
+      }
     };
+
 
 
     let redCardTapCount = 0, redCardTapTimer = null, blueCardTapCount = 0, blueCardTapTimer = null, currentFeeListMode = "UNPAID";
