@@ -4592,24 +4592,39 @@ Exact Output JSON Format Required:
 
 
             let dbSaveTimeout = null;
-      
-      // OPTIMIZATION: Poore DB ke bajaye sirf 'students' node ko real-time listen karenge
-      onValue(ref(db, 'students'), (snap) => {
-      if (snap.exists()) {
-        inMemoryStudentsData = snap.val();
-        
-        // PREVENT LAG: Ab sirf students ka data save hoga, poora DB nahi
-        if(dbSaveTimeout) clearTimeout(dbSaveTimeout);
-        dbSaveTimeout = setTimeout(() => {
-            localStorage.setItem("offlineDbCache_students", JSON.stringify(inMemoryStudentsData));
-        }, 5000); 
 
-        if(currentRole === "admin") renderAdminStudentsDirectory();
-        if(currentRole === "teacher") { refreshAllTeacherData(); window.loadTeacherLeaderboard(); }
-      } else {
-        inMemoryStudentsData = {};
-      }
-    });
+            let studentsListenerAttached = false;
+      window.attachSmartStudentsListener = function(role, sAdmn) {
+        if (studentsListenerAttached) return;
+        studentsListenerAttached = true;
+
+        // Agar Student login hai, toh poore school ko real-time listen mat karo! Sirf us student ka profile listen karo
+        if (role === "student" && sAdmn) {
+          onValue(ref(db, `students/${sAdmn}`), (snap) => {
+            if (snap.exists()) {
+              inMemoryStudentsData[sAdmn] = snap.val();
+            }
+          });
+          return;
+        }
+
+        // Sirf Admin ya Teacher ke liye students list load karo
+        onValue(ref(db, 'students'), (snap) => {
+          if (snap.exists()) {
+            inMemoryStudentsData = snap.val();
+            if(dbSaveTimeout) clearTimeout(dbSaveTimeout);
+            dbSaveTimeout = setTimeout(() => {
+                localStorage.setItem("offlineDbCache_students", JSON.stringify(inMemoryStudentsData));
+            }, 5000); 
+
+            if(currentRole === "admin") renderAdminStudentsDirectory(true);
+            if(currentRole === "teacher") { refreshAllTeacherData(); window.loadTeacherLeaderboard(); }
+          } else {
+            inMemoryStudentsData = {};
+          }
+        });
+      };
+
 
       window.cleanExpiredTestCaches = function() {
         try {
@@ -5422,17 +5437,40 @@ localStorage.setItem("loggedPass", p);
       });
     });
 
-        addSafeListener("logoutBtn", "click", () => { 
-      const theme = localStorage.getItem("appTheme");
-      const darkMode = localStorage.getItem("darkMode");
-      localStorage.clear();
-      if(theme) localStorage.setItem("appTheme", theme);
-      if(darkMode) localStorage.setItem("darkMode", darkMode);
-      if ('caches' in window) {
-          caches.keys().then(names => { for (let name of names) caches.delete(name); });
+
+          addSafeListener("logoutBtn", "click", async () => { 
+      // 1. In-Memory Variables & Firestore Media Cache Clear
+      inMemoryStudentsData = {};
+      fullDbCache = {};
+      if (typeof cachedUsersMap !== "undefined") cachedUsersMap = {};
+      if (typeof firestoreMediaCache !== "undefined") {
+        Object.keys(firestoreMediaCache).forEach(k => delete firestoreMediaCache[k]);
       }
-      location.reload(); 
+
+      // 2. Firebase Auth Session & Sign-Out Clear
+      try {
+        if (typeof auth !== "undefined" && auth.currentUser) {
+          await remove(ref(db, `auth_sessions/${auth.currentUser.uid}`)).catch(() => {});
+          await auth.signOut().catch(() => {});
+        }
+      } catch (e) {}
+
+      // 3. Complete LocalStorage & SessionStorage Wipe (Offline DB cache, Test cache, Login data sab saaf)
+      localStorage.clear();
+      sessionStorage.clear();
+
+      // 4. Browser Cache Storage & Service Worker Cache Clear (Await ke saath taaki delete hone se pehle reload na ho)
+      if ('caches' in window) {
+        try {
+          const names = await caches.keys();
+          await Promise.all(names.map(name => caches.delete(name)));
+        } catch (e) {}
+      }
+
+      // 5. Fresh Reload from Server
+      window.location.replace(window.location.pathname);
     });
+
 
 
      window.changeTeacherActiveClass = function(newClass) {
@@ -5442,9 +5480,11 @@ localStorage.setItem("loggedPass", p);
       refreshAllTeacherData();
     };
 
-           function renderDashboardForRole(role, aClass, sAdmn) {
-      currentRole = role; 
-      
+                      function renderDashboardForRole(role, aClass, sAdmn) {
+      currentRole = role;
+      window.attachSmartStudentsListener(role, sAdmn || localStorage.getItem("studentAdmn"));
+
+                        
            // 🛡️ GHOST LOGIN FIX & FIREBASE AUTH SESSION SYNC
       const loggedUser = localStorage.getItem("loggedUser");
       const loggedPass = localStorage.getItem("loggedPass");
@@ -5953,9 +5993,9 @@ localStorage.setItem("loggedPass", p);
       });
     });
 
-    async function calculateRealtimeStudentDues(student) {
+        async function calculateRealtimeStudentDues(student) {
       if(!student) return;
-      const matrix = await safeDataFetch("fees_matrix") || {};
+      const studentMatrix = await safeDataFetch(`fees_matrix/${student.admn}`) || {};
       const studentMatrix = matrix[student.admn] || {};
       const struct = window.getFeeStructure(student.class);
 
@@ -6009,10 +6049,9 @@ localStorage.setItem("loggedPass", p);
       if(nameEl) nameEl.innerText = student.name;
       if(classBadgeEl) classBadgeEl.innerText = `Class ${student.class}`;
 
-      const allAtt = await safeDataFetch("attendance") || {};
       const currentMonth = getAutoMonthName();
-      const mData = allAtt[student.admn] && allAtt[student.admn][currentMonth] ? allAtt[student.admn][currentMonth] : {};
-      
+      const mData = await safeDataFetch(`attendance/${student.admn}/${currentMonth}`) || {};
+ 
       let pCount = 0, aCount = 0;
       Object.values(mData).forEach(v => { if(v === true) pCount++; else if(v === false) aCount++; });
       if(document.getElementById("sHomePresentCount")) document.getElementById("sHomePresentCount").innerText = pCount;
@@ -6211,7 +6250,7 @@ localStorage.setItem("loggedPass", p);
         if(!student) return;
         
         const matrix = await safeDataFetch("fees_matrix") || {};
-        const studentMatrix = matrix[currentStudentAdmn] || {};
+        const studentMatrix = await safeDataFetch(`fees_matrix/${currentStudentAdmn}`) || {};
         const struct = window.getFeeStructure(student.class);
         const monthlyRate = student.customFee !== undefined ? parseFloat(student.customFee) : struct.rate;
 
@@ -7021,9 +7060,8 @@ localStorage.setItem("loggedPass", p);
         const student = await getStudentRecord(admn);
         if(!student) { alert("Student details not found."); return; }
 
-        const matrix = await safeDataFetch("fees_matrix") || {};
-        const studentMatrix = matrix[admn] || {};
-        const struct = window.getFeeStructure(student.class);
+               const studentMatrix = await safeDataFetch(`fees_matrix/${admn}`) || {};
+ const struct = window.getFeeStructure(student.class);
 
         document.getElementById("cardStudentHeaderName").innerText = `Student Name: ${student.name}`;
         document.getElementById("cardStudentHeaderClass").innerText = `Class: ${student.class} | Admn No: ${student.admn}`;
@@ -7103,14 +7141,19 @@ localStorage.setItem("loggedPass", p);
       let students = getLiveStudents().filter(s => cleanClassStr(s.class) === cleanClassStr(stdVal));
       if(selectedAdmnVal !== "ALL") students = students.filter(s => String(s.admn) === String(selectedAdmnVal));
 
-      const allAtt = await safeDataFetch("attendance") || {};
-      const reportDiv = document.getElementById(targetContainerId);
+           const reportDiv = document.getElementById(targetContainerId);
       reportDiv.innerHTML = "";
 
       if(selectedAdmnVal !== "ALL" && students.length > 0) {
         const st = students[0];
-        const mData = allAtt[st.admn] && allAtt[st.admn][monthVal] ? allAtt[st.admn][monthVal] : {};
-        let totalWorkingDays = 0, presentDays = 0, absentDays = 0, tableRows = "";
+        const mData = await safeDataFetch(`attendance/${st.admn}/${monthVal}`) || {};
+      }
+      const allAtt = (selectedAdmnVal === "ALL") ? (await safeDataFetch("attendance") || {}) : {};
+
+      if(selectedAdmnVal !== "ALL" && students.length > 0) {
+        const st = students[0];
+        const mData = await safeDataFetch(`attendance/${st.admn}/${monthVal}`) || {};
+ let totalWorkingDays = 0, presentDays = 0, absentDays = 0, tableRows = "";
         for(let d = 1; d <= daysCount; d++) {
           const dateObj = new Date(year, monthIndex, d);
           const isSunday = dateObj.getDay() === 0;
