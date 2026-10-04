@@ -1360,6 +1360,7 @@ canvas { touch-action: pan-y !important; }
     <div class="menu-item admin-only" onclick="openModal('registerStudentModal')">👤 Register Student</div>
     <div class="menu-item admin-only" onclick="openModal('registerTeacherModal')">👩‍🏫 Register Teacher</div>
     <div class="menu-item admin-only" onclick="openModal('credentialsModal')">🔑 Login IDs & Passwords</div>
+    <div class="menu-item admin-only" onclick="openModal('studentAllowedModal')">🔓 Student Allowed</div>
     <div class="menu-item admin-only" onclick="openModal('addConcessionModal')">💸 Add Concession</div>
     <div class="menu-item logout" id="logoutBtn">🚪 Logout</div>
 </div>
@@ -3235,7 +3236,7 @@ Exact Output JSON Format Required:
     </div>
   </div>
 
-  <!-- STUDENT UPDATE PROFILE GRAYED MODAL -->
+      <!-- STUDENT UPDATE PROFILE MODAL (DYNAMICALLY CONTROLLED BY ADMIN) -->
   <div id="studentUpdateModal" class="modal-overlay">
     <div class="modal-content">
       <div class="modal-header">
@@ -3243,17 +3244,33 @@ Exact Output JSON Format Required:
         <span class="close-modal" onclick="closeModal('studentUpdateModal')">✕</span>
       </div>
       <div class="modal-body">
-        <label>Full Name:</label>
-        <input type="text" id="sGrayedName" disabled style="background-color:rgba(0,0,0,0.06) !important;">
+        <div style="text-align:center; margin-bottom:12px;">
+          <img id="sUpdateAvatarPreview" src="https://via.placeholder.com/150" style="width:82px; height:82px; border-radius:50%; object-fit:cover; border:3px solid #0288d1; box-shadow:0 4px 12px rgba(0,0,0,0.18);">
+          <div style="margin-top:8px;">
+            <input type="file" id="sUpdatePhotoInput" accept="image/*" style="display:none;">
+            <button type="button" id="sUpdatePhotoBtn" class="btn-primary btn-blue" style="width:auto; padding:7px 16px; font-size:11px; margin:0 auto;" onclick="document.getElementById('sUpdatePhotoInput').click()">📷 Select & Crop Photo</button>
+          </div>
+        </div>
 
-        <label>Date of Birth:</label>
-        <input type="text" id="sGrayedDob" disabled style="background-color:rgba(0,0,0,0.06) !important;">
+        <label>Full Name:</label>
+        <input type="text" id="sGrayedName" disabled>
+
+        <label>Login Password:</label>
+        <input type="text" id="sGrayedPassword" disabled placeholder="Login Password">
 
         <label>WhatsApp Phone:</label>
-        <input type="text" id="sGrayedPhone" disabled style="background-color:rgba(0,0,0,0.06) !important;">
+        <input type="text" id="sGrayedPhone" disabled>
 
-        <div style="margin-top:16px; padding:12px; border-radius:12px; background:rgba(239, 68, 68, 0.12); border:1px solid #ef4444; text-align:center; color:#ef4444; font-weight:800; font-size:12px;">
-          🔒 Contact Teacher to Update Your Profile
+        <label>Date of Birth (DOB):</label>
+        <input type="text" id="sGrayedDob" disabled placeholder="DD/MM/YYYY">
+
+        <label>Email Address:</label>
+        <input type="email" id="sGrayedEmail" disabled placeholder="student@example.com" style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; font-size: 13px; outline: none; background: var(--input-bg); color: var(--text-color);">
+
+        <button id="sSaveProfileChangesBtn" class="btn-primary btn-green" style="margin-top:16px; display:none;" onclick="window.saveStudentSelfProfileUpdate()">💾 Update Profile</button>
+
+        <div id="sProfileLockedNotice" style="margin-top:16px; padding:12px; border-radius:12px; background:rgba(239, 68, 68, 0.12); border:1px solid #ef4444; text-align:center; color:#ef4444; font-weight:800; font-size:12px;">
+          🔒 Contact Teacher to Unlock Profile Editing
         </div>
       </div>
     </div>
@@ -3459,8 +3476,13 @@ Exact Output JSON Format Required:
               <label>Total Performance Points (+ / -):</label>
               <input type="number" id="profPointsInput" placeholder="0">
 
-              <label>Change Photo (Optional):</label>
-              <input type="file" id="profPhotoFileInput" accept="image/*">
+              <label>Email:</label>
+              <input type="email" id="profEmailInput" placeholder="student@example.com" style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; font-size: 13px; outline: none; background: var(--input-bg); color: var(--text-color);">
+
+              <label>Update Photo (Optional):</label>
+              <div style="display:flex; align-items:center; gap:10px; margin-top:4px;">
+                <input type="file" id="profPhotoFileInput" accept="image/*" style="flex:1;">
+              </div>
 
               <button id="updateStudentProfileBtn" class="btn-primary btn-green" style="margin-top:16px;">💾 Update Profile</button>
               <button id="deleteAdminStudentBtn" class="btn-primary btn-red" style="margin-top:8px;">🗑️ Delete Student Account</button>
@@ -4115,8 +4137,90 @@ Exact Output JSON Format Required:
     </div>
   </div>
 
+    <!-- ADMIN STUDENT ALLOWED (PERMISSIONS) MODAL -->
+  <div id="studentAllowedModal" class="modal-overlay" style="z-index: 100055;">
+    <div class="modal-content" style="max-width: 420px;">
+      <div class="modal-header">
+        <span>🔓 Student Allowed Permissions</span>
+        <span class="close-modal" onclick="closeModal('studentAllowedModal')">✕</span>
+      </div>
+      <div class="modal-body">
+        <label>Select Standard / Class:</label>
+        <select id="stuAllowClassSelect" onchange="window.loadStudentAllowedSettings(this.value)">
+          <option value="ALL">🌟 All Classes (Global Default)</option>
+          <option value="Nursery">Nursery</option><option value="Jr. KG">Jr. KG</option><option value="Sr. KG">Sr. KG</option>
+          <option value="1">Class 1</option><option value="2">Class 2</option><option value="3">Class 3</option><option value="4">Class 4</option>
+          <option value="5">Class 5</option><option value="6">Class 6</option><option value="7">Class 7</option><option value="8">Class 8</option>
+          <option value="9">Class 9</option><option value="10">Class 10</option><option value="11">Class 11</option><option value="12">Class 12</option>
+        </select>
 
-    <!-- CUSTOM THEME & VISUAL EFFECTS STUDIO MODAL -->
+        <div style="font-size:11px; font-weight:800; color:var(--text-muted); margin-top:12px; margin-bottom:8px;">
+          Allow students to edit the following fields:
+        </div>
+
+        <div class="dark-mode-toggle-row" style="border-radius:12px; border:1px solid var(--border-color); margin-bottom:8px; padding:12px 14px;">
+          <span>1. Full Name</span>
+          <label class="switch"><input type="checkbox" id="allowStuNameChk"><span class="slider"></span></label>
+        </div>
+
+        <div class="dark-mode-toggle-row" style="border-radius:12px; border:1px solid var(--border-color); margin-bottom:8px; padding:12px 14px;">
+          <span>2. Login Password</span>
+          <label class="switch"><input type="checkbox" id="allowStuPassChk"><span class="slider"></span></label>
+        </div>
+
+        <div class="dark-mode-toggle-row" style="border-radius:12px; border:1px solid var(--border-color); margin-bottom:8px; padding:12px 14px;">
+          <span>3. Phone Number</span>
+          <label class="switch"><input type="checkbox" id="allowStuPhoneChk"><span class="slider"></span></label>
+        </div>
+
+        <div class="dark-mode-toggle-row" style="border-radius:12px; border:1px solid var(--border-color); margin-bottom:8px; padding:12px 14px;">
+          <span>4. Date of Birth (DOB)</span>
+          <label class="switch"><input type="checkbox" id="allowStuDobChk"><span class="slider"></span></label>
+        </div>
+
+        <div class="dark-mode-toggle-row" style="border-radius:12px; border:1px solid var(--border-color); margin-bottom:8px; padding:12px 14px;">
+          <span>5. Update Photo</span>
+          <label class="switch"><input type="checkbox" id="allowStuPhotoChk"><span class="slider"></span></label>
+        </div>
+
+        <div class="dark-mode-toggle-row" style="border-radius:12px; border:1px solid var(--border-color); margin-bottom:14px; padding:12px 14px;">
+          <span>6. Add / Edit Email</span>
+          <label class="switch"><input type="checkbox" id="allowStuEmailChk"><span class="slider"></span></label>
+        </div>
+
+        <button id="saveStudentAllowedBtn" class="btn-primary btn-green" onclick="window.saveStudentAllowedSettings()">💾 Save Allowed Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- UNIVERSAL PHOTO CROP & PREVIEW MODAL -->
+  <div id="photoCropperModal" class="modal-overlay" style="z-index: 1000090;">
+    <div class="modal-content" style="max-width: 380px; text-align: center;">
+      <div class="modal-header">
+        <span>✂️ Preview & Crop Photo</span>
+        <span class="close-modal" onclick="window.cancelPhotoCrop()">✕</span>
+      </div>
+      <div class="modal-body">
+        <div style="font-size:11px; font-weight:700; color:var(--text-muted); margin-bottom:10px;">
+          Drag photo to adjust position & use slider to zoom
+        </div>
+        <div id="cropCanvasViewport" style="width: 250px; height: 250px; margin: 0 auto; border-radius: 18px; overflow: hidden; border: 2.5px solid #0288d1; position: relative; background: #0f172a; touch-action: none; cursor: grab;">
+          <canvas id="photoCropCanvas" width="300" height="300" style="width: 250px; height: 250px; display: block; touch-action: none !important;"></canvas>
+        </div>
+        <div style="margin-top: 14px; display: flex; align-items: center; gap: 10px; padding: 0 10px;">
+          <span style="font-size: 12px; font-weight: 800;">🔍</span>
+          <input type="range" id="photoCropZoomSlider" min="1" max="3" step="0.02" value="1" style="flex: 1; accent-color: #0288d1; cursor: pointer;">
+        </div>
+        <div style="display: flex; gap: 10px; margin-top: 16px;">
+          <button type="button" class="btn-primary" style="background: #64748b; margin-top: 0;" onclick="window.cancelPhotoCrop()">Cancel</button>
+          <button type="button" class="btn-primary btn-green" style="margin-top: 0;" onclick="window.applyPhotoCrop()">✔ Crop & Use</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CUSTOM THEME & VISUAL EFFECTS STUDIO MODAL -->
+
   <div id="customThemeModal" class="modal-overlay" style="z-index: 100060;">
     <div class="modal-content" style="max-width: 400px;">
       <div class="modal-header">
@@ -5085,15 +5189,17 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
         }
       }
       if(id === "uploadHomeworkModal") { document.getElementById("hwAssignedClassDisplay").value = `Class ${assignedClass}`; }
-      if(id === "studentUpdateModal") {
-        getStudentRecord(currentStudentAdmn).then(student => {
-          if(student) {
-            document.getElementById("sGrayedName").value = student.name || "";
-            document.getElementById("sGrayedDob").value = student.dob || "";
-            document.getElementById("sGrayedPhone").value = student.phone || "";
-          }
-        });
+
+                  if(id === "studentUpdateModal") {
+        window.openStudentSelfUpdateModal();
       }
+      if(id === "studentAllowedModal") {
+        const clsSel = document.getElementById("stuAllowClassSelect");
+        if(clsSel) clsSel.value = "ALL";
+        window.loadStudentAllowedSettings("ALL");
+      }
+
+            
       if(id === "studentProfileDrawerModal") {
         getStudentRecord(currentStudentAdmn).then(student => {
           if(student) {
@@ -6646,8 +6752,10 @@ localStorage.setItem("loggedPass", p);
       document.getElementById("profNameInput").value = student.name || "";
       document.getElementById("profPhoneInput").value = student.phone || "";
       document.getElementById("profDobInput").value = student.dob || "";
-      document.getElementById("profPointsInput").value = student.points || 0;
+           document.getElementById("profPointsInput").value = student.points || 0;
+      if(document.getElementById("profEmailInput")) document.getElementById("profEmailInput").value = student.email || "";
       document.getElementById("profPhotoFileInput").value = "";
+      if(window.croppedPhotosMap) delete window.croppedPhotosMap["profPhotoFileInput"];
 
       document.getElementById("deleteAdminStudentBtn").style.display = currentRole === "admin" ? "block" : "none";
       
@@ -7255,7 +7363,9 @@ localStorage.setItem("loggedPass", p);
       alert(`Attendance record cleared for Class ${std} (${month}).`);
     });
 
-        addSafeListener("updateStudentProfileBtn", "click", () => {
+
+
+          addSafeListener("updateStudentProfileBtn", "click", () => {
       const btn = document.getElementById("updateStudentProfileBtn");
       runWithBtnSpinner(btn, "💾 Update Profile", async () => {
         const oldAdmn = document.getElementById("profStudentAdmn").value;
@@ -7265,6 +7375,7 @@ localStorage.setItem("loggedPass", p);
         const cls = document.getElementById("profClassSelect").value;
         const phone = document.getElementById("profPhoneInput").value.trim();
         const dob = document.getElementById("profDobInput").value.trim();
+        const email = document.getElementById("profEmailInput") ? document.getElementById("profEmailInput").value.trim() : "";
         const pts = parseInt(document.getElementById("profPointsInput").value) || 0;
         const photoFile = document.getElementById("profPhotoFileInput");
 
@@ -7273,7 +7384,11 @@ localStorage.setItem("loggedPass", p);
         const currentStudent = await getStudentRecord(oldAdmn);
         let photoUrl = currentStudent ? (currentStudent.photo || "https://via.placeholder.com/150") : "https://via.placeholder.com/150";
 
-        if(photoFile && photoFile.files.length > 0) {
+        const croppedData = window.croppedPhotosMap && window.croppedPhotosMap["profPhotoFileInput"];
+        if (croppedData) {
+          photoUrl = await window.saveMediaToFirestore("student_photos", newAdmn, croppedData, { name: name, class: cls });
+          delete window.croppedPhotosMap["profPhotoFileInput"];
+        } else if(photoFile && photoFile.files.length > 0) {
           const uploadedPhoto = await readFileAsDataURL(photoFile.files[0], 500, 0.72);
           if(uploadedPhoto) {
             photoUrl = await window.saveMediaToFirestore("student_photos", newAdmn, uploadedPhoto, { name: name, class: cls });
@@ -7288,6 +7403,7 @@ localStorage.setItem("loggedPass", p);
           class: cls,
           phone: phone,
           dob: dob || "-",
+          email: email || "",
           points: pts,
           photo: photoUrl,
           regDate: currentStudent ? (currentStudent.regDate || getTodayFormattedDate()) : getTodayFormattedDate()
@@ -10700,7 +10816,330 @@ window.syncProfileModalHeight = function() {
           setTimeout(() => window.syncProfileModalHeight(), 150);
       };
 
-      
+            // ==========================================
+      // 🚀 PHOTO CROP & PREVIEW ENGINE + STUDENT ALLOWED ENGINE
+      // ==========================================
+      window.croppedPhotosMap = {};
+      let activeCropInputId = null;
+      let cropImageObj = null;
+      let cropScale = 1;
+      let cropMinScale = 1;
+      let cropOffsetX = 0;
+      let cropOffsetY = 0;
+      let isCropDragging = false;
+      let cropStartX = 0;
+      let cropStartY = 0;
+
+      window.initPhotoCropperForInput = function(inputId, previewImgId = null) {
+        const fileInput = document.getElementById(inputId);
+        if (!fileInput) return;
+        fileInput.addEventListener("change", (e) => {
+          if (!e.target.files || !e.target.files[0]) return;
+          const file = e.target.files[0];
+          if (!file.type.startsWith("image/")) return;
+
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            cropImageObj = new Image();
+            cropImageObj.onload = () => {
+              activeCropInputId = inputId;
+              window.activeCropPreviewImgId = previewImgId;
+
+              const canvas = document.getElementById("photoCropCanvas");
+              const cw = canvas.width;
+              const ch = canvas.height;
+              cropMinScale = Math.max(cw / cropImageObj.width, ch / cropImageObj.height);
+              cropScale = cropMinScale;
+
+              const slider = document.getElementById("photoCropZoomSlider");
+              if (slider) {
+                slider.min = cropMinScale.toFixed(3);
+                slider.max = (cropMinScale * 3).toFixed(3);
+                slider.step = (cropMinScale / 50).toFixed(4);
+                slider.value = cropScale;
+              }
+
+              cropOffsetX = (cw - cropImageObj.width * cropScale) / 2;
+              cropOffsetY = (ch - cropImageObj.height * cropScale) / 2;
+              window.drawPhotoCropCanvas();
+              document.getElementById("photoCropperModal").classList.add("active");
+            };
+            cropImageObj.src = ev.target.result;
+          };
+          reader.readAsDataURL(file);
+        });
+      };
+
+      window.drawPhotoCropCanvas = function() {
+        const canvas = document.getElementById("photoCropCanvas");
+        if (!canvas || !cropImageObj) return;
+        const ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#0f172a";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const drawW = cropImageObj.width * cropScale;
+        const drawH = cropImageObj.height * cropScale;
+
+        if (cropOffsetX > 0) cropOffsetX = 0;
+        if (cropOffsetY > 0) cropOffsetY = 0;
+        if (cropOffsetX + drawW < canvas.width) cropOffsetX = canvas.width - drawW;
+        if (cropOffsetY + drawH < canvas.height) cropOffsetY = canvas.height - drawH;
+
+        ctx.drawImage(cropImageObj, cropOffsetX, cropOffsetY, drawW, drawH);
+      };
+
+      (function setupCropperInteractions() {
+        const canvas = document.getElementById("photoCropCanvas");
+        const slider = document.getElementById("photoCropZoomSlider");
+        if (!canvas || !slider) return;
+
+        slider.addEventListener("input", (e) => {
+          if (!cropImageObj) return;
+          const newScale = parseFloat(e.target.value);
+          const centerX = canvas.width / 2;
+          const centerY = canvas.height / 2;
+          cropOffsetX = centerX - ((centerX - cropOffsetX) / cropScale) * newScale;
+          cropOffsetY = centerY - ((centerY - cropOffsetY) / cropScale) * newScale;
+          cropScale = newScale;
+          window.drawPhotoCropCanvas();
+        });
+
+        const startDrag = (clientX, clientY) => {
+          isCropDragging = true;
+          cropStartX = clientX - cropOffsetX;
+          cropStartY = clientY - cropOffsetY;
+        };
+        const moveDrag = (clientX, clientY) => {
+          if (!isCropDragging || !cropImageObj) return;
+          cropOffsetX = clientX - cropStartX;
+          cropOffsetY = clientY - cropStartY;
+          window.drawPhotoCropCanvas();
+        };
+        const endDrag = () => { isCropDragging = false; };
+
+        canvas.addEventListener("mousedown", (e) => startDrag(e.clientX, e.clientY));
+        window.addEventListener("mousemove", (e) => moveDrag(e.clientX, e.clientY));
+        window.addEventListener("mouseup", endDrag);
+
+        canvas.addEventListener("touchstart", (e) => {
+          if (e.touches.length === 1) {
+            e.preventDefault();
+            startDrag(e.touches[0].clientX, e.touches[0].clientY);
+          }
+        }, { passive: false });
+        canvas.addEventListener("touchmove", (e) => {
+          if (e.touches.length === 1) {
+            e.preventDefault();
+            moveDrag(e.touches[0].clientX, e.touches[0].clientY);
+          }
+        }, { passive: false });
+        canvas.addEventListener("touchend", endDrag);
+      })();
+
+      window.applyPhotoCrop = function() {
+        const canvas = document.getElementById("photoCropCanvas");
+        if (!canvas || !activeCropInputId) return;
+        const croppedBase64 = canvas.toDataURL("image/jpeg", 0.82);
+        window.croppedPhotosMap[activeCropInputId] = croppedBase64;
+
+        if (window.activeCropPreviewImgId) {
+          const prevEl = document.getElementById(window.activeCropPreviewImgId);
+          if (prevEl) prevEl.src = croppedBase64;
+        }
+
+        // Convert cropped data back into the file input so existing upload flows also get the cropped image
+        fetch(croppedBase64)
+          .then(res => res.blob())
+          .then(blob => {
+            const file = new File([blob], "cropped_photo.jpg", { type: "image/jpeg" });
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            const inp = document.getElementById(activeCropInputId);
+            if (inp) inp.files = dt.files;
+          }).catch(() => {});
+
+        document.getElementById("photoCropperModal").classList.remove("active");
+      };
+
+      window.cancelPhotoCrop = function() {
+        if (activeCropInputId) {
+          const inp = document.getElementById(activeCropInputId);
+          if (inp) inp.value = "";
+          delete window.croppedPhotosMap[activeCropInputId];
+        }
+        document.getElementById("photoCropperModal").classList.remove("active");
+      };
+
+      // Attach Crop & Preview Window to all Profile & Registration Photo Inputs
+      window.initPhotoCropperForInput("profPhotoFileInput", "profAvatarDisplay");
+      window.initPhotoCropperForInput("regPhotoFile", null);
+      window.initPhotoCropperForInput("sUpdatePhotoInput", "sUpdateAvatarPreview");
+
+      // ==========================================
+      // 🔓 ADMIN "STUDENT ALLOWED" PERMISSIONS LOGIC
+      // ==========================================
+      window.loadStudentAllowedSettings = async function(clsVal) {
+        const key = clsVal === "ALL" ? "ALL" : cleanClassStr(clsVal);
+        let perms = await safeDataFetch(`student_permissions/${key}`);
+        if (!perms && key !== "ALL") {
+          perms = await safeDataFetch(`student_permissions/ALL`);
+        }
+        perms = perms || {};
+
+        document.getElementById("allowStuNameChk").checked = !!perms.name;
+        document.getElementById("allowStuPassChk").checked = !!perms.password;
+        document.getElementById("allowStuPhoneChk").checked = !!perms.phone;
+        document.getElementById("allowStuDobChk").checked = !!perms.dob;
+        document.getElementById("allowStuPhotoChk").checked = !!perms.photo;
+        document.getElementById("allowStuEmailChk").checked = !!perms.email;
+      };
+
+      window.saveStudentAllowedSettings = function() {
+        const btn = document.getElementById("saveStudentAllowedBtn");
+        runWithBtnSpinner(btn, "💾 Save Allowed Settings", async () => {
+          const clsVal = document.getElementById("stuAllowClassSelect").value || "ALL";
+          const key = clsVal === "ALL" ? "ALL" : cleanClassStr(clsVal);
+
+          const permObj = {
+            name: document.getElementById("allowStuNameChk").checked,
+            password: document.getElementById("allowStuPassChk").checked,
+            phone: document.getElementById("allowStuPhoneChk").checked,
+            dob: document.getElementById("allowStuDobChk").checked,
+            photo: document.getElementById("allowStuPhotoChk").checked,
+            email: document.getElementById("allowStuEmailChk").checked,
+            updatedAt: Date.now()
+          };
+
+          const updates = {};
+          updates[`student_permissions/${key}`] = permObj;
+
+          // Agar Admin ne "All Classes" select karke save kiya hai, toh har class par apply kar do
+          if (key === "ALL") {
+            const allClasses = ["Nursery", "Jr. KG", "Sr. KG", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"];
+            allClasses.forEach(c => { updates[`student_permissions/${c}`] = permObj; });
+          }
+
+          await update(ref(db), updates);
+          alert(`✔ Student editing permissions updated for ${key === "ALL" ? "All Classes" : "Class " + key}!`);
+          window.closeModal("studentAllowedModal");
+        });
+      };
+
+      // ==========================================
+      // 🎓 STUDENT SELF-UPDATE PROFILE LOGIC
+      // ==========================================
+      window.openStudentSelfUpdateModal = async function() {
+        const student = await getStudentRecord(currentStudentAdmn);
+        if (!student) return;
+
+        const clsKey = cleanClassStr(student.class);
+        const classPerms = await safeDataFetch(`student_permissions/${clsKey}`);
+        const allPerms = await safeDataFetch(`student_permissions/ALL`);
+        const perms = classPerms || allPerms || {};
+
+        const userObj = await safeDataFetch(`users/${student.admn}`) || {};
+
+        const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(student.name || 'S')}&background=0288d1&color=fff&bold=true`;
+        const prevImg = document.getElementById("sUpdateAvatarPreview");
+        if (prevImg) prevImg.src = (student.photo && !student.photo.includes("via.placeholder.com")) ? student.photo : defaultAvatar;
+
+        delete window.croppedPhotosMap["sUpdatePhotoInput"];
+        if (document.getElementById("sUpdatePhotoInput")) document.getElementById("sUpdatePhotoInput").value = "";
+
+        const nameInp = document.getElementById("sGrayedName");
+        const passInp = document.getElementById("sGrayedPassword");
+        const phoneInp = document.getElementById("sGrayedPhone");
+        const dobInp = document.getElementById("sGrayedDob");
+        const emailInp = document.getElementById("sGrayedEmail");
+        const photoBtn = document.getElementById("sUpdatePhotoBtn");
+
+        nameInp.value = student.name || "";
+        passInp.value = userObj.password || "MM";
+        phoneInp.value = student.phone || "";
+        dobInp.value = (student.dob && student.dob !== "-") ? student.dob : "";
+        emailInp.value = student.email || "";
+
+        const applyFieldState = (el, allowed) => {
+          if (!el) return;
+          el.disabled = !allowed;
+          el.style.backgroundColor = allowed ? "var(--input-bg)" : "rgba(0,0,0,0.06)";
+          el.style.cursor = allowed ? "text" : "not-allowed";
+          el.style.opacity = allowed ? "1" : "0.65";
+        };
+
+        applyFieldState(nameInp, !!perms.name);
+        applyFieldState(passInp, !!perms.password);
+        applyFieldState(phoneInp, !!perms.phone);
+        applyFieldState(dobInp, !!perms.dob);
+        applyFieldState(emailInp, !!perms.email);
+
+        if (photoBtn) {
+          photoBtn.disabled = !perms.photo;
+          photoBtn.classList.toggle("btn-grayed", !perms.photo);
+          photoBtn.innerText = perms.photo ? "📷 Select & Crop Photo" : "🔒 Photo Update Locked";
+        }
+
+        const anyAllowed = !!(perms.name || perms.password || perms.phone || perms.dob || perms.photo || perms.email);
+        document.getElementById("sSaveProfileChangesBtn").style.display = anyAllowed ? "flex" : "none";
+        document.getElementById("sProfileLockedNotice").style.display = anyAllowed ? "none" : "block";
+      };
+
+      window.saveStudentSelfProfileUpdate = function() {
+        const btn = document.getElementById("sSaveProfileChangesBtn");
+        runWithBtnSpinner(btn, "💾 Update Profile", async () => {
+          const student = await getStudentRecord(currentStudentAdmn);
+          if (!student) return;
+
+          const clsKey = cleanClassStr(student.class);
+          const perms = (await safeDataFetch(`student_permissions/${clsKey}`)) || (await safeDataFetch(`student_permissions/ALL`)) || {};
+
+          const updates = {};
+
+          if (perms.name) {
+            const newName = document.getElementById("sGrayedName").value.trim();
+            if (!newName) { alert("Name cannot be empty."); return; }
+            updates[`students/${student.admn}/name`] = newName;
+          }
+          if (perms.password) {
+            const newPass = document.getElementById("sGrayedPassword").value.trim();
+            if (!newPass) { alert("Password cannot be empty."); return; }
+            updates[`users/${student.admn}/password`] = newPass;
+            localStorage.setItem("loggedPass", newPass);
+          }
+          if (perms.phone) {
+            updates[`students/${student.admn}/phone`] = document.getElementById("sGrayedPhone").value.trim();
+          }
+          if (perms.dob) {
+            updates[`students/${student.admn}/dob`] = document.getElementById("sGrayedDob").value.trim() || "-";
+          }
+          if (perms.email) {
+            updates[`students/${student.admn}/email`] = document.getElementById("sGrayedEmail").value.trim();
+          }
+          if (perms.photo && window.croppedPhotosMap["sUpdatePhotoInput"]) {
+            const croppedData = window.croppedPhotosMap["sUpdatePhotoInput"];
+            const photoPointer = await window.saveMediaToFirestore("student_photos", student.admn, croppedData, {
+              name: student.name,
+              class: student.class
+            });
+            updates[`students/${student.admn}/photo`] = photoPointer;
+            delete window.croppedPhotosMap["sUpdatePhotoInput"];
+          }
+
+          if (Object.keys(updates).length === 0) {
+            alert("No changes to save.");
+            return;
+          }
+
+          await update(ref(db), updates);
+          const refreshed = await safeDataFetch(`students/${student.admn}`);
+          if (refreshed) inMemoryStudentsData[student.admn] = refreshed;
+          await refreshStudentDashboard();
+          alert("✔ Your profile has been updated successfully!");
+          window.closeModal("studentUpdateModal");
+        });
+      };
+
     </script>
 </body>
 </html>
