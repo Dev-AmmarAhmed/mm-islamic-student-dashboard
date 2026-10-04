@@ -1588,19 +1588,35 @@ canvas { touch-action: pan-y !important; }
     </div>
 
 
-  <section id="loginScreen" class="tab-section active animate-in">
+
+  
+    <section id="loginScreen" class="tab-section active animate-in">
     <div class="login-box">
       <div>
         <h2 style="color: #0288d1; font-size: 16px; font-weight: 800; margin-bottom: 4px;">M.M ISLAMIC ENGLISH SCHOOL</h2>
         <h4 style="color: #e65100; font-size: 12px; font-weight: 800; letter-spacing: 0.5px;">PORTAL LOGIN</h4>
       </div>
 
-      <input type="text" id="loginUsername" placeholder="User ID / Username">
+      <input type="text" id="loginUsername" placeholder="User ID / Admission No / Email">
       <input type="password" id="loginPassword" placeholder="Password">
       <button id="loginBtn" class="btn-primary">PORTAL LOGIN</button>
       <p id="loginError" style="color:red; font-size:12px; display:none;"></p>
     </div>
+
+    <!-- SAME LENGTH GOOGLE SIGN-IN BUTTON BELOW LOGIN CARD -->
+    <div style="width: 100%; max-width: 360px; margin-top: 18px;">
+      <button id="googleLoginBtn" type="button" class="btn-primary" style="background: var(--card-bg) !important; color: var(--text-color) !important; border: 1.5px solid var(--border-color) !important; border-radius: 18px !important; padding: 14px 18px; width: 100%; display: flex; align-items: center; justify-content: center; gap: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.28) !important; margin-top: 0;">
+        <svg width="20" height="20" viewBox="0 0 48 48">
+          <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+          <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+          <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+          <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+        </svg>
+        <span style="font-size: 14px; font-weight: 800; letter-spacing: 0.3px;">Sign in with Google</span>
+      </button>
+    </div>
   </section>
+
 
 
            <!-- ADMIN & TEACHER LEAVE MANAGEMENT TAB -->
@@ -4578,7 +4594,7 @@ Exact Output JSON Format Required:
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js";
     import { getDatabase, ref, onValue, set, update, remove, child, get } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
-    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
     import { getFirestore, doc, setDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
       
@@ -5509,46 +5525,133 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       }
     });
 
-      addSafeListener("loginBtn", "click", () => {
+        // Helper: Email ko Firebase key me badalne aur user dhoondhne ke liye
+    window.encodeEmailKey = function(email) {
+      return String(email || "").trim().toLowerCase().replace(/[.#$\[\]\/]/g, "_");
+    };
+
+    window.resolveUserIdByEmail = async function(emailInput) {
+      const cleanEmail = String(emailInput || "").trim().toLowerCase();
+      if (!cleanEmail || !cleanEmail.includes("@")) return null;
+
+      // 1. Check fast email_lookup index first
+      const emailKey = window.encodeEmailKey(cleanEmail);
+      const mappedId = await safeDataFetch(`email_lookup/${emailKey}`);
+      if (mappedId) return String(mappedId);
+
+      // 2. Fallback: Search in students & teachers if email was saved before index existed
+      const allStudents = await safeDataFetch("students") || {};
+      for (const [admn, st] of Object.entries(allStudents)) {
+        if (st && st.email && String(st.email).trim().toLowerCase() === cleanEmail) {
+          await update(ref(db), { [`email_lookup/${emailKey}`]: String(admn) }).catch(() => {});
+          return String(admn);
+        }
+      }
+      const allTeachers = await safeDataFetch("teachers") || {};
+      for (const [uname, tch] of Object.entries(allTeachers)) {
+        if (tch && tch.email && String(tch.email).trim().toLowerCase() === cleanEmail) {
+          await update(ref(db), { [`email_lookup/${emailKey}`]: String(uname) }).catch(() => {});
+          return String(uname);
+        }
+      }
+      return null;
+    };
+
+    window.completePortalLoginSession = function(resolvedUserId, uData) {
+      const previousUser = localStorage.getItem("loggedUser");
+      if (previousUser !== resolvedUserId) {
+        const theme = localStorage.getItem("appTheme");
+        const darkMode = localStorage.getItem("darkMode");
+        const moreAnim = localStorage.getItem("moreAnimations");
+        const neonEff = localStorage.getItem("neonEffect");
+        localStorage.clear();
+        if(theme) localStorage.setItem("appTheme", theme);
+        if(darkMode) localStorage.setItem("darkMode", darkMode);
+        if(moreAnim) localStorage.setItem("moreAnimations", moreAnim);
+        if(neonEff) localStorage.setItem("neonEffect", neonEff);
+        if ('caches' in window) {
+          caches.keys().then(names => { for (let name of names) caches.delete(name); });
+        }
+      }
+      localStorage.setItem("loggedUser", resolvedUserId);
+      localStorage.setItem("loggedPass", uData.password);
+      localStorage.setItem("loggedRole", uData.role);
+      if(uData.assignedClass) localStorage.setItem("assignedClass", uData.assignedClass);
+      if(uData.admn) localStorage.setItem("studentAdmn", uData.admn);
+
+      if (typeof window.initNativePushAndSW === "function") {
+        window.initNativePushAndSW();
+      }
+      renderDashboardForRole(uData.role, uData.assignedClass, uData.admn);
+    };
+
+    // 1. Standard Login (Supports User ID / Admission No OR Email + Password)
+    addSafeListener("loginBtn", "click", () => {
       const btn = document.getElementById("loginBtn");
       runWithBtnSpinner(btn, "PORTAL LOGIN", async () => {
-        const u = document.getElementById("loginUsername").value.trim();
+        const rawInput = document.getElementById("loginUsername").value.trim();
         const p = document.getElementById("loginPassword").value.trim();
-        if(!u || !p) { alert("Please enter both Username and Password."); return; }
+        if(!rawInput || !p) { alert("Please enter both Username/Email and Password."); return; }
 
-        // 🛡️ SECURITY & PERFORMANCE FIX: Fetch ONLY the specific user's data
-        // Pehle poora "users" database download hota tha jo insecure aur slow tha
-        const uData = await safeDataFetch(`users/${u}`);
+        let targetUserId = rawInput;
+        if (rawInput.includes("@")) {
+          const resolved = await window.resolveUserIdByEmail(rawInput);
+          if (!resolved) {
+            document.getElementById("loginError").style.display = "block";
+            document.getElementById("loginError").innerText = "No active account linked with this email.";
+            return;
+          }
+          targetUserId = resolved;
+        }
 
+        const uData = await safeDataFetch(`users/${targetUserId}`);
         if(uData && uData.password === p) {
-          const previousUser = localStorage.getItem("loggedUser");
-          if (previousUser !== u) {
-
-            const theme = localStorage.getItem("appTheme");
-              const darkMode = localStorage.getItem("darkMode");
-              localStorage.clear();
-              if(theme) localStorage.setItem("appTheme", theme);
-              if(darkMode) localStorage.setItem("darkMode", darkMode);
-              if ('caches' in window) {
-                  caches.keys().then(names => { for (let name of names) caches.delete(name); });
-              }
-          }
-          localStorage.setItem("loggedUser", u);
-localStorage.setItem("loggedPass", p);
-          localStorage.setItem("loggedRole", uData.role);
-          if(uData.assignedClass) localStorage.setItem("assignedClass", uData.assignedClass);
-          if(uData.admn) localStorage.setItem("studentAdmn", uData.admn);
-          
-          if (typeof window.initNativePushAndSW === "function") {
-             window.initNativePushAndSW();
-          }
-
-          renderDashboardForRole(uData.role, uData.assignedClass, uData.admn);
+          document.getElementById("loginError").style.display = "none";
+          window.completePortalLoginSession(targetUserId, uData);
         } else {
-
-
           document.getElementById("loginError").style.display = "block";
           document.getElementById("loginError").innerText = "Invalid credentials. Please try again.";
+        }
+      });
+    });
+
+    // 2. Sign in with Google (Only pre-saved active emails allowed!)
+    addSafeListener("googleLoginBtn", "click", () => {
+      const btn = document.getElementById("googleLoginBtn");
+      const originalHtml = btn.innerHTML;
+      runWithBtnSpinner(btn, originalHtml, async () => {
+        try {
+          const provider = new GoogleAuthProvider();
+          provider.setCustomParameters({ prompt: "select_account" });
+          const result = await signInWithPopup(auth, provider);
+          const googleEmail = result.user ? result.user.email : null;
+
+          if (!googleEmail) {
+            window.showCustomAlert("Could not retrieve email from Google account.");
+            return;
+          }
+
+          const resolvedUserId = await window.resolveUserIdByEmail(googleEmail);
+          if (!resolvedUserId) {
+            await auth.signOut().catch(() => {});
+            await window.ensureFirebaseAuth();
+            window.showCustomAlert("Only active users allowed to sign in with Google");
+            return;
+          }
+
+          const uData = await safeDataFetch(`users/${resolvedUserId}`);
+          if (!uData) {
+            await auth.signOut().catch(() => {});
+            await window.ensureFirebaseAuth();
+            window.showCustomAlert("Only active users allowed to sign in with Google");
+            return;
+          }
+
+          window.completePortalLoginSession(resolvedUserId, uData);
+        } catch (err) {
+          if (err && err.code !== "auth/popup-closed-by-user" && err.code !== "auth/cancelled-popup-request") {
+            window.showCustomAlert("Google Sign-In failed. Please ensure Google Sign-In is enabled in Firebase Authentication.");
+          }
         }
       });
     });
@@ -7416,6 +7519,12 @@ localStorage.setItem("loggedPass", p);
         }
         updates[`students/${newAdmn}`] = updatedStudentObj;
         updates[`users/${newAdmn}`] = { password: pass || "MM", role: "student", admn: newAdmn, assignedClass: cls };
+        if (currentStudent && currentStudent.email && currentStudent.email !== email) {
+          updates[`email_lookup/${window.encodeEmailKey(currentStudent.email)}`] = null;
+        }
+        if (email) {
+          updates[`email_lookup/${window.encodeEmailKey(email)}`] = String(newAdmn);
+        }
 
         await update(ref(db), updates);
         if(currentRole === "teacher") await refreshAllTeacherData(); else renderAdminStudentsDirectory();
@@ -11113,10 +11222,17 @@ window.syncProfileModalHeight = function() {
           if (perms.dob) {
             updates[`students/${student.admn}/dob`] = document.getElementById("sGrayedDob").value.trim() || "-";
           }
-          if (perms.email) {
-            updates[`students/${student.admn}/email`] = document.getElementById("sGrayedEmail").value.trim();
+                    if (perms.email) {
+            const newEmail = document.getElementById("sGrayedEmail").value.trim();
+            if (student.email && student.email !== newEmail) {
+              updates[`email_lookup/${window.encodeEmailKey(student.email)}`] = null;
+            }
+            updates[`students/${student.admn}/email`] = newEmail;
+            if (newEmail) {
+              updates[`email_lookup/${window.encodeEmailKey(newEmail)}`] = String(student.admn);
+            }
           }
-          if (perms.photo && window.croppedPhotosMap["sUpdatePhotoInput"]) {
+if (perms.photo && window.croppedPhotosMap["sUpdatePhotoInput"]) {
             const croppedData = window.croppedPhotosMap["sUpdatePhotoInput"];
             const photoPointer = await window.saveMediaToFirestore("student_photos", student.admn, croppedData, {
               name: student.name,
