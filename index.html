@@ -1360,7 +1360,7 @@ canvas { touch-action: pan-y !important; }
     <div class="menu-item admin-only" onclick="openModal('registerStudentModal')">👤 Register Student</div>
     <div class="menu-item admin-only" onclick="openModal('registerTeacherModal')">👩‍🏫 Register Teacher</div>
     <div class="menu-item admin-only" onclick="openModal('credentialsModal')">🔑 Login IDs & Passwords</div>
-    <div class="menu-item admin-only" onclick="openModal('studentAllowedModal')">🔓 Student Allowed</div>
+    <div class="menu-item admin-only" onclick="openModal('studentAllowedModal')">🔓 Controls</div>
     <div class="menu-item admin-only" onclick="openModal('addConcessionModal')">💸 Add Concession</div>
     <div class="menu-item logout" id="logoutBtn">🚪 Logout</div>
 </div>
@@ -1409,23 +1409,28 @@ canvas { touch-action: pan-y !important; }
       <div class="drawer-item" onclick="openModal('customThemeModal')" style="color: #0288d1; font-weight: 800;">🎨 Custom Theme</div>
     </div>
 
-    <!-- TEACHER DRAWER OPTIONS -->
+        <!-- TEACHER DRAWER OPTIONS -->
     <div class="teacher-only" style="display:none;">
-      <div style="padding: 10px 18px 4px 18px; font-size:11px; font-weight:800; color:var(--text-muted);">TEACHER QUICK ACTIONS</div>
-      <div class="drawer-item" onclick="openModal('teacherMusterModal')">⏱️ Access Muster</div>
-      <div class="drawer-item" onclick="openModal('registerStudentModal')">👤 Register Student</div>
-      <div class="drawer-item" onclick="openModal('deleteTestDataModal')">🗑️ Delete Test Data</div>
-      <div class="drawer-item" onclick="openModal('bulkAddTestModal')">📝 Bulk Add Test Marks</div>
-      <div class="drawer-item" onclick="openModal('uploadHomeworkModal')">📚 Upload Homework</div>
-      <div class="drawer-item" onclick="window.openTimetableTab(event, 'teacher')">📅 Class Timetable</div>
-      <div class="drawer-item" onclick="window.openLeaveMgmtTab(event, 'teacher')">📅 Leave Applications</div>
+      <div style="padding: 10px 18px 4px 18px; font-size:11px; font-weight:800; color:var(--text-muted);">TEACHER ACCOUNT & ACTIONS</div>
+      <div class="drawer-item" onclick="window.openTeacherMyProfileTab(event)" style="color: #7c3aed; font-weight: 900;">👤 My Profile & Status</div>
+      <div class="drawer-item" data-tfeat="muster" onclick="window.runTeacherFeature('muster', () => openModal('teacherMusterModal'))">⏱️ Access Muster</div>
+      <div class="drawer-item" data-tfeat="regStudent" onclick="window.runTeacherFeature('regStudent', () => openModal('registerStudentModal'))">👤 Register Student</div>
+      <div class="drawer-item" data-tfeat="tests" onclick="window.runTeacherFeature('tests', () => openModal('deleteTestDataModal'))">🗑️ Delete Test Data</div>
+      <div class="drawer-item" data-tfeat="tests" onclick="window.runTeacherFeature('tests', () => openModal('bulkAddTestModal'))">📝 Bulk Add Test Marks</div>
+      <div class="drawer-item" data-tfeat="homework" onclick="window.runTeacherFeature('homework', () => openModal('uploadHomeworkModal'))">📚 Upload Homework</div>
+      <div class="drawer-item" data-tfeat="timetable" onclick="window.runTeacherFeature('timetable', (e) => window.openTimetableTab(e, 'teacher'))">📅 Class Timetable</div>
+      <div class="drawer-item" data-tfeat="leaves" onclick="window.runTeacherFeature('leaves', (e) => window.openLeaveMgmtTab(e, 'teacher'))">📅 Leave Applications</div>
 
       <div style="padding: 10px 18px 4px 18px; font-size:11px; font-weight:800; color:var(--text-muted); margin-top:8px;">STUDY MATERIAL (CLASS BOUND)</div>
-      <div class="drawer-item" onclick="window.openStudyMaterialTab(event, 'teacher')">📚 Study Material & Syllabus</div>
+      <div class="drawer-item" data-tfeat="studyMat" onclick="window.runTeacherFeature('studyMat', (e) => window.openStudyMaterialTab(e, 'teacher'))">📚 Study Material & Syllabus</div>
       <div class="drawer-item" onclick="openModal('customThemeModal')" style="color: #7c3aed; font-weight: 800;">🎨 Custom Theme</div>
       <div class="drawer-item" onclick="window.openAssistanceMenu()" style="border-top: 1px dashed var(--border-color); color: #0288d1; margin-top: 8px;">ℹ️ System Assistance</div>
     </div>
 
+
+
+
+    
     <!-- ADMIN DRAWER OPTIONS -->
     <div class="admin-only" style="display:none;">
       <div style="padding: 10px 18px 4px 18px; font-size:11px; font-weight:800; color:var(--text-muted);">ADMIN MASTER PANEL</div>
@@ -1721,37 +1726,113 @@ canvas { touch-action: pan-y !important; }
     </div>
 
 
-  
-<!-- DEDICATED TEACHERS MANAGEMENT SECTION -->
+
+
+  <!-- DEDICATED TEACHERS MANAGEMENT SECTION (STUDENT-LIKE PROFILE CARDS) -->
 <section id="adminTabTeachers" class="tab-section admin-tab">
+  <div style="margin-bottom: 12px;">
+    <input type="text" id="adminTeacherSearchInput" placeholder="🔍 Search Teacher Name, Username or Class..." oninput="window.loadManageTeacherList()" style="width: 100%; padding: 12px 14px; border: 1.5px solid #0288d1; border-radius: 14px; font-size: 13px; font-weight: 700; box-shadow: 0 4px 12px rgba(2, 136, 209, 0.1);">
+  </div>
+
   <div class="card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; border-bottom: 2px solid var(--border-color); padding-bottom: 8px;">
-      <div class="card-title" style="border: none; margin-bottom: 0;">👩‍🏫 Registered Teachers List & Management</div>
+      <div style="font-size:14px; font-weight:800;">👩‍🏫 Registered Teachers Directory (<span id="adminTeacherCountText">0</span>)</div>
       <button onclick="openModal('registerTeacherModal')" class="btn-primary btn-green" style="margin-top: 0; width: auto; padding: 6px 14px; font-size: 11px;">
         ➕ Add Teacher
       </button>
     </div>
+    <div id="adminTeachersDirectoryContainer">⏳ Loading teachers...</div>
+  </div>
+</section>
 
-    <!-- TABLE CONTAINER WITH SCROLL SUPPORT -->
-    <div class="table-container" style="max-height: 65vh; overflow-y: auto;">
-      <table style="min-width: 100%;">
-        <thead>
-          <tr>
-            <th style="width: 36px;">#</th>
-            <th style="text-align: left; padding-left: 8px;">Teacher Name</th>
-            <th>Class</th>
-            <th>Username</th>
-            <th>Password</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="manageTeacherTableBody">
-          <tr><td colspan="6" style="padding: 14px; text-align: center;">⏳ Loading teachers data...</td></tr>
-        </tbody>
-      </table>
+<!-- TEACHER MY PROFILE & INTERACTIVE STATUS SECTION -->
+<section id="teacherTabProfile" class="tab-section teacher-tab">
+  <div class="card unfold-card">
+    <div style="text-align: center; margin-bottom: 14px;">
+      <img id="tMyProfAvatar" src="https://via.placeholder.com/150" style="width: 92px; height: 92px; border-radius: 50%; object-fit: cover; border: 3px solid #7c3aed; box-shadow: 0 6px 18px rgba(124, 58, 237, 0.28);">
+      <h2 id="tMyProfHeaderName" style="font-size: 18px; font-weight: 900; margin-top: 8px; color: var(--text-color);">Teacher Name</h2>
+      <div style="margin-top: 6px;">
+        <span id="tMyProfClassBadge" class="class-badge" style="background: #7c3aed;">Class: -</span>
+        <span id="tMyProfPointsBadge" class="pts-chip" style="margin-left: 6px; background: #10b981;">0 PTS</span>
+      </div>
+    </div>
+
+    <!-- 2 SUB-TABS: INFO & STATUS -->
+    <div class="sub-nav-tabs" style="margin-bottom: 16px;">
+      <div class="sub-tab-btn active" id="tProfSubTabInfoBtn" onclick="window.switchTeacherMyProfileSubTab('info')">👤 Info</div>
+      <div class="sub-tab-btn" id="tProfSubTabStatusBtn" onclick="window.switchTeacherMyProfileSubTab('status')">📈 Status (Points Graph)</div>
+    </div>
+
+    <!-- SUB-TAB 1: PROFILE INFO (GRAYED OR ENABLED BY ADMIN CONTROLS) -->
+    <div id="tProfSubPaneInfo">
+      <div style="text-align: center; margin-bottom: 12px;">
+        <input type="file" id="tMyProfPhotoInput" accept="image/*" style="display: none;">
+        <button type="button" id="tMyProfPhotoBtn" class="btn-primary btn-purple" style="width: auto; padding: 7px 16px; font-size: 11px; margin: 0 auto;" onclick="document.getElementById('tMyProfPhotoInput').click()">📷 Select & Crop Photo</button>
+      </div>
+
+      <label>Full Name:</label>
+      <input type="text" id="tMyProfNameInput" disabled>
+
+      <label>Login Username:</label>
+      <input type="text" id="tMyProfUserInput" disabled>
+
+      <label>Login Password:</label>
+      <input type="text" id="tMyProfPassInput" disabled>
+
+      <label>Phone / WhatsApp Number:</label>
+      <input type="text" id="tMyProfPhoneInput" disabled placeholder="10-Digit Mobile Number">
+
+      <label>Email Address:</label>
+      <input type="email" id="tMyProfEmailInput" disabled placeholder="teacher@example.com" style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; font-size: 13px; outline: none; background: var(--input-bg); color: var(--text-color);">
+
+      <label>Assigned Classes (Admin Controlled):</label>
+      <input type="text" id="tMyProfClassesReadonly" disabled style="background-color: rgba(0,0,0,0.06) !important; font-weight: 800;">
+
+      <button id="tMyProfSaveBtn" class="btn-primary btn-green" style="margin-top: 16px; display: none;" onclick="window.saveTeacherSelfProfileUpdate()">💾 Save Profile Changes</button>
+
+      <div id="tMyProfLockedBanner" style="margin-top: 16px; padding: 12px; border-radius: 12px; background: rgba(239, 68, 68, 0.12); border: 1px solid #ef4444; text-align: center; color: #ef4444; font-weight: 800; font-size: 12px;">
+        🔒 Profile fields are locked by Admin. Contact Admin to enable editing.
+      </div>
+    </div>
+
+    <!-- SUB-TAB 2: INTERACTIVE POINTS LINE GRAPH & STATUS -->
+    <div id="tProfSubPaneStatus" style="display: none;">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
+        <div style="font-size: 12px; font-weight: 800; color: var(--text-muted);">📊 Interactive Points Journey</div>
+        <div style="display: flex; gap: 6px;">
+          <button type="button" class="class-chip active" id="tGraphBtnAll" style="padding: 5px 12px; font-size: 10px;" onclick="window.setTeacherGraphRange('all', this)">All History</button>
+          <button type="button" class="class-chip" id="tGraphBtnRecent" style="padding: 5px 12px; font-size: 10px;" onclick="window.setTeacherGraphRange('recent', this)">Last 5</button>
+          <button type="button" class="class-chip" id="tGraphBtnAnalyze" style="padding: 5px 12px; font-size: 10px;" onclick="window.triggerTeacherGraphInsight()">✨ Analyze Trend</button>
+        </div>
+      </div>
+
+      <div style="position: relative; height: 240px; width: 100%; background: rgba(0,0,0,0.02); border-radius: 16px; padding: 12px; border: 1px solid var(--border-color);">
+        <canvas id="teacherPointsLineChart"></canvas>
+      </div>
+
+      <!-- Interactive Point Tap Inspector -->
+      <div id="teacherGraphTapFeedback" style="margin-top: 12px; padding: 12px 14px; border-radius: 14px; background: rgba(124, 58, 237, 0.08); border: 1px dashed #7c3aed; font-size: 12px; font-weight: 800; color: var(--text-color); text-align: center;">
+        👆 Tap any point on the line graph above to inspect its exact date, points change & reason!
+      </div>
+
+      <div class="stats-grid" style="margin-top: 14px; grid-template-columns: 1fr 1fr 1fr;">
+        <div class="stat-card blue" style="padding: 12px;">
+          <span style="font-size: 10px;">Current Points</span>
+          <h3 id="tStatCurrentPts" style="font-size: 17px;">0</h3>
+        </div>
+        <div class="stat-card" style="background: linear-gradient(135deg, #16a34a 0%, #15803d 100%); padding: 12px;">
+          <span style="font-size: 10px;">Highest Peak</span>
+          <h3 id="tStatPeakPts" style="font-size: 17px;">0</h3>
+        </div>
+        <div class="stat-card" style="background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%); padding: 12px;">
+          <span style="font-size: 10px;">Net Growth</span>
+          <h3 id="tStatGrowthText" style="font-size: 17px;">+0</h3>
+        </div>
+      </div>
     </div>
   </div>
 </section>
+
 
       <!-- ADMIN DASHBOARD SECTIONS -->
     <section id="adminTabHome" class="tab-section admin-tab">
@@ -3710,26 +3791,46 @@ Exact Output JSON Format Required:
     </div>
   </div>
 
+   <!-- TEACHER PROFILE & MANAGEMENT MODAL (LIKE STUDENT PROFILE MODAL) -->
   <div id="editTeacherModal" class="modal-overlay">
     <div class="modal-content">
       <div class="modal-header">
-        <span>✏️ Edit Teacher Details</span>
+        <span>👩‍🏫 Teacher Profile</span>
         <span class="close-modal" onclick="closeModal('editTeacherModal')">✕</span>
       </div>
       <div class="modal-body">
         <input type="hidden" id="editTeacherOldUsername">
 
-        <label>Teacher Name *:</label>
-        <input type="text" id="editTeacherName">
+        <div style="text-align:center; margin-bottom:14px;">
+          <img id="editTeacherAvatarPreview" src="https://via.placeholder.com/150" style="width:85px; height:85px; border-radius:50%; object-fit:cover; border:3px solid #7c3aed; box-shadow:0 6px 16px rgba(0,0,0,0.2);">
+          <div style="margin-top:6px;">
+            <span id="editTeacherClassBadge" class="class-badge" style="background:#7c3aed;">Class 1</span>
+            <span id="editTeacherPointsChip" class="pts-chip" style="margin-left:6px;">0 PTS</span>
+          </div>
+        </div>
 
-        <label>Username (Read-only):</label>
-        <input type="text" id="editTeacherUser" disabled style="background-color: rgba(0,0,0,0.06) !important; font-weight: 800; cursor: not-allowed;">
+        <label>Teacher Full Name *:</label>
+        <input type="text" id="editTeacherName" placeholder="Teacher Full Name">
 
-        <label>Password *:</label>
-        <input type="text" id="editTeacherPass">
+        <label>Login Username * (Editable):</label>
+        <input type="text" id="editTeacherUser" style="font-weight: 800;">
 
-        
-                 <label>Assign Classes (Select Multiple) *:</label>
+        <label>Login Password *:</label>
+        <input type="text" id="editTeacherPass" placeholder="Password">
+
+        <label>Mobile / WhatsApp Number:</label>
+        <input type="text" id="editTeacherPhone" placeholder="10-Digit Mobile Number">
+
+        <label>Email Address:</label>
+        <input type="email" id="editTeacherEmail" placeholder="teacher@example.com" style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; font-size: 13px; outline: none; background: var(--input-bg); color: var(--text-color);">
+
+        <label>Total Performance Points (+ / -):</label>
+        <input type="number" id="editTeacherPointsInput" placeholder="0">
+
+        <label>Change Photo (Optional):</label>
+        <input type="file" id="editTeacherPhotoInput" accept="image/*">
+
+        <label>Assign Classes (Select Multiple) *:</label>
         <div class="checkbox-grid" id="editTeacherClassCheckboxes">
           <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="Nursery"> Nursery</div>
           <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="Jr. KG"> Jr. KG</div>
@@ -3748,13 +3849,57 @@ Exact Output JSON Format Required:
           <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="12"> Class 12</div>
         </div>
 
-
         <button id="updateTeacherBtn" onclick="window.saveUpdatedTeacherDetails()" class="btn-primary btn-green" style="margin-top: 16px;">
-          💾 Update Teacher
+          💾 Update Teacher Profile
+        </button>
+        <button type="button" onclick="window.deleteTeacherFromModal()" class="btn-primary btn-red" style="margin-top: 8px;">
+          🗑️ Delete Teacher Account
         </button>
       </div>
     </div>
   </div>
+
+  <!-- REGISTER NEW TEACHER MODAL (WITH PHOTO, PHONE & EMAIL) -->
+  <div id="registerTeacherModal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header"><span>👩‍🏫 Register Teacher</span><span class="close-modal" onclick="closeModal('registerTeacherModal')">✕</span></div>
+      <div class="modal-body">
+        <div style="text-align:center; margin-bottom:10px;">
+          <img id="tRegAvatarPreview" src="https://via.placeholder.com/150" style="width:76px; height:76px; border-radius:50%; object-fit:cover; border:3px solid #16a34a;">
+        </div>
+        <label>Teacher Full Name *:</label><input type="text" id="tRegName" placeholder="Full Name">
+        <label>Login Username *:</label><input type="text" id="tRegUser" placeholder="Unique Username">
+        <label>Login Password *:</label><input type="text" id="tRegPass" placeholder="Password">
+        <label>WhatsApp / Phone Number:</label><input type="text" id="tRegPhone" placeholder="10-Digit Mobile Number">
+        <label>Email Address (For Google Login):</label>
+        <input type="email" id="tRegEmail" placeholder="teacher@example.com" style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; font-size: 13px; outline: none; background: var(--input-bg); color: var(--text-color);">
+        <label>Profile Photo (Optional):</label>
+        <input type="file" id="tRegPhotoFile" accept="image/*">
+
+        <label>Assign Classes (Select Multiple) *:</label>
+        <div class="checkbox-grid" id="tRegClassCheckboxes">
+          <div class="checkbox-item"><input type="checkbox" class="t-reg-chk" value="Nursery"> Nursery</div>
+          <div class="checkbox-item"><input type="checkbox" class="t-reg-chk" value="Jr. KG"> Jr. KG</div>
+          <div class="checkbox-item"><input type="checkbox" class="t-reg-chk" value="Sr. KG"> Sr. KG</div>
+          <div class="checkbox-item"><input type="checkbox" class="t-reg-chk" value="1"> Class 1</div>
+          <div class="checkbox-item"><input type="checkbox" class="t-reg-chk" value="2"> Class 2</div>
+          <div class="checkbox-item"><input type="checkbox" class="t-reg-chk" value="3"> Class 3</div>
+          <div class="checkbox-item"><input type="checkbox" class="t-reg-chk" value="4"> Class 4</div>
+          <div class="checkbox-item"><input type="checkbox" class="t-reg-chk" value="5"> Class 5</div>
+          <div class="checkbox-item"><input type="checkbox" class="t-reg-chk" value="6"> Class 6</div>
+          <div class="checkbox-item"><input type="checkbox" class="t-reg-chk" value="7"> Class 7</div>
+          <div class="checkbox-item"><input type="checkbox" class="t-reg-chk" value="8"> Class 8</div>
+          <div class="checkbox-item"><input type="checkbox" class="t-reg-chk" value="9"> Class 9</div>
+          <div class="checkbox-item"><input type="checkbox" class="t-reg-chk" value="10"> Class 10</div>
+          <div class="checkbox-item"><input type="checkbox" class="t-reg-chk" value="11"> Class 11</div>
+          <div class="checkbox-item"><input type="checkbox" class="t-reg-chk" value="12"> Class 12</div>
+        </div>
+
+        <button id="saveTeacherBtn" class="btn-primary btn-green">Create Teacher</button>
+      </div>
+    </div>
+  </div>
+
 
   <div id="registerTeacherModal" class="modal-overlay">
     <div class="modal-content">
@@ -4153,87 +4298,150 @@ Exact Output JSON Format Required:
     </div>
   </div>
 
-    <!-- ADMIN STUDENT ALLOWED (PERMISSIONS) MODAL -->
+      <!-- ADMIN MASTER CONTROLS MODAL (STUDENTS & TEACHERS SUB-TABS) -->
   <div id="studentAllowedModal" class="modal-overlay" style="z-index: 100055;">
-    <div class="modal-content" style="max-width: 420px;">
+    <div class="modal-content" style="max-width: 450px;">
       <div class="modal-header">
-        <span>🔓 Student Allowed Permissions</span>
+        <span>🎛️ Admin Master Controls</span>
         <span class="close-modal" onclick="closeModal('studentAllowedModal')">✕</span>
       </div>
       <div class="modal-body">
-        <label>Select Standard / Class:</label>
-        <select id="stuAllowClassSelect" onchange="window.loadStudentAllowedSettings(this.value)">
-          <option value="ALL">🌟 All Classes (Global Default)</option>
-          <option value="Nursery">Nursery</option><option value="Jr. KG">Jr. KG</option><option value="Sr. KG">Sr. KG</option>
-          <option value="1">Class 1</option><option value="2">Class 2</option><option value="3">Class 3</option><option value="4">Class 4</option>
-          <option value="5">Class 5</option><option value="6">Class 6</option><option value="7">Class 7</option><option value="8">Class 8</option>
-          <option value="9">Class 9</option><option value="10">Class 10</option><option value="11">Class 11</option><option value="12">Class 12</option>
-        </select>
-
-        <div style="font-size:11px; font-weight:800; color:var(--text-muted); margin-top:12px; margin-bottom:8px;">
-          Allow students to edit the following fields:
+        <!-- SUB-TABS: STUDENT VS TEACHER -->
+        <div class="sub-nav-tabs" style="margin-bottom: 14px;">
+          <div class="sub-tab-btn active" id="ctrlSubTabStudentBtn" onclick="window.switchControlsSubTab('student')">🎓 Student</div>
+          <div class="sub-tab-btn" id="ctrlSubTabTeacherBtn" onclick="window.switchControlsSubTab('teacher')">👩‍‍🏫 Teacher</div>
         </div>
 
-        <div class="dark-mode-toggle-row" style="border-radius:12px; border:1px solid var(--border-color); margin-bottom:8px; padding:12px 14px;">
-          <span>1. Full Name</span>
-          <label class="switch"><input type="checkbox" id="allowStuNameChk"><span class="slider"></span></label>
+        <!-- PANE 1: STUDENT CONTROLS -->
+        <div id="ctrlStudentPane">
+          <label>Select Standard / Class:</label>
+          <select id="stuAllowClassSelect" onchange="window.loadStudentAllowedSettings(this.value)">
+            <option value="ALL">🌟 All Classes (Global Default)</option>
+            <option value="Nursery">Nursery</option><option value="Jr. KG">Jr. KG</option><option value="Sr. KG">Sr. KG</option>
+            <option value="1">Class 1</option><option value="2">Class 2</option><option value="3">Class 3</option><option value="4">Class 4</option>
+            <option value="5">Class 5</option><option value="6">Class 6</option><option value="7">Class 7</option><option value="8">Class 8</option>
+            <option value="9">Class 9</option><option value="10">Class 10</option><option value="11">Class 11</option><option value="12">Class 12</option>
+          </select>
+
+          <div style="font-size:11px; font-weight:800; color:var(--text-muted); margin-top:12px; margin-bottom:8px;">
+            UPDATE PROFILE PERMISSIONS (STUDENT):
+          </div>
+
+          <div class="dark-mode-toggle-row" style="border-radius:12px; border:1px solid var(--border-color); margin-bottom:8px; padding:11px 14px;">
+            <span>1. Full Name</span>
+            <label class="switch"><input type="checkbox" id="allowStuNameChk"><span class="slider"></span></label>
+          </div>
+          <div class="dark-mode-toggle-row" style="border-radius:12px; border:1px solid var(--border-color); margin-bottom:8px; padding:11px 14px;">
+            <span>2. Login Password</span>
+            <label class="switch"><input type="checkbox" id="allowStuPassChk"><span class="slider"></span></label>
+          </div>
+          <div class="dark-mode-toggle-row" style="border-radius:12px; border:1px solid var(--border-color); margin-bottom:8px; padding:11px 14px;">
+            <span>3. Phone Number</span>
+            <label class="switch"><input type="checkbox" id="allowStuPhoneChk"><span class="slider"></span></label>
+          </div>
+          <div class="dark-mode-toggle-row" style="border-radius:12px; border:1px solid var(--border-color); margin-bottom:8px; padding:11px 14px;">
+            <span>4. Date of Birth (DOB)</span>
+            <label class="switch"><input type="checkbox" id="allowStuDobChk"><span class="slider"></span></label>
+          </div>
+          <div class="dark-mode-toggle-row" style="border-radius:12px; border:1px solid var(--border-color); margin-bottom:8px; padding:11px 14px;">
+            <span>5. Update Photo</span>
+            <label class="switch"><input type="checkbox" id="allowStuPhotoChk"><span class="slider"></span></label>
+          </div>
+          <div class="dark-mode-toggle-row" style="border-radius:12px; border:1px solid var(--border-color); margin-bottom:14px; padding:11px 14px;">
+            <span>6. Add / Edit Email</span>
+            <label class="switch"><input type="checkbox" id="allowStuEmailChk"><span class="slider"></span></label>
+          </div>
+
+          <button id="saveStudentAllowedBtn" class="btn-primary btn-green" onclick="window.saveStudentAllowedSettings()">💾 Save Student Controls</button>
         </div>
 
-        <div class="dark-mode-toggle-row" style="border-radius:12px; border:1px solid var(--border-color); margin-bottom:8px; padding:12px 14px;">
-          <span>2. Login Password</span>
-          <label class="switch"><input type="checkbox" id="allowStuPassChk"><span class="slider"></span></label>
-        </div>
+        <!-- PANE 2: TEACHER CONTROLS (PROFILE + FEATURES LOCKS) -->
+        <div id="ctrlTeacherPane" style="display: none;">
+          <label>Select Target Teacher:</label>
+          <select id="tchAllowTargetSelect" onchange="window.loadTeacherAllowedSettings(this.value)">
+            <option value="ALL">🌟 All Teachers (Global Default)</option>
+          </select>
 
-        <div class="dark-mode-toggle-row" style="border-radius:12px; border:1px solid var(--border-color); margin-bottom:8px; padding:12px 14px;">
-          <span>3. Phone Number</span>
-          <label class="switch"><input type="checkbox" id="allowStuPhoneChk"><span class="slider"></span></label>
-        </div>
+          <div style="font-size:11px; font-weight:900; color:#7c3aed; margin-top:14px; margin-bottom:8px; letter-spacing:0.4px;">
+            ✏️ UPDATE PROFILE PERMISSIONS:
+          </div>
 
-        <div class="dark-mode-toggle-row" style="border-radius:12px; border:1px solid var(--border-color); margin-bottom:8px; padding:12px 14px;">
-          <span>4. Date of Birth (DOB)</span>
-          <label class="switch"><input type="checkbox" id="allowStuDobChk"><span class="slider"></span></label>
-        </div>
+          <div class="dark-mode-toggle-row" style="border-radius:12px; border:1px solid var(--border-color); margin-bottom:7px; padding:10px 14px;">
+            <span>1. Name</span>
+            <label class="switch"><input type="checkbox" id="allowTchNameChk"><span class="slider"></span></label>
+          </div>
+          <div class="dark-mode-toggle-row" style="border-radius:12px; border:1px solid var(--border-color); margin-bottom:7px; padding:10px 14px;">
+            <span>2. Username</span>
+            <label class="switch"><input type="checkbox" id="allowTchUserChk"><span class="slider"></span></label>
+          </div>
+          <div class="dark-mode-toggle-row" style="border-radius:12px; border:1px solid var(--border-color); margin-bottom:7px; padding:10px 14px;">
+            <span>3. Password</span>
+            <label class="switch"><input type="checkbox" id="allowTchPassChk"><span class="slider"></span></label>
+          </div>
+          <div class="dark-mode-toggle-row" style="border-radius:12px; border:1px solid var(--border-color); margin-bottom:7px; padding:10px 14px;">
+            <span>4. Phone No.</span>
+            <label class="switch"><input type="checkbox" id="allowTchPhoneChk"><span class="slider"></span></label>
+          </div>
+          <div class="dark-mode-toggle-row" style="border-radius:12px; border:1px solid var(--border-color); margin-bottom:7px; padding:10px 14px;">
+            <span>5. Email</span>
+            <label class="switch"><input type="checkbox" id="allowTchEmailChk"><span class="slider"></span></label>
+          </div>
+          <div class="dark-mode-toggle-row" style="border-radius:12px; border:1px solid var(--border-color); margin-bottom:14px; padding:10px 14px;">
+            <span>6. Photo</span>
+            <label class="switch"><input type="checkbox" id="allowTchPhotoChk"><span class="slider"></span></label>
+          </div>
 
-        <div class="dark-mode-toggle-row" style="border-radius:12px; border:1px solid var(--border-color); margin-bottom:8px; padding:12px 14px;">
-          <span>5. Update Photo</span>
-          <label class="switch"><input type="checkbox" id="allowStuPhotoChk"><span class="slider"></span></label>
-        </div>
+          <div style="font-size:11px; font-weight:900; color:#0288d1; margin-top:14px; margin-bottom:8px; border-top:1px dashed var(--border-color); padding-top:12px; letter-spacing:0.4px;">
+            🚀 TEACHER DASHBOARD FEATURES (ON = Active, OFF = Locked by Admin):
+          </div>
 
-        <div class="dark-mode-toggle-row" style="border-radius:12px; border:1px solid var(--border-color); margin-bottom:14px; padding:12px 14px;">
-          <span>6. Add / Edit Email</span>
-          <label class="switch"><input type="checkbox" id="allowStuEmailChk"><span class="slider"></span></label>
-        </div>
+          <div class="dark-mode-toggle-row" style="border-radius:12px; border:1px solid var(--border-color); margin-bottom:7px; padding:10px 14px;">
+            <span>⏱️ Access Muster (In/Out)</span>
+            <label class="switch"><input type="checkbox" id="featTchMusterChk" checked><span class="slider"></span></label>
+          </div>
+          <div class="dark-mode-toggle-row" style="border-radius:12px; border:1px solid var(--border-color); margin-bottom:7px; padding:10px 14px;">
+            <span>👤 Register Student</span>
+            <label class="switch"><input type="checkbox" id="featTchRegStudentChk" checked><span class="slider"></span></label>
+          </div>
+          <div class="dark-mode-toggle-row" style="border-radius:12px; border:1px solid var(--border-color); margin-bottom:7px; padding:10px 14px;">
+            <span>📅 Mark Class Attendance</span>
+            <label class="switch"><input type="checkbox" id="featTchAttendChk" checked><span class="slider"></span></label>
+          </div>
+          <div class="dark-mode-toggle-row" style="border-radius:12px; border:1px solid var(--border-color); margin-bottom:7px; padding:10px 14px;">
+            <span>🔍 Track Attendance Report</span>
+            <label class="switch"><input type="checkbox" id="featTchTrackAttChk" checked><span class="slider"></span></label>
+          </div>
+          <div class="dark-mode-toggle-row" style="border-radius:12px; border:1px solid var(--border-color); margin-bottom:7px; padding:10px 14px;">
+            <span>⭐ Award / Deduct Performance Points</span>
+            <label class="switch"><input type="checkbox" id="featTchPerformChk" checked><span class="slider"></span></label>
+          </div>
+          <div class="dark-mode-toggle-row" style="border-radius:12px; border:1px solid var(--border-color); margin-bottom:7px; padding:10px 14px;">
+            <span>📋 Online & Offline Tests Management</span>
+            <label class="switch"><input type="checkbox" id="featTchTestsChk" checked><span class="slider"></span></label>
+          </div>
+          <div class="dark-mode-toggle-row" style="border-radius:12px; border:1px solid var(--border-color); margin-bottom:7px; padding:10px 14px;">
+            <span>📚 Upload Homework</span>
+            <label class="switch"><input type="checkbox" id="featTchHomeworkChk" checked><span class="slider"></span></label>
+          </div>
+          <div class="dark-mode-toggle-row" style="border-radius:12px; border:1px solid var(--border-color); margin-bottom:7px; padding:10px 14px;">
+            <span>📖 Study Material & Syllabus Tracker</span>
+            <label class="switch"><input type="checkbox" id="featTchStudyMatChk" checked><span class="slider"></span></label>
+          </div>
+          <div class="dark-mode-toggle-row" style="border-radius:12px; border:1px solid var(--border-color); margin-bottom:7px; padding:10px 14px;">
+            <span>📅 Class Timetable Management</span>
+            <label class="switch"><input type="checkbox" id="featTchTimetableChk" checked><span class="slider"></span></label>
+          </div>
+          <div class="dark-mode-toggle-row" style="border-radius:12px; border:1px solid var(--border-color); margin-bottom:14px; padding:10px 14px;">
+            <span>📅 Leave Applications</span>
+            <label class="switch"><input type="checkbox" id="featTchLeavesChk" checked><span class="slider"></span></label>
+          </div>
 
-        <button id="saveStudentAllowedBtn" class="btn-primary btn-green" onclick="window.saveStudentAllowedSettings()">💾 Save Allowed Settings</button>
+          <button id="saveTeacherAllowedBtn" class="btn-primary btn-purple" onclick="window.saveTeacherAllowedSettings()">💾 Save Teacher Controls</button>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- UNIVERSAL PHOTO CROP & PREVIEW MODAL -->
-  <div id="photoCropperModal" class="modal-overlay" style="z-index: 1000090;">
-    <div class="modal-content" style="max-width: 380px; text-align: center;">
-      <div class="modal-header">
-        <span>✂️ Preview & Crop Photo</span>
-        <span class="close-modal" onclick="window.cancelPhotoCrop()">✕</span>
-      </div>
-      <div class="modal-body">
-        <div style="font-size:11px; font-weight:700; color:var(--text-muted); margin-bottom:10px;">
-          Drag photo to adjust position & use slider to zoom
-        </div>
-        <div id="cropCanvasViewport" style="width: 250px; height: 250px; margin: 0 auto; border-radius: 18px; overflow: hidden; border: 2.5px solid #0288d1; position: relative; background: #0f172a; touch-action: none; cursor: grab;">
-          <canvas id="photoCropCanvas" width="300" height="300" style="width: 250px; height: 250px; display: block; touch-action: none !important;"></canvas>
-        </div>
-        <div style="margin-top: 14px; display: flex; align-items: center; gap: 10px; padding: 0 10px;">
-          <span style="font-size: 12px; font-weight: 800;">🔍</span>
-          <input type="range" id="photoCropZoomSlider" min="1" max="3" step="0.02" value="1" style="flex: 1; accent-color: #0288d1; cursor: pointer;">
-        </div>
-        <div style="display: flex; gap: 10px; margin-top: 16px;">
-          <button type="button" class="btn-primary" style="background: #64748b; margin-top: 0;" onclick="window.cancelPhotoCrop()">Cancel</button>
-          <button type="button" class="btn-primary btn-green" style="margin-top: 0;" onclick="window.applyPhotoCrop()">✔ Crop & Use</button>
-        </div>
-      </div>
-    </div>
-  </div>
 
   <!-- CUSTOM THEME & VISUAL EFFECTS STUDIO MODAL -->
 
@@ -5794,14 +6002,16 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
         document.querySelectorAll(".student-only").forEach(e => e.style.display = "none");
         document.querySelectorAll(".teacher-only").forEach(e => e.style.display = "block");
 
-        bottomNav.innerHTML = `
+                bottomNav.innerHTML = `
           <div class="nav-item active" onclick="switchTab('teacherTabHome', this, event)"><div class="nav-icon">🏠</div>Home</div>
-          <div class="nav-item" onclick="switchTab('teacherTabAttend', this, event)"><div class="nav-icon">📅</div>Attend</div>
-          <div class="nav-item" onclick="switchTab('teacherTabTrackAtt', this, event)"><div class="nav-icon">🔍</div>Track</div>
+          <div class="nav-item" data-tfeat="attend" onclick="window.runTeacherFeature('attend', () => switchTab('teacherTabAttend', this, event))"><div class="nav-icon">📅</div>Attend</div>
+          <div class="nav-item" data-tfeat="trackAtt" onclick="window.runTeacherFeature('trackAtt', () => switchTab('teacherTabTrackAtt', this, event))"><div class="nav-icon">🔍</div>Track</div>
           <div class="nav-item" onclick="switchTab('teacherTabStudents', this, event)"><div class="nav-icon">👤</div>Students</div>
-          <div class="nav-item" onclick="switchTab('teacherTabPerform', this, event)"><div class="nav-icon">⭐</div>Perform</div>
-          <div class="nav-item" onclick="switchTab('teacherTabTest', this, event)"><div class="nav-icon">📋</div>Test</div>
+          <div class="nav-item" data-tfeat="perform" onclick="window.runTeacherFeature('perform', () => switchTab('teacherTabPerform', this, event))"><div class="nav-icon">⭐</div>Perform</div>
+          <div class="nav-item" data-tfeat="tests" onclick="window.runTeacherFeature('tests', () => switchTab('teacherTabTest', this, event))"><div class="nav-icon">📋</div>Test</div>
         `;
+        if (typeof window.syncTeacherFeatureLocksRealtime === "function") window.syncTeacherFeatureLocksRealtime();
+
         
         const activeSelect = document.getElementById("teacherActiveSelect");
         if(activeSelect) {
@@ -7571,33 +7781,67 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       });
     });
 
+
           addSafeListener("saveTeacherBtn", "click", () => {
       const btn = document.getElementById("saveTeacherBtn");
       runWithBtnSpinner(btn, "Create Teacher", async () => {
         const name = document.getElementById("tRegName").value.trim();
         const user = document.getElementById("tRegUser").value.trim();
         const pass = document.getElementById("tRegPass").value.trim();
-        
-        // Checkbox reading logic
+        const phone = document.getElementById("tRegPhone") ? document.getElementById("tRegPhone").value.trim() : "";
+        const email = document.getElementById("tRegEmail") ? document.getElementById("tRegEmail").value.trim() : "";
+        const fileInput = document.getElementById("tRegPhotoFile");
+
         const checkedClasses = Array.from(document.querySelectorAll(".t-reg-chk:checked")).map(c => c.value);
         const cls = checkedClasses.join(",");
 
-        if(!name || !user || !pass || !cls) { alert("Please fill all required fields and tick at least 1 class."); return; }
-        
-        await set(ref(db, `teachers/${user}`), { name: name, username: user, assignedClass: cls });
-        await set(ref(db, `users/${user}`), { password: pass, role: "teacher", assignedClass: cls });
-        
-        alert("Teacher account created successfully.");
-        
-        // Form reset
+        if(!name || !user || !pass || !cls) { alert("Please fill Name, Username, Password and tick at least 1 class."); return; }
+
+        let photoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=7c3aed&color=fff&bold=true`;
+        const croppedData = window.croppedPhotosMap && window.croppedPhotosMap["tRegPhotoFile"];
+        if (croppedData) {
+          photoUrl = await window.saveMediaToFirestore("teacher_photos", user, croppedData, { name: name, assignedClass: cls });
+          delete window.croppedPhotosMap["tRegPhotoFile"];
+        } else if (fileInput && fileInput.files && fileInput.files.length > 0) {
+          const uploadedPhoto = await readFileAsDataURL(fileInput.files[0], 500, 0.72);
+          if (uploadedPhoto) {
+            photoUrl = await window.saveMediaToFirestore("teacher_photos", user, uploadedPhoto, { name: name, assignedClass: cls });
+          }
+        }
+
+        const updates = {};
+        updates[`teachers/${user}`] = {
+          name: name,
+          username: user,
+          assignedClass: cls,
+          phone: phone,
+          email: email,
+          photo: photoUrl,
+          points: 0,
+          regDate: getTodayFormattedDate()
+        };
+        updates[`users/${user}`] = { password: pass, role: "teacher", assignedClass: cls };
+        if (email && typeof window.encodeEmailKey === "function") {
+          updates[`email_lookup/${window.encodeEmailKey(email)}`] = String(user);
+        }
+
+        await update(ref(db), updates);
+        alert("✔ Teacher account created successfully!");
+
         document.getElementById("tRegName").value = "";
         document.getElementById("tRegUser").value = "";
         document.getElementById("tRegPass").value = "";
+        if(document.getElementById("tRegPhone")) document.getElementById("tRegPhone").value = "";
+        if(document.getElementById("tRegEmail")) document.getElementById("tRegEmail").value = "";
+        if(fileInput) fileInput.value = "";
+        if(document.getElementById("tRegAvatarPreview")) document.getElementById("tRegAvatarPreview").src = "https://via.placeholder.com/150";
         document.querySelectorAll(".t-reg-chk").forEach(c => c.checked = false);
-        
+
         window.closeModal("registerTeacherModal");
+        window.loadManageTeacherList();
       });
     });
+
 
 
     async function loadCredentialsVault() {
@@ -8368,25 +8612,60 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       window.closeDrawer(); window.switchTab('adminTabTeachers', null, e); window.loadManageTeacherList();
     };
 
-    window.loadManageTeacherList = async function() {
-      const tbody = document.getElementById("manageTeacherTableBody");
-      if (!tbody) return;
-      tbody.innerHTML = `<tr><td colspan="6" style="padding:14px; text-align:center;">⏳ Loading teachers data...</td></tr>`;
+
+          window.loadManageTeacherList = async function() {
+      const container = document.getElementById("adminTeachersDirectoryContainer");
+      const countEl = document.getElementById("adminTeacherCountText");
+      if (!container) return;
 
       try {
         const teachers = await safeDataFetch("teachers") || {};
         const users = await safeDataFetch("users") || {};
-        tbody.innerHTML = "";
-        let count = 0;
-        const teacherArray = Object.values(teachers).filter(t => t && t.username);
+        const searchInput = document.getElementById("adminTeacherSearchInput");
+        const query = searchInput ? searchInput.value.toLowerCase().trim() : "";
 
-        if (teacherArray.length === 0) { tbody.innerHTML = `<tr><td colspan="6" style="color:var(--text-muted); padding:14px; text-align:center;">No teachers registered yet.</td></tr>`; return; }
+        let teacherArray = Object.values(teachers).filter(t => t && t.username);
+        if (countEl) countEl.innerText = teacherArray.length;
 
+        if (teacherArray.length === 0) {
+          container.innerHTML = `<p style="font-size:12px; color:var(--text-muted); text-align:center; padding:12px;">No teachers registered yet.</p>`;
+          return;
+        }
+
+        if (query !== "") {
+          teacherArray.sort((a, b) => {
+            const aMatch = (a.name || "").toLowerCase().includes(query) || (a.username || "").toLowerCase().includes(query) || String(a.assignedClass || "").toLowerCase().includes(query);
+            const bMatch = (b.name || "").toLowerCase().includes(query) || (b.username || "").toLowerCase().includes(query) || String(b.assignedClass || "").toLowerCase().includes(query);
+            if (aMatch && !bMatch) return -1;
+            if (!aMatch && bMatch) return 1;
+            return 0;
+          });
+        }
+
+        let html = "";
         teacherArray.forEach((t) => {
-          count++;
-          tbody.innerHTML += `<tr><td><b>${count}</b></td><td style="text-align:left; padding-left:8px; font-weight:700;">${t.name}</td><td>Class ${t.assignedClass || '-'}</td><td><b>${t.username}</b></td><td><b>${users[t.username] ? users[t.username].password : "-"}</b></td><td><div style="display:flex; gap:6px; justify-content:center;"><button class="btn-primary btn-blue" style="padding:4px 8px; font-size:10px; margin-top:0;" onclick="window.openEditTeacherModal('${t.username}', '${(t.name || "").replace(/'/g, "\\'")}', '${users[t.username] ? users[t.username].password : "-"}', '${t.assignedClass}')">✏️ Edit</button><button class="btn-sm-del" style="padding:4px 8px; font-size:10px; margin-top:0;" onclick="window.deleteTeacherAccount('${t.username}')">🗑️ Delete</button></div></td></tr>`;
+          const pass = users[t.username] ? users[t.username].password : "-";
+          const isMatched = query !== "" && ((t.name || "").toLowerCase().includes(query) || (t.username || "").toLowerCase().includes(query) || String(t.assignedClass || "").toLowerCase().includes(query));
+          const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(t.name || 'T')}&background=7c3aed&color=fff&bold=true`;
+          const avatarSrc = (t.photo && !t.photo.includes("via.placeholder.com")) ? t.photo : defaultAvatar;
+          const matchStyle = isMatched ? "border: 2px solid #7c3aed; background: rgba(124, 58, 237, 0.08);" : "";
+          const matchBadge = isMatched ? '<span style="font-size:10px; background:#7c3aed; color:white; padding:2px 6px; border-radius:6px; margin-left:4px;">Match</span>' : '';
+
+          html += `
+            <div class="student-grid-card" style="${matchStyle}" onclick="window.openEditTeacherModal('${t.username}')">
+              <img src="${avatarSrc}" loading="lazy" onerror="this.src='${defaultAvatar}'" class="student-avatar" style="border-color:#7c3aed;" alt="Avatar">
+              <div style="flex:1;">
+                <div style="font-size:13px; font-weight:800;">${t.name} ${matchBadge}</div>
+                <div style="font-size:11px; color:var(--text-muted);">User: <b>${t.username}</b> | Pass: <b>${pass}</b> | Cls: ${t.assignedClass || '-'}</div>
+                <div style="font-size:10px; font-weight:700; color:#7c3aed; margin-top:2px;">Phone: ${t.phone || '-'} | PTS: ${t.points || 0}</div>
+              </div>
+              <div style="font-size:16px;">✏️</div>
+            </div>`;
         });
-      } catch (err) { tbody.innerHTML = `<tr><td colspan="6" style="color:red; padding:14px; text-align:center;">Failed to load data. Please retry.</td></tr>`; }
+        container.innerHTML = html;
+      } catch (err) {
+        container.innerHTML = `<p style="color:red; padding:14px; text-align:center;">Failed to load teachers.</p>`;
+      }
     };
 
     window.loadTeacherActiveOnlineTests = function() {
@@ -11254,6 +11533,490 @@ if (perms.photo && window.croppedPhotosMap["sUpdatePhotoInput"]) {
           alert("✔ Your profile has been updated successfully!");
           window.closeModal("studentUpdateModal");
         });
+      };
+
+
+            // Attach Cropper to Teacher Modals & Teacher Self Profile
+      window.initPhotoCropperForInput("tRegPhotoFile", "tRegAvatarPreview");
+      window.initPhotoCropperForInput("editTeacherPhotoInput", "editTeacherAvatarPreview");
+      window.initPhotoCropperForInput("tMyProfPhotoInput", "tMyProfAvatar");
+
+      // =========================================================
+      // 🎛️ ADMIN CONTROLS: TEACHER PERMISSIONS & FEATURE LOCKS
+      // =========================================================
+      window.activeTeacherPermsCache = {
+        profile: {},
+        features: {
+          muster: true, regStudent: true, attend: true, trackAtt: true,
+          perform: true, tests: true, homework: true, studyMat: true,
+          timetable: true, leaves: true
+        }
+      };
+
+      window.switchControlsSubTab = async function(tab) {
+        document.getElementById("ctrlSubTabStudentBtn").classList.toggle("active", tab === "student");
+        document.getElementById("ctrlSubTabTeacherBtn").classList.toggle("active", tab === "teacher");
+        document.getElementById("ctrlStudentPane").style.display = tab === "student" ? "block" : "none";
+        document.getElementById("ctrlTeacherPane").style.display = tab === "teacher" ? "block" : "none";
+
+        if (tab === "teacher") {
+          const sel = document.getElementById("tchAllowTargetSelect");
+          const teachers = await safeDataFetch("teachers") || {};
+          sel.innerHTML = `<option value="ALL">🌟 All Teachers (Global Default)</option>`;
+          Object.values(teachers).forEach(t => {
+            if (t && t.username) sel.innerHTML += `<option value="${t.username}">👩‍🏫 ${t.name} (${t.username})</option>`;
+          });
+          window.loadTeacherAllowedSettings("ALL");
+        }
+      };
+
+      window.loadTeacherAllowedSettings = async function(targetKey) {
+        const key = targetKey || "ALL";
+        let data = await safeDataFetch(`teacher_permissions/${key}`);
+        if (!data && key !== "ALL") {
+          data = await safeDataFetch(`teacher_permissions/ALL`);
+        }
+        const prof = (data && data.profile) ? data.profile : {};
+        const feat = (data && data.features) ? data.features : {};
+
+        document.getElementById("allowTchNameChk").checked = !!prof.name;
+        document.getElementById("allowTchUserChk").checked = !!prof.username;
+        document.getElementById("allowTchPassChk").checked = !!prof.password;
+        document.getElementById("allowTchPhoneChk").checked = !!prof.phone;
+        document.getElementById("allowTchEmailChk").checked = !!prof.email;
+        document.getElementById("allowTchPhotoChk").checked = !!prof.photo;
+
+        const isFeatOn = (k) => feat[k] !== false; // Default ON unless Admin turned it OFF
+        document.getElementById("featTchMusterChk").checked = isFeatOn("muster");
+        document.getElementById("featTchRegStudentChk").checked = isFeatOn("regStudent");
+        document.getElementById("featTchAttendChk").checked = isFeatOn("attend");
+        document.getElementById("featTchTrackAttChk").checked = isFeatOn("trackAtt");
+        document.getElementById("featTchPerformChk").checked = isFeatOn("perform");
+        document.getElementById("featTchTestsChk").checked = isFeatOn("tests");
+        document.getElementById("featTchHomeworkChk").checked = isFeatOn("homework");
+        document.getElementById("featTchStudyMatChk").checked = isFeatOn("studyMat");
+        document.getElementById("featTchTimetableChk").checked = isFeatOn("timetable");
+        document.getElementById("featTchLeavesChk").checked = isFeatOn("leaves");
+      };
+
+      window.saveTeacherAllowedSettings = function() {
+        const btn = document.getElementById("saveTeacherAllowedBtn");
+        runWithBtnSpinner(btn, "💾 Save Teacher Controls", async () => {
+          const targetKey = document.getElementById("tchAllowTargetSelect").value || "ALL";
+          const payload = {
+            profile: {
+              name: document.getElementById("allowTchNameChk").checked,
+              username: document.getElementById("allowTchUserChk").checked,
+              password: document.getElementById("allowTchPassChk").checked,
+              phone: document.getElementById("allowTchPhoneChk").checked,
+              email: document.getElementById("allowTchEmailChk").checked,
+              photo: document.getElementById("allowTchPhotoChk").checked
+            },
+            features: {
+              muster: document.getElementById("featTchMusterChk").checked,
+              regStudent: document.getElementById("featTchRegStudentChk").checked,
+              attend: document.getElementById("featTchAttendChk").checked,
+              trackAtt: document.getElementById("featTchTrackAttChk").checked,
+              perform: document.getElementById("featTchPerformChk").checked,
+              tests: document.getElementById("featTchTestsChk").checked,
+              homework: document.getElementById("featTchHomeworkChk").checked,
+              studyMat: document.getElementById("featTchStudyMatChk").checked,
+              timetable: document.getElementById("featTchTimetableChk").checked,
+              leaves: document.getElementById("featTchLeavesChk").checked
+            },
+            updatedAt: Date.now()
+          };
+
+          const updates = {};
+          updates[`teacher_permissions/${targetKey}`] = payload;
+
+          if (targetKey === "ALL") {
+            const teachers = await safeDataFetch("teachers") || {};
+            Object.keys(teachers).forEach(u => {
+              updates[`teacher_permissions/${u}`] = payload;
+            });
+          }
+
+          await update(ref(db), updates);
+          alert(`✔ Teacher Controls saved for ${targetKey === "ALL" ? "All Teachers" : targetKey}!`);
+          window.closeModal("studentAllowedModal");
+        });
+      };
+
+      // Realtime Listener for Teacher Dashboard Locks
+      window.syncTeacherFeatureLocksRealtime = function() {
+        const loggedUser = localStorage.getItem("loggedUser");
+        if (!loggedUser || currentRole !== "teacher") return;
+
+        const applyLocksUI = (permData) => {
+          const feat = (permData && permData.features) ? permData.features : {};
+          window.activeTeacherPermsCache = {
+            profile: (permData && permData.profile) ? permData.profile : {},
+            features: feat
+          };
+
+          document.querySelectorAll("[data-tfeat]").forEach(el => {
+            const key = el.getAttribute("data-tfeat");
+            const locked = feat[key] === false;
+            el.style.opacity = locked ? "0.55" : "1";
+
+            let badge = el.querySelector(".admin-lock-pill");
+            if (locked) {
+              if (!badge && el.classList.contains("drawer-item")) {
+                badge = document.createElement("span");
+                badge.className = "admin-lock-pill";
+                badge.style.cssText = "margin-left:auto; font-size:9px; font-weight:900; background:rgba(239,68,68,0.15); color:#ef4444; padding:2px 7px; border-radius:6px;";
+                badge.innerText = "🔒 Locked by Admin";
+                el.appendChild(badge);
+              }
+            } else if (badge) {
+              badge.remove();
+            }
+          });
+
+          // Lock Home Muster button if muster is disabled
+          const homeMusterBtn = document.querySelector("#teacherTabHome button[onclick*='teacherMusterModal']");
+          if (homeMusterBtn) {
+            const mLocked = feat.muster === false;
+            homeMusterBtn.classList.toggle("btn-grayed", mLocked);
+            homeMusterBtn.innerText = mLocked ? "🔒 Locked by Admin" : "Access Muster Panel";
+            homeMusterBtn.onclick = () => window.runTeacherFeature("muster", () => openModal("teacherMusterModal"));
+          }
+        };
+
+        onValue(ref(db, `teacher_permissions/${loggedUser}`), async (snap) => {
+          if (snap.exists()) {
+            applyLocksUI(snap.val());
+          } else {
+            const globalPerms = await safeDataFetch("teacher_permissions/ALL");
+            applyLocksUI(globalPerms || {});
+          }
+        });
+      };
+
+      window.runTeacherFeature = function(featureKey, callback) {
+        const featMap = (window.activeTeacherPermsCache && window.activeTeacherPermsCache.features) || {};
+        if (featMap[featureKey] === false) {
+          window.closeDrawer();
+          window.showCustomAlert("🔒 Locked by Admin: This feature has been disabled by the Administrator.");
+          return;
+        }
+        if (typeof callback === "function") callback();
+      };
+
+      // =========================================================
+      // 👤 TEACHER "MY PROFILE" & INTERACTIVE LINE GRAPH ENGINE
+      // =========================================================
+      let teacherLineChartInstance = null;
+      let cachedTeacherPointSeries = [];
+      let currentTeacherGraphMode = "all";
+
+      window.openTeacherMyProfileTab = async function(e) {
+        if (e) e.stopPropagation();
+        window.closeDrawer();
+        window.switchTab("teacherTabProfile", null, e);
+        window.switchTeacherMyProfileSubTab("info");
+        await window.loadTeacherMyProfileData();
+      };
+
+      window.switchTeacherMyProfileSubTab = function(sub) {
+        document.getElementById("tProfSubTabInfoBtn").classList.toggle("active", sub === "info");
+        document.getElementById("tProfSubTabStatusBtn").classList.toggle("active", sub === "status");
+        document.getElementById("tProfSubPaneInfo").style.display = sub === "info" ? "block" : "none";
+        document.getElementById("tProfSubPaneStatus").style.display = sub === "status" ? "block" : "none";
+
+        if (sub === "status") {
+          window.renderTeacherInteractiveLineGraph();
+        }
+      };
+
+      window.loadTeacherMyProfileData = async function() {
+        const loggedUser = localStorage.getItem("loggedUser");
+        if (!loggedUser) return;
+
+        const tObj = await safeDataFetch(`teachers/${loggedUser}`) || {};
+        const uObj = await safeDataFetch(`users/${loggedUser}`) || {};
+        const permData = (await safeDataFetch(`teacher_permissions/${loggedUser}`)) || (await safeDataFetch(`teacher_permissions/ALL`)) || {};
+        const profPerms = permData.profile || {};
+
+        const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(tObj.name || loggedUser)}&background=7c3aed&color=fff&bold=true`;
+        document.getElementById("tMyProfAvatar").src = (tObj.photo && !tObj.photo.includes("via.placeholder.com")) ? tObj.photo : defaultAvatar;
+        document.getElementById("tMyProfHeaderName").innerText = (tObj.name || loggedUser) + " Teacher";
+        document.getElementById("tMyProfClassBadge").innerText = `Class: ${tObj.assignedClass || assignedClass}`;
+        document.getElementById("tMyProfPointsBadge").innerText = `${tObj.points || 0} PTS`;
+
+        const nameInp = document.getElementById("tMyProfNameInput");
+        const userInp = document.getElementById("tMyProfUserInput");
+        const passInp = document.getElementById("tMyProfPassInput");
+        const phoneInp = document.getElementById("tMyProfPhoneInput");
+        const emailInp = document.getElementById("tMyProfEmailInput");
+        const photoBtn = document.getElementById("tMyProfPhotoBtn");
+
+        nameInp.value = tObj.name || "";
+        userInp.value = tObj.username || loggedUser;
+        passInp.value = uObj.password || "";
+        phoneInp.value = tObj.phone || "";
+        emailInp.value = tObj.email || "";
+        document.getElementById("tMyProfClassesReadonly").value = `Class ${tObj.assignedClass || assignedClass}`;
+
+        const setFieldState = (el, allowed) => {
+          if (!el) return;
+          el.disabled = !allowed;
+          el.style.backgroundColor = allowed ? "var(--input-bg)" : "rgba(0,0,0,0.06)";
+          el.style.cursor = allowed ? "text" : "not-allowed";
+          el.style.opacity = allowed ? "1" : "0.65";
+        };
+
+        setFieldState(nameInp, !!profPerms.name);
+        setFieldState(userInp, !!profPerms.username);
+        setFieldState(passInp, !!profPerms.password);
+        setFieldState(phoneInp, !!profPerms.phone);
+        setFieldState(emailInp, !!profPerms.email);
+
+        if (photoBtn) {
+          photoBtn.disabled = !profPerms.photo;
+          photoBtn.classList.toggle("btn-grayed", !profPerms.photo);
+          photoBtn.innerText = profPerms.photo ? "📷 Select & Crop Photo" : "🔒 Photo Locked by Admin";
+        }
+
+        const anyAllowed = !!(profPerms.name || profPerms.username || profPerms.password || profPerms.phone || profPerms.email || profPerms.photo);
+        document.getElementById("tMyProfSaveBtn").style.display = anyAllowed ? "flex" : "none";
+        document.getElementById("tMyProfLockedBanner").style.display = anyAllowed ? "none" : "block";
+      };
+
+      window.saveTeacherSelfProfileUpdate = function() {
+        const btn = document.getElementById("tMyProfSaveBtn");
+        runWithBtnSpinner(btn, "💾 Save Profile Changes", async () => {
+          const oldUser = localStorage.getItem("loggedUser");
+          if (!oldUser) return;
+
+          const tObj = await safeDataFetch(`teachers/${oldUser}`) || {};
+          const uObj = await safeDataFetch(`users/${oldUser}`) || {};
+          const permData = (await safeDataFetch(`teacher_permissions/${oldUser}`)) || (await safeDataFetch(`teacher_permissions/ALL`)) || {};
+          const profPerms = permData.profile || {};
+
+          let targetUser = oldUser;
+          if (profPerms.username) {
+            const newU = document.getElementById("tMyProfUserInput").value.trim();
+            if (!newU) { alert("Username cannot be empty."); return; }
+            targetUser = newU;
+          }
+
+          const updatedTeacher = { ...tObj, username: targetUser };
+          const updatedUser = { ...uObj };
+
+          if (profPerms.name) {
+            const n = document.getElementById("tMyProfNameInput").value.trim();
+            if (!n) { alert("Name cannot be empty."); return; }
+            updatedTeacher.name = n;
+          }
+          if (profPerms.password) {
+            const p = document.getElementById("tMyProfPassInput").value.trim();
+            if (!p) { alert("Password cannot be empty."); return; }
+            updatedUser.password = p;
+            localStorage.setItem("loggedPass", p);
+          }
+          if (profPerms.phone) {
+            updatedTeacher.phone = document.getElementById("tMyProfPhoneInput").value.trim();
+          }
+          if (profPerms.email) {
+            updatedTeacher.email = document.getElementById("tMyProfEmailInput").value.trim();
+          }
+          if (profPerms.photo && window.croppedPhotosMap["tMyProfPhotoInput"]) {
+            const croppedData = window.croppedPhotosMap["tMyProfPhotoInput"];
+            updatedTeacher.photo = await window.saveMediaToFirestore("teacher_photos", targetUser, croppedData, { name: updatedTeacher.name });
+            delete window.croppedPhotosMap["tMyProfPhotoInput"];
+          }
+
+          const updates = {};
+          if (targetUser !== oldUser) {
+            updates[`teachers/${oldUser}`] = null;
+            updates[`users/${oldUser}`] = null;
+            localStorage.setItem("loggedUser", targetUser);
+          }
+          updates[`teachers/${targetUser}`] = updatedTeacher;
+          updates[`users/${targetUser}`] = updatedUser;
+
+          if (typeof window.encodeEmailKey === "function") {
+            if (tObj.email && tObj.email !== updatedTeacher.email) {
+              updates[`email_lookup/${window.encodeEmailKey(tObj.email)}`] = null;
+            }
+            if (updatedTeacher.email) {
+              updates[`email_lookup/${window.encodeEmailKey(updatedTeacher.email)}`] = String(targetUser);
+            }
+          }
+
+          await update(ref(db), updates);
+          alert("✔ Your Teacher Profile has been updated!");
+          await window.loadTeacherMyProfileData();
+          window.refreshTeacherDashboardData();
+        });
+      };
+
+      // Interactive Teacher Points Line Chart Engine
+      window.setTeacherGraphRange = function(mode, btnEl) {
+        currentTeacherGraphMode = mode;
+        document.querySelectorAll("#tProfSubPaneStatus .class-chip").forEach(b => b.classList.remove("active"));
+        if (btnEl) btnEl.classList.add("active");
+        window.renderTeacherInteractiveLineGraph();
+      };
+
+      window.renderTeacherInteractiveLineGraph = async function() {
+        const loggedUser = localStorage.getItem("loggedUser");
+        const canvas = document.getElementById("teacherPointsLineChart");
+        if (!loggedUser || !canvas) return;
+
+        const tObj = await safeDataFetch(`teachers/${loggedUser}`) || {};
+        const currentPts = parseInt(tObj.points) || 0;
+        const allLogsObj = await safeDataFetch("teacher_points_logs") || {};
+        const dailyClaimsObj = await safeDataFetch(`teacher_daily_claims/${loggedUser}`) || {};
+
+        let myLogs = Object.values(allLogsObj)
+          .filter(l => l && l.username === loggedUser)
+          .sort((a, b) => Number(a.id) - Number(b.id));
+
+        const series = [{ label: "Start", total: 0, delta: 0, reason: "Account Initialized", date: tObj.regDate || "Initial" }];
+
+        if (myLogs.length > 0) {
+          myLogs.forEach((lg, idx) => {
+            series.push({
+              label: lg.date ? lg.date.slice(0, 5) : `#${idx + 1}`,
+              total: parseInt(lg.totalPoints) || 0,
+              delta: parseInt(lg.points) || 0,
+              reason: lg.reason || "Admin Point Update",
+              date: lg.date || "-"
+            });
+          });
+          if (series[series.length - 1].total !== currentPts) {
+            const diff = currentPts - series[series.length - 1].total;
+            series.push({
+              label: "Today",
+              total: currentPts,
+              delta: diff,
+              reason: diff > 0 ? "Daily Reward Claims (+50 PTS)" : "Points Sync",
+              date: getTodayFormattedDate()
+            });
+          }
+        } else {
+          // Construct timeline from daily claims if no manual admin logs exist
+          const claimKeys = Object.keys(dailyClaimsObj).sort();
+          let running = 0;
+          claimKeys.forEach((k) => {
+            running += 50;
+            const parts = k.split("_");
+            const lbl = parts.length === 3 ? `${parts[2]}/${parts[1]}` : k;
+            series.push({
+              label: lbl,
+              total: running,
+              delta: 50,
+              reason: "Daily Reward Claimed 🎁",
+              date: lbl
+            });
+          });
+          if (running !== currentPts) {
+            series.push({
+              label: "Current",
+              total: currentPts,
+              delta: currentPts - running,
+              reason: "Current Standing",
+              date: getTodayFormattedDate()
+            });
+          }
+        }
+
+        cachedTeacherPointSeries = currentTeacherGraphMode === "recent" ? series.slice(-5) : series;
+
+        const peak = cachedTeacherPointSeries.reduce((mx, p) => Math.max(mx, p.total), 0);
+        const growth = currentPts - (cachedTeacherPointSeries[0]?.total || 0);
+        document.getElementById("tStatCurrentPts").innerText = `${currentPts}`;
+        document.getElementById("tStatPeakPts").innerText = `${peak}`;
+        document.getElementById("tStatGrowthText").innerText = `${growth >= 0 ? '+' : ''}${growth}`;
+
+        const isDark = document.body.classList.contains("dark-mode");
+        const ctx = canvas.getContext("2d");
+        const grad = ctx.createLinearGradient(0, 0, 0, 220);
+        grad.addColorStop(0, isDark ? "rgba(168, 85, 247, 0.45)" : "rgba(124, 58, 237, 0.32)");
+        grad.addColorStop(1, "rgba(124, 58, 237, 0.0)");
+
+        const pointColors = cachedTeacherPointSeries.map(p => p.delta < 0 ? "#ef4444" : "#10b981");
+
+        if (teacherLineChartInstance) teacherLineChartInstance.destroy();
+        teacherLineChartInstance = new Chart(canvas, {
+          type: "line",
+          data: {
+            labels: cachedTeacherPointSeries.map(p => p.label),
+            datasets: [{
+              label: "Total Points",
+              data: cachedTeacherPointSeries.map(p => p.total),
+              borderColor: isDark ? "#c084fc" : "#7c3aed",
+              backgroundColor: grad,
+              borderWidth: 3,
+              fill: true,
+              tension: 0.38,
+              pointRadius: 6,
+              pointHoverRadius: 10,
+              pointBackgroundColor: pointColors,
+              pointBorderColor: isDark ? "#ffffff" : "#1e1b4b",
+              pointBorderWidth: 2
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            onClick: (evt, activeEls) => {
+              if (activeEls && activeEls.length > 0) {
+                const idx = activeEls[0].index;
+                const pt = cachedTeacherPointSeries[idx];
+                if (pt) {
+                  const sign = pt.delta >= 0 ? `+${pt.delta}` : `${pt.delta}`;
+                  const color = pt.delta < 0 ? "#ef4444" : "#10b981";
+                  document.getElementById("teacherGraphTapFeedback").innerHTML = `
+                    <div style="font-size:13px; font-weight:900; color:${color};">${pt.date} — ${sign} PTS (Total: ${pt.total} PTS)</div>
+                    <div style="font-size:11px; font-weight:700; color:var(--text-muted); margin-top:3px;">📌 Reason: ${pt.reason}</div>
+                  `;
+                }
+              }
+            },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: (context) => {
+                    const pt = cachedTeacherPointSeries[context.dataIndex];
+                    const sign = pt.delta >= 0 ? `+${pt.delta}` : `${pt.delta}`;
+                    return ` Total: ${pt.total} PTS (${sign} PTS)`;
+                  },
+                  afterLabel: (context) => {
+                    const pt = cachedTeacherPointSeries[context.dataIndex];
+                    return ` Reason: ${pt.reason}`;
+                  }
+                }
+              }
+            },
+            scales: {
+              x: {
+                ticks: { color: isDark ? "#cbd5e1" : "#475569", font: { weight: "700", size: 10 } },
+                grid: { color: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)" }
+              },
+              y: {
+                beginAtZero: true,
+                ticks: { color: isDark ? "#cbd5e1" : "#475569", font: { weight: "700", size: 10 } },
+                grid: { color: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)" }
+              }
+            }
+          }
+        });
+      };
+
+      window.triggerTeacherGraphInsight = function() {
+        if (!cachedTeacherPointSeries || cachedTeacherPointSeries.length === 0) return;
+        const lastPt = cachedTeacherPointSeries[cachedTeacherPointSeries.length - 1];
+        const prevPt = cachedTeacherPointSeries.length > 1 ? cachedTeacherPointSeries[cachedTeacherPointSeries.length - 2] : { total: 0 };
+        const diff = lastPt.total - prevPt.total;
+        const trendMsg = diff >= 0
+          ? `🚀 Upward Trend! Your last activity boosted your score by +${diff} PTS (${lastPt.reason}). Keep claiming daily rewards to climb the Teacherboard!`
+          : `⚠️ Dip Alert! Your last update deducted ${diff} PTS (${lastPt.reason}). Claim today's +50 bonus points to recover fast!`;
+        document.getElementById("teacherGraphTapFeedback").innerHTML = `<div style="color:#7c3aed; font-weight:900;">${trendMsg}</div>`;
       };
 
     </script>
