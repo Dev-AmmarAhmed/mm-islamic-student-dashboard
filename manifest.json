@@ -9,16 +9,15 @@
   "theme_color": "#0f172a",
   "icons": [
     {
-      "src": "https://raw.githubusercontent.com/Dev-AmmarAhmed/mm-islamic-student-dashboard/30568210b4d225d3635fc7b9f1e707bbdee48bb3/12922.png",
+      "src": "https://raw.githubusercontent.com/Dev-AmmarAhmed/mm-islamic-student-dashboard/d6d24f3e257c37e211f227d935af222dd37de7ca/icon%20blue.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "https://raw.githubusercontent.com/Dev-AmmarAhmed/mm-islamic-student-dashboard/30568210b4d225d3635fc7b9f1e707bbdee48bb3/13041.png",
+      "src": "https://raw.githubusercontent.com/Dev-AmmarAhmed/mm-islamic-student-dashboard/d6d24f3e257c37e211f227d935af222dd37de7ca/icon%20blue.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
     }
   ]
-}
