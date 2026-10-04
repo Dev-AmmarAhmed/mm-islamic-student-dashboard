@@ -1,8 +1,10 @@
 {
+  "id": "./",
   "name": "M.M ISLAMIC ENGLISH SCHOOL",
   "short_name": "MM ISLAMIC",
   "description": "Official Student and Teacher Portal Dashboard for M.M Islamic English School.",
-  "start_url": "./index.html",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#0f172a",
@@ -10,15 +12,15 @@
   "icons": [
     {
       "src": "https://raw.githubusercontent.com/Dev-AmmarAhmed/mm-islamic-student-dashboard/d6d24f3e257c37e211f227d935af222dd37de7ca/icon%20blue.png",
-      "sizes": "192x192",
+      "sizes": "192x192 512x512 1024x1024 any",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "https://raw.githubusercontent.com/Dev-AmmarAhmed/mm-islamic-student-dashboard/d6d24f3e257c37e211f227d935af222dd37de7ca/icon%20blue.png",
-      "sizes": "512x512",
+      "sizes": "192x192 512x512 1024x1024 any",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "maskable"
     }
   ]
 }
