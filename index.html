@@ -3901,38 +3901,7 @@ Exact Output JSON Format Required:
   </div>
 
 
-  <div id="registerTeacherModal" class="modal-overlay">
-    <div class="modal-content">
-      <div class="modal-header"><span>👩‍🏫 Register Teacher</span><span class="close-modal" onclick="closeModal('registerTeacherModal')">✕</span></div>
-      <div class="modal-body">
-        <label>Teacher Name:</label><input type="text" id="tRegName">
-        <label>Username:</label><input type="text" id="tRegUser">
-        <label>Password:</label><input type="text" id="tRegPass">
-       
-        
-                <label>Assign Classes (Select Multiple) *:</label>
-        <div class="checkbox-grid" id="tRegClassCheckboxes">
-          <div class="checkbox-item"><input type="checkbox" class="t-reg-chk" value="Nursery"> Nursery</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-reg-chk" value="Jr. KG"> Jr. KG</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-reg-chk" value="Sr. KG"> Sr. KG</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-reg-chk" value="1"> Class 1</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-reg-chk" value="2"> Class 2</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-reg-chk" value="3"> Class 3</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-reg-chk" value="4"> Class 4</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-reg-chk" value="5"> Class 5</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-reg-chk" value="6"> Class 6</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-reg-chk" value="7"> Class 7</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-reg-chk" value="8"> Class 8</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-reg-chk" value="9"> Class 9</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-reg-chk" value="10"> Class 10</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-reg-chk" value="11"> Class 11</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-reg-chk" value="12"> Class 12</div>
-        </div>
-
-        <button id="saveTeacherBtn" class="btn-primary btn-green">Create Teacher</button>
-      </div>
-    </div>
-  </div>
+  
 
   <div id="credentialsModal" class="modal-overlay">
     <div class="modal-content">
@@ -4442,6 +4411,31 @@ Exact Output JSON Format Required:
     </div>
   </div>
 
+  <!-- UNIVERSAL PHOTO CROP & PREVIEW MODAL -->
+  <div id="photoCropperModal" class="modal-overlay" style="z-index: 1000090;">
+    <div class="modal-content" style="max-width: 380px; text-align: center;">
+      <div class="modal-header">
+        <span>✂️ Preview & Crop Photo</span>
+        <span class="close-modal" onclick="window.cancelPhotoCrop()">✕</span>
+      </div>
+      <div class="modal-body">
+        <div style="font-size:11px; font-weight:700; color:var(--text-muted); margin-bottom:10px;">
+          Drag photo to adjust position & use slider to zoom
+        </div>
+        <div id="cropCanvasViewport" style="width: 250px; height: 250px; margin: 0 auto; border-radius: 18px; overflow: hidden; border: 2.5px solid #0288d1; position: relative; background: #0f172a; touch-action: none; cursor: grab;">
+          <canvas id="photoCropCanvas" width="300" height="300" style="width: 250px; height: 250px; display: block; touch-action: none !important;"></canvas>
+        </div>
+        <div style="margin-top: 14px; display: flex; align-items: center; gap: 10px; padding: 0 10px;">
+          <span style="font-size: 12px; font-weight: 800;">🔍</span>
+          <input type="range" id="photoCropZoomSlider" min="1" max="3" step="0.02" value="1" style="flex: 1; accent-color: #0288d1; cursor: pointer;">
+        </div>
+        <div style="display: flex; gap: 10px; margin-top: 16px;">
+          <button type="button" class="btn-primary" style="background: #64748b; margin-top: 0;" onclick="window.cancelPhotoCrop()">Cancel</button>
+          <button type="button" class="btn-primary btn-green" style="margin-top: 0;" onclick="window.applyPhotoCrop()">✔ Crop & Use</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- CUSTOM THEME & VISUAL EFFECTS STUDIO MODAL -->
 
@@ -9025,36 +9019,106 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       });
     };
 
-         window.openEditTeacherModal = function(username, name, pass, assignedClass) {
+            window.openEditTeacherModal = async function(username) {
+      const tObj = await safeDataFetch(`teachers/${username}`) || {};
+      const uObj = await safeDataFetch(`users/${username}`) || {};
+
+      const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(tObj.name || username || 'T')}&background=7c3aed&color=fff&bold=true`;
       document.getElementById("editTeacherOldUsername").value = username;
-      document.getElementById("editTeacherName").value = name;
-      document.getElementById("editTeacherUser").value = username;
-      document.getElementById("editTeacherPass").value = pass;
-      
-      const classArr = (assignedClass || "1").split(",");
+      document.getElementById("editTeacherAvatarPreview").src = (tObj.photo && !tObj.photo.includes("via.placeholder.com")) ? tObj.photo : defaultAvatar;
+      document.getElementById("editTeacherClassBadge").innerText = `Class ${tObj.assignedClass || '-'}`;
+      document.getElementById("editTeacherPointsChip").innerText = `${tObj.points || 0} PTS`;
+
+      document.getElementById("editTeacherName").value = tObj.name || "";
+      document.getElementById("editTeacherUser").value = username || "";
+      document.getElementById("editTeacherPass").value = uObj.password || "";
+      document.getElementById("editTeacherPhone").value = tObj.phone || "";
+      document.getElementById("editTeacherEmail").value = tObj.email || "";
+      document.getElementById("editTeacherPointsInput").value = tObj.points || 0;
+      if(document.getElementById("editTeacherPhotoInput")) document.getElementById("editTeacherPhotoInput").value = "";
+      if(window.croppedPhotosMap) delete window.croppedPhotosMap["editTeacherPhotoInput"];
+
+      const classArr = String(tObj.assignedClass || "1").split(",").map(s => s.trim());
       document.querySelectorAll(".t-edit-chk").forEach(chk => {
         chk.checked = classArr.includes(chk.value);
       });
-      
+
       window.openModal("editTeacherModal");
     };
 
-       window.saveUpdatedTeacherDetails = async function() {
-      const username = document.getElementById("editTeacherOldUsername").value;
-      const name = document.getElementById("editTeacherName").value.trim();
-      const pass = document.getElementById("editTeacherPass").value.trim();
-      
-      const checkedClasses = Array.from(document.querySelectorAll(".t-edit-chk:checked")).map(c => c.value);
-      const assignedClass = checkedClasses.join(",");
+    window.saveUpdatedTeacherDetails = function() {
+      const btn = document.getElementById("updateTeacherBtn");
+      runWithBtnSpinner(btn, "💾 Update Teacher Profile", async () => {
+        const oldUser = document.getElementById("editTeacherOldUsername").value;
+        const newUser = document.getElementById("editTeacherUser").value.trim();
+        const name = document.getElementById("editTeacherName").value.trim();
+        const pass = document.getElementById("editTeacherPass").value.trim();
+        const phone = document.getElementById("editTeacherPhone").value.trim();
+        const email = document.getElementById("editTeacherEmail").value.trim();
+        const pts = parseInt(document.getElementById("editTeacherPointsInput").value) || 0;
+        const photoFile = document.getElementById("editTeacherPhotoInput");
 
-      if(!name || !pass || !assignedClass) { alert("Teacher name, password and at least 1 class is required."); return; }
-      
-      await update(ref(db), { [`teachers/${username}/name`]: name, [`teachers/${username}/assignedClass`]: assignedClass, [`users/${username}/password`]: pass, [`users/${username}/assignedClass`]: assignedClass });
-      
-      alert("✔ Teacher details updated successfully!"); 
-      window.closeModal("editTeacherModal"); 
-      window.loadManageTeacherList();
+        const checkedClasses = Array.from(document.querySelectorAll(".t-edit-chk:checked")).map(c => c.value);
+        const assignedCls = checkedClasses.join(",");
+
+        if(!name || !newUser || !pass || !assignedCls) { alert("Name, Username, Password and at least 1 class are required."); return; }
+
+        const currentTeacher = await safeDataFetch(`teachers/${oldUser}`) || {};
+        let photoUrl = currentTeacher.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=7c3aed&color=fff&bold=true`;
+
+        const croppedData = window.croppedPhotosMap && window.croppedPhotosMap["editTeacherPhotoInput"];
+        if (croppedData) {
+          photoUrl = await window.saveMediaToFirestore("teacher_photos", newUser, croppedData, { name: name, assignedClass: assignedCls });
+          delete window.croppedPhotosMap["editTeacherPhotoInput"];
+        } else if (photoFile && photoFile.files && photoFile.files.length > 0) {
+          const uploadedPhoto = await readFileAsDataURL(photoFile.files[0], 500, 0.72);
+          if (uploadedPhoto) {
+            photoUrl = await window.saveMediaToFirestore("teacher_photos", newUser, uploadedPhoto, { name: name, assignedClass: assignedCls });
+          }
+        }
+
+        const updates = {};
+        if (oldUser !== newUser) {
+          updates[`teachers/${oldUser}`] = null;
+          updates[`users/${oldUser}`] = null;
+        }
+
+        updates[`teachers/${newUser}`] = {
+          ...currentTeacher,
+          name: name,
+          username: newUser,
+          assignedClass: assignedCls,
+          phone: phone,
+          email: email,
+          points: pts,
+          photo: photoUrl
+        };
+        updates[`users/${newUser}`] = { password: pass, role: "teacher", assignedClass: assignedCls };
+
+        if (typeof window.encodeEmailKey === "function") {
+          if (currentTeacher.email && currentTeacher.email !== email) {
+            updates[`email_lookup/${window.encodeEmailKey(currentTeacher.email)}`] = null;
+          }
+          if (email) {
+            updates[`email_lookup/${window.encodeEmailKey(email)}`] = String(newUser);
+          }
+        }
+
+        await update(ref(db), updates);
+        alert("✔ Teacher Profile Updated Successfully!");
+        window.closeModal("editTeacherModal");
+        window.loadManageTeacherList();
+        window.renderAdminHomeTeacherboardCards();
+      });
     };
+
+    window.deleteTeacherFromModal = function() {
+      const username = document.getElementById("editTeacherOldUsername").value;
+      if (!username) return;
+      window.closeModal("editTeacherModal");
+      window.deleteTeacherAccount(username);
+    };
+
 
     window.renderTeacherboardCardsTable = async function() {
       const container = document.getElementById("teacherboardTableCardsContainer");
