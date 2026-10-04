@@ -5175,15 +5175,25 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
     }
 
     
+       let serverTimeOffset = 0;
+    onValue(ref(db, ".info/serverTimeOffset"), (snap) => {
+      serverTimeOffset = snap.val() || 0;
+    });
+
+    function getServerNow() {
+      return new Date(Date.now() + serverTimeOffset);
+    }
+
     function getTodayFormattedDate() {
-      const today = new Date();
+      const today = getServerNow();
       return `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
     }
 
     function getTodayKey() {
-      const today = new Date();
+      const today = getServerNow();
       return `${today.getFullYear()}_${today.getMonth() + 1}_${today.getDate()}`;
     }
+
 
     function getAutoMonthName() {
       const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -6178,7 +6188,6 @@ localStorage.setItem("loggedPass", p);
         const student = await getStudentRecord(currentStudentAdmn);
         if(!student) return;
         
-        const matrix = await safeDataFetch("fees_matrix") || {};
         const studentMatrix = await safeDataFetch(`fees_matrix/${currentStudentAdmn}`) || {};
         const struct = window.getFeeStructure(student.class);
         const monthlyRate = student.customFee !== undefined ? parseFloat(student.customFee) : struct.rate;
@@ -6397,10 +6406,17 @@ localStorage.setItem("loggedPass", p);
           const subChapInfo = (mat.subject || mat.chapterNo) 
             ? `<div style="font-size:10px; color:#0288d1; font-weight:800; margin-bottom:2px;">${mat.subject ? mat.subject : ''}${mat.subject && mat.chapterNo ? ' • ' : ''}${mat.chapterNo ? 'Ch. ' + mat.chapterNo : ''}</div>` 
             : '';
-          
-          tbody.innerHTML += `<tr>
+
+                    tbody.innerHTML += `<tr>
             <td style="text-align:left; padding-left:8px; font-weight:700;">
-              ${subChapInfo}${mat.title}${isHidden ? '<span style="color:#dc2626; font-size:9px; display:block;">(Hidden)</span>' : ''}
+              ${subChapInfo}${mat.title} ${isHidden ? '<span style="color:#dc2626; font-size:9px; display:block;">(Hidden)</span>' : ''}
+            </td>
+            <td>${mat.type ? mat.type.toUpperCase() : 'FILE'}</td>
+            <td>
+              <div style="display:flex; gap:6px; justify-content:center; flex-wrap:wrap;">
+                <button class="btn-primary" style="background:${hideBtnColor}; padding:4px 8px; font-size:10px; margin-top:0; width:auto;" onclick="window.toggleStudyMaterialVisibility('${classKey}', '${key}', ${isHidden})">${hideBtnText}</button>
+                <button class="btn-sm-del" style="padding:4px 8px; font-size:10px; margin-top:0;" onclick="window.deleteStudyMaterial('${classKey}', '${key}')">🗑️ Delete</button>
+              </div>
             </td>
           </tr>`;
         });
