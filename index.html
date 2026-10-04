@@ -716,10 +716,43 @@ body.more-animations .stat-card {
   }
 }
 
-body.more-animations .modal-overlay.active .modal-content:not(.bottom-sheet-content) {
+     @keyframes modalGenieToBtn {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    border-radius: 22px;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--btn-origin-x, 0px), var(--btn-origin-y, 40px), 0) scale(0.08);
+    border-radius: 48px;
+  }
+}
+
+@keyframes fadeOutOverlay {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+body.more-animations .modal-overlay.active:not(.closing):not(#customSelectModal) .modal-content:not(.bottom-sheet-content) {
   animation: modalGenieFromBtn 0.38s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
   will-change: transform, opacity;
 }
+
+body.more-animations .modal-overlay.closing:not(#customSelectModal) {
+  animation: fadeOutOverlay 0.32s ease forwards !important;
+  pointer-events: none !important;
+}
+
+body.more-animations .modal-overlay.closing:not(#customSelectModal) .modal-content:not(.bottom-sheet-content) {
+  animation: modalGenieToBtn 0.32s cubic-bezier(0.32, 0, 0.67, 0) forwards !important;
+  will-change: transform, opacity;
+}
+
+#customSelectModal .modal-content {
+  animation: slideUp 0.34s cubic-bezier(0.22, 1, 0.36, 1) forwards !important;
+}
+
 
 
 * {
@@ -4307,14 +4340,23 @@ Exact Output JSON Format Required:
         item.className = `custom-select-option-item ${isSelected ? 'selected' : ''}`;
         item.innerHTML = `<span>${opt.text}</span>${isSelected ? '<span style="font-size:14px; color:#0288d1;">✔</span>' : ''}`;
 
-        item.onclick = function() {
-          selectEl.value = opt.value;
-          selectEl.dispatchEvent(new Event('change', { bubbles: true }));
-          window.closeCustomSelectSheet();
+              item.onclick = function() {
+          // Pehle tick (✔) aur highlight dikhao, phir 150ms baad aaram se band karo
+          container.querySelectorAll(".custom-select-option-item").forEach(el => el.classList.remove("selected"));
+          item.classList.add("selected");
+          setTimeout(() => {
+            selectEl.value = opt.value;
+            selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+            window.closeCustomSelectSheet();
+          }, 150);
         };
         container.appendChild(item);
       });
-      modal.classList.add("active");
+
+      // Selector dabane ke baad 110ms ka natural pause phir smooth open
+      setTimeout(() => {
+        modal.classList.add("active");
+      }, 110);
     };
 
     window.closeCustomSelectSheet = function() {
@@ -4323,22 +4365,24 @@ Exact Output JSON Format Required:
       activeSelectTarget = null;
     };
 
+    // Native Picker ko roko, lekin sheet tabhi kholo jab user proper CLICK kare (scroll karte waqt galti se nahi khulega)
     document.addEventListener("mousedown", function(e) {
       const selectTarget = e.target.closest("select");
-      if (selectTarget && !selectTarget.disabled) {
+      if (selectTarget && !selectTarget.disabled && selectTarget.id !== "teacherActiveSelect") {
+        e.preventDefault();
+        selectTarget.blur();
+      }
+    }, true);
+
+    document.addEventListener("click", function(e) {
+      const selectTarget = e.target.closest("select");
+      if (selectTarget && !selectTarget.disabled && selectTarget.id !== "teacherActiveSelect") {
         e.preventDefault();
         selectTarget.blur();
         window.openCustomSelectSheet(selectTarget);
       }
     }, true);
-    document.addEventListener("touchstart", function(e) {
-      const selectTarget = e.target.closest("select");
-      if (selectTarget && !selectTarget.disabled) {
-        e.preventDefault();
-        selectTarget.blur();
-        window.openCustomSelectSheet(selectTarget);
-      }
-    }, { passive: false, capture: true });
+
 
     document.addEventListener("click", function (e) {
   const target = e.target.closest(".btn-primary, .btn-sm-del, .icon-btn, .class-chip, .drawer-item");
@@ -4402,20 +4446,10 @@ Exact Output JSON Format Required:
       }
     };
 
-    window.closeCustomAlert = function() {
-      const modal = document.getElementById("customAlertModal");
-      if (modal) { modal.classList.remove("active"); }
-    };
-    
-    // Har normal alert ko humare premium popup mein badal do
-    window.alert = function(msg) { window.showCustomAlert(msg); };
-
-
  
-      
-          window.closeCustomAlert = function() {
-      const modal = document.getElementById("customAlertModal");
-      if (modal) { modal.classList.remove("active"); }
+    
+           window.closeCustomAlert = function() {
+      window.closeModal("customAlertModal");
     };
     window.alert = function(msg) { window.showCustomAlert(msg); };
 
@@ -4436,8 +4470,7 @@ Exact Output JSON Format Required:
     };
     
     window.closeCustomConfirm = function() {
-      const modal = document.getElementById("customConfirmModal");
-      if (modal) { modal.classList.remove("active"); }
+      window.closeModal("customConfirmModal");
     };
 
 
@@ -4961,13 +4994,21 @@ Exact Output JSON Format Required:
       if(id === "onlineTestHistoryModal") window.loadTeacherTestHistory();
     };
 
-        window.closeModal = function(id) {
+           window.closeModal = function(id) {
       const modal = document.getElementById(id);
-      if(modal) modal.classList.remove("active");
+      if(modal && modal.classList.contains("active")) {
+        if (document.body.classList.contains("more-animations") && id !== "customSelectModal" && id !== "studentLiveTestModal" && id !== "assistanceMenuModal") {
+          modal.classList.add("closing");
+          setTimeout(() => {
+            modal.classList.remove("active", "closing");
+          }, 310);
+        } else {
+          modal.classList.remove("active", "closing");
+        }
+      }
       if(id === "registerStudentModal") { if(document.getElementById("regStd")) document.getElementById("regStd").disabled = false; }
       
       // 🛑 PHASE 5 OPTIMIZATION: Timers Memory Leak Fix
-      // Jab bhi modal band hoga, background ke saare timers strictly destroy ho jayenge
       if(id === "teacherMusterModal" && typeof musterClockInterval !== 'undefined') {
           clearInterval(musterClockInterval);
       }
@@ -4975,6 +5016,7 @@ Exact Output JSON Format Required:
           clearInterval(activeLiveTestTimer);
       }
     };
+
 
 
     function addSafeListener(id, eventType, callback) {
@@ -6111,14 +6153,18 @@ localStorage.setItem("loggedPass", p);
     // ==========================================
     // BUTTON-TO-MODAL ORIGIN TRACKER & STUDY MATERIAL SUBJECTS ENGINE
     // ==========================================
-    window.lastClickedTriggerRect = null;
+
+          window.lastClickedTriggerRect = null;
     document.addEventListener("pointerdown", (e) => {
+      // Agar click kisi khule hue modal ke andar hua hai (jaise Close '✕' button par), toh bahar wale button ka origin change mat karo
+      if (e.target.closest(".modal-overlay")) return;
       const trigger = e.target.closest("button, .btn-primary, .drawer-item, .menu-item, .student-grid-card, a, .stat-card, .icon-btn, select");
       if (trigger) {
         window.lastClickedTriggerRect = trigger.getBoundingClientRect();
       }
     }, { capture: true, passive: true });
 
+      
     window.applyModalGenieOrigin = function(modalEl) {
       if (!modalEl || !window.lastClickedTriggerRect) return;
       const content = modalEl.querySelector(".modal-content");
