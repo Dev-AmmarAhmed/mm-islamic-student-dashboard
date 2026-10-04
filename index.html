@@ -6837,7 +6837,7 @@ localStorage.setItem("loggedPass", p);
 
     window.loadConcessionDetails = async function() {
       const admn = document.getElementById("concessionSelectedAdmn").value;
-      if(!admn) { alert("Pehle search karke student select karein."); return; }
+      if(!admn) { alert("Please search and select a student first."); return; }
       
       const student = await getStudentRecord(admn);
       if(!student) return;
