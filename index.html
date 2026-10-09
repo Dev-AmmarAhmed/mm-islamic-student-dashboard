@@ -5135,7 +5135,8 @@ Exact Output JSON Format Required:
 
       const allTests = await safeDataFetch("online_tests") || {};
       const allStudents = getLiveStudents();
-      const allAttempts = await safeDataFetch("test_attempts") || {};
+            // 🛡️ SECURITY FIX: Do not bulk download all test attempts. Fetch per test in the loop later.
+      // const allAttempts = await safeDataFetch("test_attempts") || {}; // Removed bulk fetch
 
       let testsList = [];
 
@@ -5195,11 +5196,24 @@ Exact Output JSON Format Required:
         const classStudents = allStudents.filter(s => cleanClassStr(s.class) === cleanClassStr(t.class));
         const totalStudentsCount = classStudents.length;
         
-        const testAttemptsData = allAttempts[t.testId] || {};
-        let attemptedCount = 0;
-        classStudents.forEach(st => {
-          if(testAttemptsData[st.admn]) attemptedCount++;
+            // 🚀 OPTIMIZATION: Only fetch attempts for this specific test
+        safeDataFetch(`test_attempts/${t.testId}`).then(testAttemptsData => {
+            testAttemptsData = testAttemptsData || {};
+            let attemptedCount = 0;
+            classStudents.forEach(st => {
+              if(testAttemptsData[st.admn]) attemptedCount++;
+            });
+            // Update the DOM dynamically for counts to save initial load time
+            const attemptDom = document.getElementById(`att_count_${t.testId}`);
+            const notAttemptDom = document.getElementById(`not_att_count_${t.testId}`);
+            if(attemptDom) attemptDom.innerText = attemptedCount;
+            if(notAttemptDom) notAttemptDom.innerText = Math.max(0, totalStudentsCount - attemptedCount);
         });
+        
+        let attemptedCount = "..."; // Placeholder while fetching
+        const notAttemptedCount = "..."; // Placeholder while fetching
+
+        
         const notAttemptedCount = Math.max(0, totalStudentsCount - attemptedCount);
 
         const safeTestId = t.testId;
@@ -6032,8 +6046,9 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
         Object.keys(firestoreMediaCache).forEach(k => delete firestoreMediaCache[k]);
       }
       
-      // Stop all active Firebase Listeners (Very Important)
+           // Stop all active Firebase Listeners (Very Important)
       if (window.currentStudentsUnsubscribe) window.currentStudentsUnsubscribe();
+      if (window.currentNotifUnsubscribe) window.currentNotifUnsubscribe(); // Cleanup notification listener
 
       // 2. Firebase Sign-Out
       try {
@@ -6065,6 +6080,9 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
            window.indexedDB.deleteDatabase("firebase-app-check-database");
         }
       }
+                    if (activeLiveTestTimer) clearInterval(activeLiveTestTimer);
+      if (musterClockInterval) clearInterval(musterClockInterval);
+
 
       // 6. Hard Refresh the entire app to reset memory completely
       setTimeout(() => {
@@ -7200,9 +7218,13 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       }
     });
 
-
-      window.triggerTeacherStudentSearch = function() {
-      loadTeacherStudentsDirectory();
+    // 🚀 OPTIMIZATION: Debounce teacher student search to prevent DOM lag on typing
+    let teacherSearchTimer = null;
+    window.triggerTeacherStudentSearch = function() {
+      if (teacherSearchTimer) clearTimeout(teacherSearchTimer);
+      teacherSearchTimer = setTimeout(() => {
+        loadTeacherStudentsDirectory();
+      }, 150); // 150ms delay
     };
 
     function loadTeacherStudentsDirectory() {
@@ -7704,11 +7726,18 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
            const reportDiv = document.getElementById(targetContainerId);
       reportDiv.innerHTML = "";
 
-      if(selectedAdmnVal !== "ALL" && students.length > 0) {
-        const st = students[0];
-        const mData = await safeDataFetch(`attendance/${st.admn}/${monthVal}`) || {};
+          // 🛡️ SECURITY & PERFORMANCE FIX: Never fetch the whole "attendance" root node!
+      let allAtt = {};
+      if(selectedAdmnVal === "ALL") {
+          // If fetching for whole class, fetch attendance for those specific students only, not the whole school
+          for (let st of students) {
+              const stAtt = await safeDataFetch(`attendance/${st.admn}/${monthVal}`);
+              if (stAtt) {
+                 if (!allAtt[st.admn]) allAtt[st.admn] = {};
+                 allAtt[st.admn][monthVal] = stAtt;
+              }
+          }
       }
-      const allAtt = (selectedAdmnVal === "ALL") ? (await safeDataFetch("attendance") || {}) : {};
 
       if(selectedAdmnVal !== "ALL" && students.length > 0) {
         const st = students[0];
@@ -8562,6 +8591,14 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
     };
 
     window.startStudentLiveTest = async function(testId) {
+         window.startStudentLiveTest = async function(testId) {
+      // 🛡️ MEMORY LEAK FIX: Ensure NO ghost timers exist before starting a new test
+      if(activeLiveTestTimer) {
+          clearInterval(activeLiveTestTimer);
+          activeLiveTestTimer = null;
+      }
+
+      
       const classKey = cleanClassStr(assignedClass);
       const test = await safeDataFetch(`online_tests/${classKey}/${testId}`);
       if(!test) { alert("Test details not found or test has expired."); return; }
@@ -12666,8 +12703,9 @@ if (perms.photo && window.croppedPhotosMap["sUpdatePhotoInput"]) {
         }
       };
 
+    }
 
-      
+
     </script>
 </body>
 </html>
