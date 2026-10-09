@@ -1759,82 +1759,81 @@ canvas { touch-action: pan-y !important; }
       </div>
     </div>
 
-    <!-- 2 SUB-TABS: INFO & STATUS -->
+        <!-- 2 SUB-TABS: INFO & STATUS -->
     <div class="sub-nav-tabs" style="margin-bottom: 16px;">
       <div class="sub-tab-btn active" id="tProfSubTabInfoBtn" onclick="window.switchTeacherMyProfileSubTab('info')">👤 Info</div>
-           <div class="sub-tab-btn" id="tProfSubTabStatusBtn" onclick="window.switchTeacherMyProfileSubTab('status')">📈 Mentor's Progression</div>
-</div>
+      <div class="sub-tab-btn" id="tProfSubTabStatusBtn" onclick="window.switchTeacherMyProfileSubTab('status')">📈 Mentor's Progression</div>
+    </div>
 
-    <!-- SUB-TAB 1: PROFILE INFO (GRAYED OR ENABLED BY ADMIN CONTROLS) -->
-    <div id="tProfSubPaneInfo">
-      <div style="text-align: center; margin-bottom: 12px;">
-        <input type="file" id="tMyProfPhotoInput" accept="image/*" style="display: none;">
-        <button type="button" id="tMyProfPhotoBtn" class="btn-primary btn-purple" style="width: auto; padding: 7px 16px; font-size: 11px; margin: 0 auto;" onclick="document.getElementById('tMyProfPhotoInput').click()">📷 Select & Crop Photo</button>
+    <!-- WRAPPER FOR SLIDE ANIMATION -->
+    <div class="prof-slide-container" id="tProfSlideContainer">
+
+      <!-- SUB-TAB 1: PROFILE INFO -->
+      <div id="tProfSubPaneInfo" class="prof-slide-pane active">
+        <div style="text-align: center; margin-bottom: 12px;">
+          <input type="file" id="tMyProfPhotoInput" accept="image/*" style="display: none;">
+          <button type="button" id="tMyProfPhotoBtn" class="btn-primary btn-purple" style="width: auto; padding: 7px 16px; font-size: 11px; margin: 0 auto;" onclick="document.getElementById('tMyProfPhotoInput').click()">📷 Select & Crop Photo</button>
+        </div>
+
+        <label>Full Name:</label>
+        <input type="text" id="tMyProfNameInput" disabled>
+        <label>Login Username:</label>
+        <input type="text" id="tMyProfUserInput" disabled>
+        <label>Login Password:</label>
+        <input type="text" id="tMyProfPassInput" disabled>
+        <label>Phone / WhatsApp Number:</label>
+        <input type="text" id="tMyProfPhoneInput" disabled placeholder="10-Digit Mobile Number">
+        <label>Email Address:</label>
+        <input type="email" id="tMyProfEmailInput" disabled placeholder="teacher@example.com" style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; font-size: 13px; outline: none; background: var(--input-bg); color: var(--text-color);">
+        <label>Assigned Classes (Admin Controlled):</label>
+        <input type="text" id="tMyProfClassesReadonly" disabled style="background-color: rgba(0,0,0,0.06) !important; font-weight: 800;">
+
+        <button id="tMyProfSaveBtn" class="btn-primary btn-green" style="margin-top: 16px; display: none;" onclick="window.saveTeacherSelfProfileUpdate()">💾 Save Profile Changes</button>
+
+        <div id="tMyProfLockedBanner" style="margin-top: 16px; padding: 12px; border-radius: 12px; background: rgba(239, 68, 68, 0.12); border: 1px solid #ef4444; text-align: center; color: #ef4444; font-weight: 800; font-size: 12px;">
+          🔒 Profile fields are locked by Admin. Contact Admin to enable editing.
+        </div>
       </div>
 
-      <label>Full Name:</label>
-      <input type="text" id="tMyProfNameInput" disabled>
+      <!-- SUB-TAB 2: INTERACTIVE POINTS LINE GRAPH & STATUS -->
+      <div id="tProfSubPaneStatus" class="prof-slide-pane hidden-right">
+        <div style="font-size: 12px; font-weight: 800; color: var(--text-muted); margin-bottom: 8px;">📊 Interactive Points Journey</div>
+        <!-- Graph Filters -->
+        <div class="class-chips-container" style="margin-bottom: 12px;">
+          <div class="class-chip active" onclick="window.setSingleTeacherGraphFilter('all', this, 'teacherMy')">All Time</div>
+          <div class="class-chip" onclick="window.setSingleTeacherGraphFilter('5days', this, 'teacherMy')">5 Days</div>
+          <div class="class-chip" onclick="window.setSingleTeacherGraphFilter('10days', this, 'teacherMy')">10 Days</div>
+          <div class="class-chip" onclick="window.setSingleTeacherGraphFilter('1month', this, 'teacherMy')">1 Month</div>
+          <div class="class-chip" onclick="window.setSingleTeacherGraphFilter('6month', this, 'teacherMy')">6 Months</div>
+          <div class="class-chip" onclick="window.setSingleTeacherGraphFilter('1year', this, 'teacherMy')">1 Year</div>
+        </div>
 
-      <label>Login Username:</label>
-      <input type="text" id="tMyProfUserInput" disabled>
+        <div style="position: relative; height: 240px; width: 100%; background: rgba(0,0,0,0.02); border-radius: 16px; padding: 12px; border: 1px solid var(--border-color);">
+          <canvas id="teacherPointsLineChart"></canvas>
+        </div>
 
-      <label>Login Password:</label>
-      <input type="text" id="tMyProfPassInput" disabled>
+        <!-- Interactive Point Tap Inspector -->
+        <div id="teacherGraphTapFeedback" style="margin-top: 12px; padding: 12px 14px; border-radius: 14px; background: rgba(124, 58, 237, 0.08); border: 1px dashed #7c3aed; font-size: 12px; font-weight: 800; color: var(--text-color); text-align: center;">
+          👆 Tap any point on the line graph above to inspect its exact date, points change & reason!
+        </div>
 
-      <label>Phone / WhatsApp Number:</label>
-      <input type="text" id="tMyProfPhoneInput" disabled placeholder="10-Digit Mobile Number">
-
-      <label>Email Address:</label>
-      <input type="email" id="tMyProfEmailInput" disabled placeholder="teacher@example.com" style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; font-size: 13px; outline: none; background: var(--input-bg); color: var(--text-color);">
-
-      <label>Assigned Classes (Admin Controlled):</label>
-      <input type="text" id="tMyProfClassesReadonly" disabled style="background-color: rgba(0,0,0,0.06) !important; font-weight: 800;">
-
-      <button id="tMyProfSaveBtn" class="btn-primary btn-green" style="margin-top: 16px; display: none;" onclick="window.saveTeacherSelfProfileUpdate()">💾 Save Profile Changes</button>
-
-      <div id="tMyProfLockedBanner" style="margin-top: 16px; padding: 12px; border-radius: 12px; background: rgba(239, 68, 68, 0.12); border: 1px solid #ef4444; text-align: center; color: #ef4444; font-weight: 800; font-size: 12px;">
-        🔒 Profile fields are locked by Admin. Contact Admin to enable editing.
+        <div class="stats-grid" style="margin-top: 14px; grid-template-columns: 1fr 1fr 1fr;">
+          <div class="stat-card blue" style="padding: 12px;">
+            <span style="font-size: 10px;">Current Points</span>
+            <h3 id="tStatCurrentPts" style="font-size: 17px;">0</h3>
+          </div>
+          <div class="stat-card" style="background: linear-gradient(135deg, #16a34a 0%, #15803d 100%); padding: 12px;">
+            <span style="font-size: 10px;">Highest Peak</span>
+            <h3 id="tStatPeakPts" style="font-size: 17px;">0</h3>
+          </div>
+          <div class="stat-card" style="background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%); padding: 12px;">
+            <span style="font-size: 10px;">Net Growth</span>
+            <h3 id="tStatGrowthText" style="font-size: 17px;">+0</h3>
+          </div>
+        </div>
       </div>
     </div>
 
-       <!-- SUB-TAB 2: INTERACTIVE POINTS LINE GRAPH & STATUS -->
-    <div id="tProfSubPaneStatus" style="display: none;">
-      <div style="font-size: 12px; font-weight: 800; color: var(--text-muted); margin-bottom: 8px;">📊 Interactive Points Journey</div>
-      <!-- Graph Filters -->
-      <div class="class-chips-container" style="margin-bottom: 12px;">
-        <div class="class-chip active" onclick="window.setSingleTeacherGraphFilter('all', this, 'teacherMy')">All Time</div>
-        <div class="class-chip" onclick="window.setSingleTeacherGraphFilter('5days', this, 'teacherMy')">5 Days</div>
-        <div class="class-chip" onclick="window.setSingleTeacherGraphFilter('10days', this, 'teacherMy')">10 Days</div>
-        <div class="class-chip" onclick="window.setSingleTeacherGraphFilter('1month', this, 'teacherMy')">1 Month</div>
-        <div class="class-chip" onclick="window.setSingleTeacherGraphFilter('6month', this, 'teacherMy')">6 Months</div>
-        <div class="class-chip" onclick="window.setSingleTeacherGraphFilter('1year', this, 'teacherMy')">1 Year</div>
-      </div>
-
-      <div style="position: relative; height: 240px; width: 100%; background: rgba(0,0,0,0.02); border-radius: 16px; padding: 12px; border: 1px solid var(--border-color);">
-        <canvas id="teacherPointsLineChart"></canvas>
-      </div>
-
-      <!-- Interactive Point Tap Inspector -->
-      <div id="teacherGraphTapFeedback" style="margin-top: 12px; padding: 12px 14px; border-radius: 14px; background: rgba(124, 58, 237, 0.08); border: 1px dashed #7c3aed; font-size: 12px; font-weight: 800; color: var(--text-color); text-align: center;">
-        👆 Tap any point on the line graph above to inspect its exact date, points change & reason!
-      </div>
-
-      <div class="stats-grid" style="margin-top: 14px; grid-template-columns: 1fr 1fr 1fr;">
-        <div class="stat-card blue" style="padding: 12px;">
-          <span style="font-size: 10px;">Current Points</span>
-          <h3 id="tStatCurrentPts" style="font-size: 17px;">0</h3>
-        </div>
-        <div class="stat-card" style="background: linear-gradient(135deg, #16a34a 0%, #15803d 100%); padding: 12px;">
-          <span style="font-size: 10px;">Highest Peak</span>
-          <h3 id="tStatPeakPts" style="font-size: 17px;">0</h3>
-        </div>
-        <div class="stat-card" style="background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%); padding: 12px;">
-          <span style="font-size: 10px;">Net Growth</span>
-          <h3 id="tStatGrowthText" style="font-size: 17px;">+0</h3>
-        </div>
-      </div>
-    </div>
-  </div>
 </section>
 
 
@@ -4893,20 +4892,23 @@ Exact Output JSON Format Required:
     import { getFirestore, doc, setDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
       
-       // M.M ISLAMIC ENGLISH SCHOOL FIREBASE CREDENTIALS (Loaded from external secure file)
+        // 🛡️ SECURE INITIALIZATION: Wait for external firebase-config.js to load
     if (!window.appFirebaseConfig) {
-       alert("CRITICAL ERROR: firebase-config.js is missing or not linked properly!");
+       console.error("CRITICAL ERROR: firebase-config.js is missing or blocked!");
+       alert("Network Error: Could not connect to secure server. Please refresh the page.");
     }
+    
     const app = initializeApp(window.appFirebaseConfig);
 
-      try {
-      if (typeof initializeAppCheck === 'function') {
+    try {
+      if (typeof initializeAppCheck === 'function' && window.appFirebaseConfig) {
+        // App Check reCAPTCHA key should also ideally be in the config file later, but hardcoded is okay for now as it's public
         initializeAppCheck(app, {
           provider: new ReCaptchaEnterpriseProvider('6LefZbUtAAAAADOa8KBfn1qywMly7Ky2-UlX6zxW'),
           isTokenAutoRefreshEnabled: true
         });
       }
-    } catch (err) { console.warn("App Check bypass:", err); }
+    } catch (err) { console.warn("App Check bypass/dev mode:", err); }
 
     const db = getDatabase(app);
     const auth = getAuth(app);
@@ -5924,34 +5926,53 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
     };
 
     // 1. Standard Login (Supports User ID / Admission No OR Email + Password)
-    addSafeListener("loginBtn", "click", () => {
+      addSafeListener("loginBtn", "click", () => {
       const btn = document.getElementById("loginBtn");
+      const errorMsg = document.getElementById("loginError");
+      
       runWithBtnSpinner(btn, "PORTAL LOGIN", async () => {
         const rawInput = document.getElementById("loginUsername").value.trim();
         const p = document.getElementById("loginPassword").value.trim();
-        if(!rawInput || !p) { alert("Please enter both Username/Email and Password."); return; }
-
-        let targetUserId = rawInput;
-        if (rawInput.includes("@")) {
-          const resolved = await window.resolveUserIdByEmail(rawInput);
-          if (!resolved) {
-            document.getElementById("loginError").style.display = "block";
-            document.getElementById("loginError").innerText = "No active account linked with this email.";
-            return;
-          }
-          targetUserId = resolved;
+        
+        if(!rawInput || !p) { 
+            errorMsg.style.display = "block";
+            errorMsg.innerText = "Please enter both User ID and Password.";
+            return; 
         }
 
-        const uData = await safeDataFetch(`users/${targetUserId}`);
-        if(uData && uData.password === p) {
-          document.getElementById("loginError").style.display = "none";
-          window.completePortalLoginSession(targetUserId, uData);
-        } else {
-          document.getElementById("loginError").style.display = "block";
-          document.getElementById("loginError").innerText = "Invalid credentials. Please try again.";
+        try {
+            let targetUserId = rawInput;
+            
+            // Step 1: If input is email, resolve it to User ID first
+            if (rawInput.includes("@")) {
+              const resolved = await window.resolveUserIdByEmail(rawInput);
+              if (!resolved) {
+                errorMsg.style.display = "block";
+                errorMsg.innerText = "No active account linked with this email address.";
+                return;
+              }
+              targetUserId = resolved;
+            }
+
+            // Step 2: Fetch the actual user data from Firestore/Realtime DB
+            const uData = await safeDataFetch(`users/${targetUserId}`);
+            
+            // Step 3: Validate Password securely
+            if(uData && uData.password === p) {
+              errorMsg.style.display = "none";
+              window.completePortalLoginSession(targetUserId, uData);
+            } else {
+              errorMsg.style.display = "block";
+              errorMsg.innerText = "Invalid User ID or Password. Please check and try again.";
+            }
+        } catch (error) {
+            console.error("Login verification failed:", error);
+            errorMsg.style.display = "block";
+            errorMsg.innerText = "Connection error. Please check your internet and try again.";
         }
       });
     });
+
 
 
       
@@ -11967,17 +11988,7 @@ if (perms.photo && window.croppedPhotosMap["sUpdatePhotoInput"]) {
         await window.loadTeacherMyProfileData();
       };
 
-      window.switchTeacherMyProfileSubTab = function(sub) {
-        document.getElementById("tProfSubTabInfoBtn").classList.toggle("active", sub === "info");
-        document.getElementById("tProfSubTabStatusBtn").classList.toggle("active", sub === "status");
-        document.getElementById("tProfSubPaneInfo").style.display = sub === "info" ? "block" : "none";
-        document.getElementById("tProfSubPaneStatus").style.display = sub === "status" ? "block" : "none";
-
-        if (sub === "status") {
-          window.renderTeacherInteractiveLineGraph();
-        }
-      };
-
+  
       window.loadTeacherMyProfileData = async function() {
         const loggedUser = localStorage.getItem("loggedUser");
         if (!loggedUser) return;
@@ -12596,35 +12607,65 @@ if (perms.photo && window.croppedPhotosMap["sUpdatePhotoInput"]) {
       };
 
       // Reset tabs safely for Admin's Teacher Edit Modal
-      window.switchEditTeacherTab = function(tab) {
-        document.getElementById("eTchTabInfoBtn").classList.toggle("active", tab === "info");
-        document.getElementById("eTchTabStatusBtn").classList.toggle("active", tab === "status");
-        document.getElementById("eTchPaneInfo").style.display = tab === "info" ? "block" : "none";
-        document.getElementById("eTchPaneStatus").style.display = tab === "status" ? "block" : "none";
+         // Universal Height Auto-Adjust for All Animated Modals
+      window.syncProfileModalHeight = function() {
+          document.querySelectorAll(".prof-slide-container").forEach(container => {
+              const activePane = container.querySelector(".prof-slide-pane.active");
+              if (activePane) {
+                  container.style.height = (activePane.scrollHeight + 40) + "px";
+              }
+          });
+      };
 
-        if (tab === "status") {
-          const username = document.getElementById("editTeacherOldUsername").value;
-          // By default 'all' time load karega, user filters daba kar change kar sakta hai
-          window.renderGenericSingleTeacherGraph(username, "eTchPointsLineChart", "eTchGraphTapFeedback", "all");
+      // Teacher Tab Dashboard Logic
+      window.switchTeacherMyProfileSubTab = function(sub) {
+        document.getElementById("tProfSubTabInfoBtn").classList.toggle("active", sub === "info");
+        document.getElementById("tProfSubTabStatusBtn").classList.toggle("active", sub === "status");
+        
+        const infoPane = document.getElementById("tProfSubPaneInfo");
+        const statusPane = document.getElementById("tProfSubPaneStatus");
+        
+        if (infoPane && statusPane) {
+            [infoPane, statusPane].forEach(p => p.className = "prof-slide-pane");
+
+            if (sub === "info") {
+                infoPane.classList.add("active");
+                statusPane.classList.add("hidden-right");
+                setTimeout(() => window.syncProfileModalHeight(), 150);
+            } else if (sub === "status") {
+                infoPane.classList.add("hidden-left");
+                statusPane.classList.add("active");
+                window.renderTeacherInteractiveLineGraph();
+                setTimeout(() => window.syncProfileModalHeight(), 150);
+            }
         }
       };
 
-      window.renderTeacherInteractiveLineGraph = function() {
-        const loggedUser = localStorage.getItem("loggedUser");
-        window.renderGenericSingleTeacherGraph(loggedUser, "teacherPointsLineChart", "teacherGraphTapFeedback", "all");
+      // Admin Modal Logic
+      window.switchEditTeacherTab = function(tab) {
+        document.getElementById("eTchTabInfoBtn").classList.toggle("active", tab === "info");
+        document.getElementById("eTchTabStatusBtn").classList.toggle("active", tab === "status");
+        
+        const infoPane = document.getElementById("eTchPaneInfo");
+        const statusPane = document.getElementById("eTchPaneStatus");
+
+        if (infoPane && statusPane) {
+            [infoPane, statusPane].forEach(p => p.className = "prof-slide-pane");
+
+            if (tab === "info") {
+                infoPane.classList.add("active");
+                statusPane.classList.add("hidden-right");
+                setTimeout(() => window.syncProfileModalHeight(), 150);
+            } else if (tab === "status") {
+                infoPane.classList.add("hidden-left");
+                statusPane.classList.add("active");
+                const username = document.getElementById("editTeacherOldUsername").value;
+                window.renderGenericSingleTeacherGraph(username, "eTchPointsLineChart", "eTchGraphTapFeedback", "all");
+                setTimeout(() => window.syncProfileModalHeight(), 150);
+            }
+        }
       };
 
-      const originalRenderTeacherboardCardsTable = window.renderTeacherboardCardsTable;
-      window.renderTeacherboardCardsTable = async function() {
-        if(originalRenderTeacherboardCardsTable) await originalRenderTeacherboardCardsTable();
-        window.renderMentorsProgressionGraph('teacherMentorsProgressionChart', 'teacherMentorsGraphFeedback', currentMentorsGraphFilter_teacher);
-      };
-      
-      const originalRenderAdminHomeTeacherboardCards = window.renderAdminHomeTeacherboardCards;
-      window.renderAdminHomeTeacherboardCards = async function() {
-        if(originalRenderAdminHomeTeacherboardCards) await originalRenderAdminHomeTeacherboardCards();
-        window.renderMentorsProgressionGraph('adminMentorsProgressionChart', 'adminMentorsGraphFeedback', currentMentorsGraphFilter_admin);
-      };
 
       
     </script>
