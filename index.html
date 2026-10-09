@@ -8590,8 +8590,8 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       return urduPattern.test(text);
     };
 
-      
-      window.startStudentLiveTest = async function(testId) {
+    window.startStudentLiveTest = async function(testId) {
+         window.startStudentLiveTest = async function(testId) {
       // 🛡️ MEMORY LEAK FIX: Ensure NO ghost timers exist before starting a new test
       if(activeLiveTestTimer) {
           clearInterval(activeLiveTestTimer);
@@ -12704,6 +12704,7 @@ if (perms.photo && window.croppedPhotosMap["sUpdatePhotoInput"]) {
       };
 
     
+
 
     </script>
 </body>
