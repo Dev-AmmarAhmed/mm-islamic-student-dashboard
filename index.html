@@ -4995,64 +4995,113 @@ Exact Output JSON Format Required:
             let dbSaveTimeout = null;
 
             let studentsListenerAttached = false;
-      window.attachSmartStudentsListener = function(role, sAdmn) {
-        if (studentsListenerAttached) return;
-        studentsListenerAttached = true;
-
-        // Agar Student login hai, toh poore school ko real-time listen mat karo! Sirf us student ka profile listen karo
-        if (role === "student" && sAdmn) {
-          onValue(ref(db, `students/${sAdmn}`), (snap) => {
-            if (snap.exists()) {
-              inMemoryStudentsData[sAdmn] = snap.val();
-            }
-          });
-          return;
+           window.currentStudentsUnsubscribe = null;
+      window.attachSmartStudentsListener = function(role, sAdmn, targetClass) {
+        if (window.currentStudentsUnsubscribe) {
+            window.currentStudentsUnsubscribe(); // Stop listening to previous data
         }
 
-        // Sirf Admin ya Teacher ke liye students list load karo
-        onValue(ref(db, 'students'), (snap) => {
-          if (snap.exists()) {
-            inMemoryStudentsData = snap.val();
-            if(dbSaveTimeout) clearTimeout(dbSaveTimeout);
-            dbSaveTimeout = setTimeout(() => {
-                localStorage.setItem("offlineDbCache_students", JSON.stringify(inMemoryStudentsData));
-            }, 5000); 
-
-            if(currentRole === "admin") renderAdminStudentsDirectory(true);
-            if(currentRole === "teacher") { refreshAllTeacherData(); window.loadTeacherLeaderboard(); }
-          } else {
+        if (role === "student" && sAdmn) {
+          // 🛡️ STRICT SECURITY: Student device ONLY downloads their own profile.
+          window.currentStudentsUnsubscribe = onValue(ref(db, `students/${sAdmn}`), (snap) => {
             inMemoryStudentsData = {};
-          }
-        });
+            if (snap.exists()) inMemoryStudentsData[sAdmn] = snap.val();
+          });
+        } else if (role === "teacher") {
+          // 🛡️ STRICT SECURITY & PERFORMANCE: Teacher ONLY downloads their assigned class.
+          const activeCls = targetClass || assignedClass;
+          if (!activeCls) return;
+          const q = query(ref(db, 'students'), orderByChild('class'), equalTo(activeCls));
+          
+          window.currentStudentsUnsubscribe = onValue(q, (snap) => {
+            inMemoryStudentsData = {};
+            if (snap.exists()) inMemoryStudentsData = snap.val();
+            refreshAllTeacherData();
+            window.loadTeacherLeaderboard();
+          });
+        } else if (role === "admin") {
+          // 🚀 PERFORMANCE: Admin listens to all students for global tracking, BUT users/passwords are blocked.
+          window.currentStudentsUnsubscribe = onValue(ref(db, 'students'), (snap) => {
+            if (snap.exists()) {
+              inMemoryStudentsData = snap.val();
+              if(dbSaveTimeout) clearTimeout(dbSaveTimeout);
+              dbSaveTimeout = setTimeout(() => {
+                  localStorage.setItem("offlineDbCache_students", JSON.stringify(inMemoryStudentsData));
+              }, 5000); 
+              renderAdminStudentsDirectory(true);
+            } else {
+              inMemoryStudentsData = {};
+            }
+          });
+        }
       };
 
 
-      window.cleanExpiredTestCaches = function() {
+
+         // 🛡️ ADVANCED CACHE SECURITY & CLEANUP ENGINE
+      window.enforceStrictCacheSecurity = function() {
         try {
             const now = Date.now();
+            const loggedUser = localStorage.getItem("loggedUser");
             const keysToRemove = [];
+
             for (let i = 0; i < localStorage.length; i++) {
                 const key = localStorage.key(i);
-                if (key && key.startsWith("test_cache_")) {
-                    const cacheItem = localStorage.getItem(key);
-                    if (cacheItem) {
+                if (!key) continue;
+
+                // 1. Check Online Test Caches (Expiry, Corrupt & Illegal Access)
+                if (key.startsWith("test_cache_")) {
+                    try {
+                        const cacheItem = localStorage.getItem(key);
+                        if (!cacheItem) { keysToRemove.push(key); continue; }
+                        
                         const parsed = JSON.parse(cacheItem);
-                        if (parsed.expiryTime && now > parsed.expiryTime) keysToRemove.push(key);
+                        
+                        // Rule A: Test expire ho gaya toh turant delete
+                        if (parsed.expiryTime && now > parsed.expiryTime) {
+                            keysToRemove.push(key);
+                            continue;
+                        }
+                        
+                        // Rule B: Illegal Access (Agar current user ka cache nahi hai toh delete karega)
+                        if (loggedUser && !key.endsWith(`_${loggedUser}`)) {
+                            keysToRemove.push(key);
+                        }
+                    } catch(e) { 
+                        // Rule C: Corrupted JSON data hai toh app crash bachane ke liye delete karega
+                        keysToRemove.push(key); 
                     }
                 }
-            }
-            keysToRemove.forEach(k => localStorage.removeItem(k));
-        } catch(e) { console.error("Cache cleanup error:", e); }
-    };
 
-    // 🚀 Load Offline Data if No Internet on Startup
+                // 2. Wipe sensitive offline data if nobody is logged in (Ghost Data)
+                if (!loggedUser && key.startsWith("offlineDbCache")) {
+                    keysToRemove.push(key);
+                }
+            }
+
+            // Remove all illegal/expired keys safely without breaking loops
+            keysToRemove.forEach(k => {
+                localStorage.removeItem(k);
+                console.log(`🛡️ Security Sweeper: Removed illegal/expired cache [${k}]`);
+            });
+
+        } catch(e) { console.error("Cache cleanup error:", e); }
+      };
+
+    // 🚀 INITIALIZE SECURITY ENGINE & OFFLINE DATA ON STARTUP
     window.addEventListener('load', () => {
-      window.cleanExpiredTestCaches();
+      window.enforceStrictCacheSecurity(); // Sabse pehle safai
+      
       if (!navigator.onLine) {
         const cachedStudents = localStorage.getItem("offlineDbCache_students");
         if (cachedStudents) {
-          inMemoryStudentsData = JSON.parse(cachedStudents);
-          window.showCustomAlert("⚡ You are currently offline. Working from local backup. Attendance will auto-sync when online.");
+          try {
+            inMemoryStudentsData = JSON.parse(cachedStudents);
+            window.showCustomAlert("⚡ You are currently offline. Working from local backup. Data will auto-sync when online.");
+          } catch(err) {
+            // Agar offline file kharab hai toh use use mat karo
+            localStorage.removeItem("offlineDbCache_students");
+          }
         }
       }
     });
@@ -5978,12 +6027,13 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
 
 
 
-     window.changeTeacherActiveClass = function(newClass) {
+         window.changeTeacherActiveClass = function(newClass) {
       assignedClass = newClass;
       document.getElementById("classBadgeContainer").innerText = `Class: ${newClass}`;
+      window.attachSmartStudentsListener("teacher", null, newClass); // Smart Re-fetch for new class
       if (typeof window.refreshTeacherDashboardData === 'function') window.refreshTeacherDashboardData();
-      refreshAllTeacherData();
     };
+
 
                       function renderDashboardForRole(role, aClass, sAdmn) {
       currentRole = role;
@@ -6199,19 +6249,17 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
 
 
 
-    async function renderAdminStudentsDirectory(skipNetworkFetch = false) {
+       async function renderAdminStudentsDirectory(skipNetworkFetch = false) {
       const container = document.getElementById("adminStudentsDirectoryContainer");
       if(!container) return;
 
-      if (!skipNetworkFetch && Object.keys(cachedUsersMap).length === 0) {
-        cachedUsersMap = await safeDataFetch("users") || {};
-      }
+      // 🛡️ SECURITY FIX: Users (Passwords) node ka bulk download hata diya gaya hai!
       const students = getLiveStudents();
       const searchInput = document.getElementById("adminStudentSearchInput");
       const query = searchInput ? searchInput.value.toLowerCase().trim() : "";
 
       if(students.length === 0) {
-        container.innerHTML = `<p style="font-size:12px; color:var(--text-muted);">No students registered yet.</p>`;
+        container.innerHTML = `<p style="font-size:12px; color:var(--text-muted); text-align:center;">No students registered yet.</p>`;
         document.getElementById("adminStudentCountText").innerText = "0"; return;
       }
 
@@ -6230,11 +6278,6 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
           const bMatch = bName.includes(query) || bAdmn.includes(query);
           if (aMatch && !bMatch) return -1;
           if (!aMatch && bMatch) return 1;
-
-          const aStarts = aName.startsWith(query) || aAdmn === query;
-          const bStarts = bName.startsWith(query) || bAdmn === query;
-          if (aStarts && !bStarts) return -1;
-          if (!aStarts && bStarts) return 1;
           return 0;
         });
       }
@@ -6243,24 +6286,26 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       document.getElementById("adminStudentCountText").innerText = count;
 
       if(count === 0) {
-        container.innerHTML = `<p style="font-size:12px; color:var(--text-muted);">No students found in ${selectedAdminClassFilter}.</p>`;
+        container.innerHTML = `<p style="font-size:12px; color:var(--text-muted); text-align:center;">No students found in ${selectedAdminClassFilter}.</p>`;
         return;
       }
 
-      // Single-pass HTML batch render (10x faster than appendChild calls!)
+      // 🚀 PERFORMANCE FIX: Batch HTML Rendering (Removes UI Freezing)
       let cardsHtml = "";
       filteredList.forEach(s => {
-        const pass = cachedUsersMap[s.admn] ? cachedUsersMap[s.admn].password : "MM";
+        // Passwords ab list mein show nahi honge, sirf Edit Profile Modal kholne par dikhenge!
+        const pass = "🔒 Hidden"; 
         const isMatched = query !== "" && ((s.name || "").toLowerCase().includes(query) || String(s.admn || "").toLowerCase().includes(query));
         const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(s.name || 'S')}&background=0288d1&color=fff&bold=true`;
         const avatarSrc = (s.photo && !s.photo.includes("via.placeholder.com")) ? s.photo : defaultAvatar;
         const matchStyle = isMatched ? "border: 2px solid #0288d1; background: rgba(2, 136, 209, 0.08);" : "";
         const matchBadge = isMatched ? '<span style="font-size:10px; background:#0288d1; color:white; padding:2px 6px; border-radius:6px; margin-left:4px;">Match</span>' : '';
 
-        cardsHtml += `<div class="student-grid-card" style="${matchStyle}" onclick="window.openStudentProfileModal('${s.admn}')"><img src="${avatarSrc}" loading="lazy" onerror="this.src='${defaultAvatar}'" class="student-avatar" alt="Avatar"><div style="flex:1;"><div style="font-size:13px; font-weight:800;">${s.name} ${matchBadge}</div><div style="font-size:11px; color:var(--text-muted);">ID: ${s.admn} | Class: ${s.class} | Pass: <b>${pass}</b></div><div style="font-size:10px; font-weight:700; color:#0288d1; margin-top:2px;">Phone: ${s.phone || '-'} | PTS: ${s.points || 0}</div></div><div style="font-size:16px;">✏️</div></div>`;
+        cardsHtml += `<div class="student-grid-card" style="${matchStyle}" onclick="window.openStudentProfileModal('${s.admn}')"><img src="${avatarSrc}" loading="lazy" onerror="this.src='${defaultAvatar}'" class="student-avatar" alt="Avatar"><div style="flex:1;"><div style="font-size:13px; font-weight:800;">${s.name} ${matchBadge}</div><div style="font-size:11px; color:var(--text-muted);">ID: ${s.admn} | Class: ${s.class} | Pass: <b style="color:#ef4444;">${pass}</b></div><div style="font-size:10px; font-weight:700; color:#0288d1; margin-top:2px;">Phone: ${s.phone || '-'} | PTS: ${s.points || 0}</div></div><div style="font-size:16px;">✏️</div></div>`;
       });
       container.innerHTML = cardsHtml;
     }
+
 
   
 
