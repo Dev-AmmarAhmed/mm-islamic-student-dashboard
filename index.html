@@ -1760,8 +1760,8 @@ canvas { touch-action: pan-y !important; }
     <!-- 2 SUB-TABS: INFO & STATUS -->
     <div class="sub-nav-tabs" style="margin-bottom: 16px;">
       <div class="sub-tab-btn active" id="tProfSubTabInfoBtn" onclick="window.switchTeacherMyProfileSubTab('info')">👤 Info</div>
-      <div class="sub-tab-btn" id="tProfSubTabStatusBtn" onclick="window.switchTeacherMyProfileSubTab('status')">📈 Status (Points Graph)</div>
-    </div>
+           <div class="sub-tab-btn" id="tProfSubTabStatusBtn" onclick="window.switchTeacherMyProfileSubTab('status')">📈 Mentor's Progression</div>
+</div>
 
     <!-- SUB-TAB 1: PROFILE INFO (GRAYED OR ENABLED BY ADMIN CONTROLS) -->
     <div id="tProfSubPaneInfo">
@@ -1881,19 +1881,36 @@ canvas { touch-action: pan-y !important; }
         </div>
       </div>
 
-      <!-- CARD 2: TEACHERBOARD STANDINGS -->
+          <!-- CARD 2: MENTORS STANDINGS (WITH GRAPH SUBTABS) -->
       <div class="card unfold-card" style="margin-top: 16px;">
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-color); padding-bottom: 8px; margin-bottom: 12px;">
-          <div class="card-title" style="border: none; margin-bottom: 0;">🏆 Teacherboard Standings</div>
+          <div class="card-title" style="border: none; margin-bottom: 0;">🏆 Mentors Standings</div>
           <button onclick="openModal('addTeacherPointsModal')" class="btn-primary btn-orange" style="margin-top: 0; width: auto; padding: 6px 14px; font-size: 11px;">
             ⭐ Add / Deduct Points
           </button>
         </div>
+        
+        <div class="sub-nav-tabs" style="margin-bottom: 12px;">
+          <div class="sub-tab-btn active" id="adminMsTabLbBtn" onclick="window.switchMentorsStandingTab('lb', 'admin')">🏆 Teacherboard</div>
+          <div class="sub-tab-btn" id="adminMsTabProgBtn" onclick="window.switchMentorsStandingTab('prog', 'admin')">📈 Mentors' Progression</div>
+        </div>
 
-        <div id="adminHomeTeacherboardCardsContainer">
-          <div style="font-size: 12px; color: var(--text-muted); text-align: center; padding: 10px;">Loading Teacherboard...</div>
+        <div id="adminMsPaneLb">
+          <div id="adminHomeTeacherboardCardsContainer">
+            <div style="font-size: 12px; color: var(--text-muted); text-align: center; padding: 10px;">Loading Teacherboard...</div>
+          </div>
+        </div>
+
+        <div id="adminMsPaneProg" style="display:none;">
+          <div style="position: relative; height: 280px; width: 100%; background: rgba(0,0,0,0.02); border-radius: 16px; padding: 12px; border: 1px solid var(--border-color);">
+            <canvas id="adminMentorsProgressionChart"></canvas>
+          </div>
+          <div id="adminMentorsGraphFeedback" style="margin-top: 12px; padding: 12px 14px; border-radius: 14px; background: rgba(2, 136, 209, 0.08); border: 1px dashed #0288d1; font-size: 12px; font-weight: 800; color: var(--text-color); text-align: center;">
+            👆 Tap any point on a mentor's line to view Rank & Details!
+          </div>
         </div>
       </div>
+
 
     </section>
 
@@ -2340,7 +2357,12 @@ canvas { touch-action: pan-y !important; }
     <div style="display: flex; justify-content: space-between; align-items: center;">
       <div>
         <h2 id="tWelcomeTeacherName" style="font-size: 19px; font-weight: 800; color: var(--text-color); margin-bottom: 4px; letter-spacing: 0.3px;">Teacher Name</h2>
-        <div style="font-size:13px; font-weight:700; margin-top:4px;">           Active Class:            <select id="teacherActiveSelect" onchange="window.changeTeacherActiveClass(this.value)" style="padding: 4px 8px; font-size: 12px; font-weight: bold; border-radius: 8px; border: 1px solid #7c3aed; color: #7c3aed; background: rgba(124, 58, 237, 0.1); display: inline-block; width: auto; appearance: auto !important; -webkit-appearance: auto !important; background-image: none !important; margin-left: 6px;">           </select>         </div>
+               <div style="font-size:13px; font-weight:700; margin-top:4px;">
+           Active Class: 
+           <select id="teacherActiveSelect" onchange="window.changeTeacherActiveClass(this.value)" style="padding: 4px 8px; font-size: 12px; font-weight: bold; border-radius: 8px; border: 1px solid #7c3aed; color: #7c3aed; background: rgba(124, 58, 237, 0.1); display: inline-block; width: auto; margin-left: 6px;">
+           </select>
+        </div>
+
         <p style="font-size:12px; color:var(--text-muted); margin-top:4px;">Manage attendance, study materials, tests, and claim daily rewards.</p>
       </div>
       
@@ -2385,11 +2407,28 @@ canvas { touch-action: pan-y !important; }
     </div>
   </div>
 
-  <!-- Teacherboard Cards Table -->
+    <!-- Mentors Standings Table & Progression Graph -->
   <div class="card unfold-card">
-    <div class="card-title">🏆 Teacherboard Standings</div>
-    <div id="teacherboardTableCardsContainer">
-      <div style="font-size:12px; color:var(--text-muted); text-align:center; padding:10px;">Loading Teacherboard...</div>
+    <div class="card-title">🏆 Mentors Standings</div>
+    
+    <div class="sub-nav-tabs" style="margin-bottom: 12px;">
+      <div class="sub-tab-btn active" id="tchMsTabLbBtn" onclick="window.switchMentorsStandingTab('lb', 'teacher')">🏆 Teacherboard</div>
+      <div class="sub-tab-btn" id="tchMsTabProgBtn" onclick="window.switchMentorsStandingTab('prog', 'teacher')">📈 Mentors' Progression</div>
+    </div>
+
+    <div id="tchMsPaneLb">
+      <div id="teacherboardTableCardsContainer">
+        <div style="font-size:12px; color:var(--text-muted); text-align:center; padding:10px;">Loading Teacherboard...</div>
+      </div>
+    </div>
+
+    <div id="tchMsPaneProg" style="display:none;">
+      <div style="position: relative; height: 280px; width: 100%; background: rgba(0,0,0,0.02); border-radius: 16px; padding: 12px; border: 1px solid var(--border-color);">
+        <canvas id="teacherMentorsProgressionChart"></canvas>
+      </div>
+      <div id="teacherMentorsGraphFeedback" style="margin-top: 12px; padding: 12px 14px; border-radius: 14px; background: rgba(124, 58, 237, 0.08); border: 1px dashed #7c3aed; font-size: 12px; font-weight: 800; color: var(--text-color); text-align: center;">
+        👆 Tap any point on a mentor's line to view Rank & Details!
+      </div>
     </div>
   </div>
 
@@ -3791,7 +3830,8 @@ Exact Output JSON Format Required:
     </div>
   </div>
 
-   <!-- TEACHER PROFILE & MANAGEMENT MODAL (LIKE STUDENT PROFILE MODAL) -->
+
+    <!-- TEACHER PROFILE & MANAGEMENT MODAL (LIKE STUDENT PROFILE MODAL) -->
   <div id="editTeacherModal" class="modal-overlay">
     <div class="modal-content">
       <div class="modal-header">
@@ -3809,55 +3849,72 @@ Exact Output JSON Format Required:
           </div>
         </div>
 
-        <label>Teacher Full Name *:</label>
-        <input type="text" id="editTeacherName" placeholder="Teacher Full Name">
-
-        <label>Login Username * (Editable):</label>
-        <input type="text" id="editTeacherUser" style="font-weight: 800;">
-
-        <label>Login Password *:</label>
-        <input type="text" id="editTeacherPass" placeholder="Password">
-
-        <label>Mobile / WhatsApp Number:</label>
-        <input type="text" id="editTeacherPhone" placeholder="10-Digit Mobile Number">
-
-        <label>Email Address:</label>
-        <input type="email" id="editTeacherEmail" placeholder="teacher@example.com" style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; font-size: 13px; outline: none; background: var(--input-bg); color: var(--text-color);">
-
-        <label>Total Performance Points (+ / -):</label>
-        <input type="number" id="editTeacherPointsInput" placeholder="0">
-
-        <label>Change Photo (Optional):</label>
-        <input type="file" id="editTeacherPhotoInput" accept="image/*">
-
-        <label>Assign Classes (Select Multiple) *:</label>
-        <div class="checkbox-grid" id="editTeacherClassCheckboxes">
-          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="Nursery"> Nursery</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="Jr. KG"> Jr. KG</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="Sr. KG"> Sr. KG</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="1"> Class 1</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="2"> Class 2</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="3"> Class 3</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="4"> Class 4</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="5"> Class 5</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="6"> Class 6</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="7"> Class 7</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="8"> Class 8</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="9"> Class 9</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="10"> Class 10</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="11"> Class 11</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="12"> Class 12</div>
+        <div class="sub-nav-tabs" style="margin-bottom:16px; display:flex;">
+          <div class="sub-tab-btn active" id="eTchTabInfoBtn" onclick="window.switchEditTeacherTab('info')">👤 Info</div>
+          <div class="sub-tab-btn" id="eTchTabStatusBtn" onclick="window.switchEditTeacherTab('status')">📈 Mentor's Progression</div>
         </div>
 
-        <button id="updateTeacherBtn" onclick="window.saveUpdatedTeacherDetails()" class="btn-primary btn-green" style="margin-top: 16px;">
-          💾 Update Teacher Profile
-        </button>
-        <button type="button" onclick="window.deleteTeacherFromModal()" class="btn-primary btn-red" style="margin-top: 8px;">
-          🗑️ Delete Teacher Account
-        </button>
+        <div id="eTchPaneInfo">
+          <label>Teacher Full Name *:</label>
+          <input type="text" id="editTeacherName" placeholder="Teacher Full Name">
+
+          <label>Login Username * (Editable):</label>
+          <input type="text" id="editTeacherUser" style="font-weight: 800;">
+
+          <label>Login Password *:</label>
+          <input type="text" id="editTeacherPass" placeholder="Password">
+
+          <label>Mobile / WhatsApp Number:</label>
+          <input type="text" id="editTeacherPhone" placeholder="10-Digit Mobile Number">
+
+          <label>Email Address:</label>
+          <input type="email" id="editTeacherEmail" placeholder="teacher@example.com" style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; font-size: 13px; outline: none; background: var(--input-bg); color: var(--text-color);">
+
+          <label>Total Performance Points (+ / -):</label>
+          <input type="number" id="editTeacherPointsInput" placeholder="0">
+
+          <label>Change Photo (Optional):</label>
+          <input type="file" id="editTeacherPhotoInput" accept="image/*">
+
+          <label>Assign Classes (Select Multiple) *:</label>
+          <div class="checkbox-grid" id="editTeacherClassCheckboxes">
+            <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="Nursery"> Nursery</div>
+            <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="Jr. KG"> Jr. KG</div>
+            <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="Sr. KG"> Sr. KG</div>
+            <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="1"> Class 1</div>
+            <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="2"> Class 2</div>
+            <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="3"> Class 3</div>
+            <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="4"> Class 4</div>
+            <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="5"> Class 5</div>
+            <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="6"> Class 6</div>
+            <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="7"> Class 7</div>
+            <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="8"> Class 8</div>
+            <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="9"> Class 9</div>
+            <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="10"> Class 10</div>
+            <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="11"> Class 11</div>
+            <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="12"> Class 12</div>
+          </div>
+
+          <button id="updateTeacherBtn" onclick="window.saveUpdatedTeacherDetails()" class="btn-primary btn-green" style="margin-top: 16px;">
+            💾 Update Teacher Profile
+          </button>
+          <button type="button" onclick="window.deleteTeacherFromModal()" class="btn-primary btn-red" style="margin-top: 8px;">
+            🗑️ Delete Teacher Account
+          </button>
+        </div>
+
+        <div id="eTchPaneStatus" style="display:none;">
+          <div style="position: relative; height: 260px; width: 100%; background: rgba(0,0,0,0.02); border-radius: 16px; padding: 12px; border: 1px solid var(--border-color);">
+            <canvas id="eTchPointsLineChart"></canvas>
+          </div>
+          <div id="eTchGraphTapFeedback" style="margin-top: 12px; padding: 12px 14px; border-radius: 14px; background: rgba(124, 58, 237, 0.08); border: 1px dashed #7c3aed; font-size: 12px; font-weight: 800; color: var(--text-color); text-align: center;">
+            👆 Tap any point on the line graph above to inspect details!
+          </div>
+        </div>
       </div>
     </div>
   </div>
+
 
   <!-- REGISTER NEW TEACHER MODAL (WITH PHOTO, PHONE & EMAIL) -->
   <div id="registerTeacherModal" class="modal-overlay">
@@ -4684,10 +4741,12 @@ Exact Output JSON Format Required:
       activeSelectTarget = null;
     };
 
-    // Native Picker ko roko, lekin sheet tabhi kholo jab user proper CLICK kare (scroll karte waqt galti se nahi khulega)
+
+      
+       // Native Picker ko roko, sheet open karo (Active class dropdown ab native Custom sheet me aayega)
     document.addEventListener("mousedown", function(e) {
       const selectTarget = e.target.closest("select");
-      if (selectTarget && !selectTarget.disabled && selectTarget.id !== "teacherActiveSelect") {
+      if (selectTarget && !selectTarget.disabled) {
         e.preventDefault();
         selectTarget.blur();
       }
@@ -4695,12 +4754,13 @@ Exact Output JSON Format Required:
 
     document.addEventListener("click", function(e) {
       const selectTarget = e.target.closest("select");
-      if (selectTarget && !selectTarget.disabled && selectTarget.id !== "teacherActiveSelect") {
+      if (selectTarget && !selectTarget.disabled) {
         e.preventDefault();
         selectTarget.blur();
         window.openCustomSelectSheet(selectTarget);
       }
     }, true);
+
 
 
     document.addEventListener("click", function (e) {
@@ -5817,13 +5877,16 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       });
     });
 
-    // 2. Sign in with Google (Only pre-saved active emails allowed!)
+
+      
+     // 2. Sign in with Google (Only pre-saved active emails allowed!)
     addSafeListener("googleLoginBtn", "click", () => {
       const btn = document.getElementById("googleLoginBtn");
       const originalHtml = btn.innerHTML;
       runWithBtnSpinner(btn, originalHtml, async () => {
         try {
           const provider = new GoogleAuthProvider();
+          // Prompt explicitly ask karega, popup error bypass karne ke liye
           provider.setCustomParameters({ prompt: "select_account" });
           const result = await signInWithPopup(auth, provider);
           const googleEmail = result.user ? result.user.email : null;
@@ -5837,7 +5900,7 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
           if (!resolvedUserId) {
             await auth.signOut().catch(() => {});
             await window.ensureFirebaseAuth();
-            window.showCustomAlert("Only active users allowed to sign in with Google");
+            window.showCustomAlert("Only active users allowed to sign in with Google. If you are authorized, contact Admin.");
             return;
           }
 
@@ -5845,14 +5908,16 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
           if (!uData) {
             await auth.signOut().catch(() => {});
             await window.ensureFirebaseAuth();
-            window.showCustomAlert("Only active users allowed to sign in with Google");
+            window.showCustomAlert("Only active users allowed to sign in with Google. If you are authorized, contact Admin.");
             return;
           }
 
           window.completePortalLoginSession(resolvedUserId, uData);
         } catch (err) {
+          // Silent catch for user cancellation, detailed alert for configuration issues
           if (err && err.code !== "auth/popup-closed-by-user" && err.code !== "auth/cancelled-popup-request") {
-            window.showCustomAlert("Google Sign-In failed. Please ensure Google Sign-In is enabled in Firebase Authentication.");
+             console.error("Google Auth Error:", err);
+             window.showCustomAlert("Google Sign-In is not configured correctly on this domain.\n\nEnsure this website URL is added to your Firebase Authorized Domains list.");
           }
         }
       });
@@ -12083,6 +12148,319 @@ if (perms.photo && window.croppedPhotosMap["sUpdatePhotoInput"]) {
         document.getElementById("teacherGraphTapFeedback").innerHTML = `<div style="color:#7c3aed; font-weight:900;">${trendMsg}</div>`;
       };
 
+
+
+            // =========================================================
+      // 📈 MENTORS PROGRESSION MULTI-LINE GRAPH ENGINE (Global)
+      // =========================================================
+      let mentorsMultiLineChart = null;
+
+      window.switchMentorsStandingTab = function(tab, role) {
+        const prefix = role === "admin" ? "adminMs" : "tchMs";
+        document.getElementById(`${prefix}TabLbBtn`).classList.toggle("active", tab === "lb");
+        document.getElementById(`${prefix}TabProgBtn`).classList.toggle("active", tab === "prog");
+        document.getElementById(`${prefix}PaneLb`).style.display = tab === "lb" ? "block" : "none";
+        document.getElementById(`${prefix}PaneProg`).style.display = tab === "prog" ? "block" : "none";
+
+        if (tab === "prog") {
+          const canvasId = role === "admin" ? "adminMentorsProgressionChart" : "teacherMentorsProgressionChart";
+          const feedbackId = role === "admin" ? "adminMentorsGraphFeedback" : "teacherMentorsGraphFeedback";
+          window.renderMentorsProgressionGraph(canvasId, feedbackId);
+        }
+      };
+
+      window.renderMentorsProgressionGraph = async function(canvasId, feedbackId) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) return;
+
+        const allTeachers = await safeDataFetch("teachers") || {};
+        const allLogsObj = await safeDataFetch("teacher_points_logs") || {};
+        const dailyClaimsObj = await safeDataFetch("teacher_daily_claims") || {};
+
+        let events = [];
+        Object.values(allLogsObj).forEach(lg => {
+            if(lg && lg.username) {
+                events.push({ time: Number(lg.id), username: lg.username, delta: parseInt(lg.points)||0, desc: lg.reason, dateStr: lg.date });
+            }
+        });
+
+        Object.entries(dailyClaimsObj).forEach(([uname, claims]) => {
+            Object.keys(claims).forEach(k => {
+                const parts = k.split("_");
+                if(parts.length === 3) {
+                    const t = new Date(parts[0], parts[1]-1, parts[2]).getTime();
+                    events.push({ time: t, username: uname, delta: 50, desc: "Daily Reward", dateStr: `${parts[2]}/${parts[1]}/${parts[0]}` });
+                }
+            });
+        });
+
+        events.sort((a,b) => a.time - b.time);
+
+        let dateSet = new Set();
+        events.forEach(e => dateSet.add(e.dateStr));
+        let labels = Array.from(dateSet);
+        if(labels.length === 0) labels = [getTodayFormattedDate()];
+
+        let runningTotals = {};
+        let datasetsMap = {};
+        const theme = window.getChartThemeColors();
+        const colors = theme.palette;
+        let cIdx = 0;
+
+        Object.keys(allTeachers).forEach(uname => {
+            runningTotals[uname] = 0;
+            datasetsMap[uname] = {
+                label: allTeachers[uname].name || uname,
+                data: new Array(labels.length).fill(0),
+                borderColor: colors[cIdx % colors.length],
+                backgroundColor: 'transparent',
+                borderWidth: 3,
+                tension: 0.38,
+                pointRadius: 4,
+                pointHoverRadius: 8,
+                _username: uname
+            };
+            cIdx++;
+        });
+
+        let eIdx = 0;
+        for (let i = 0; i < labels.length; i++) {
+            const currentLabel = labels[i];
+            while(eIdx < events.length && events[eIdx].dateStr === currentLabel) {
+                const ev = events[eIdx];
+                if(runningTotals[ev.username] !== undefined) {
+                    runningTotals[ev.username] += ev.delta;
+                }
+                eIdx++;
+            }
+            Object.keys(datasetsMap).forEach(uname => {
+                datasetsMap[uname].data[i] = runningTotals[uname];
+            });
+        }
+
+        Object.keys(allTeachers).forEach(uname => {
+            if(datasetsMap[uname]) {
+                const actualPoints = parseInt(allTeachers[uname].points)||0;
+                if(datasetsMap[uname].data[labels.length-1] !== actualPoints) {
+                    datasetsMap[uname].data[labels.length-1] = actualPoints;
+                }
+            }
+        });
+
+        const datasets = Object.values(datasetsMap);
+
+        if(window['multiLineChart_' + canvasId]) window['multiLineChart_' + canvasId].destroy();
+
+        const isDark = document.body.classList.contains("dark-mode");
+        window['multiLineChart_' + canvasId] = new Chart(canvas, {
+            type: 'line',
+            data: { labels: labels, datasets: datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'nearest', intersect: true },
+                onClick: (evt, activeEls) => {
+                    if (activeEls && activeEls.length > 0) {
+                        const idx = activeEls[0].index;
+                        const dsIdx = activeEls[0].datasetIndex;
+                        const ds = datasets[dsIdx];
+                        const ptVal = ds.data[idx];
+                        
+                        let rankArr = [];
+                        datasets.forEach(d => rankArr.push({ name: d.label, val: d.data[idx] }));
+                        rankArr.sort((a,b) => b.val - a.val);
+                        const rank = rankArr.findIndex(r => r.name === ds.label) + 1;
+
+                        document.getElementById(feedbackId).innerHTML = `
+                            <div style="color:${ds.borderColor}; font-size:14px; font-weight:900;">${ds.label}</div>
+                            <div style="font-size:12px; color:var(--text-color); font-weight:800;">Total Points: ${ptVal} PTS | 🏆 Rank: #${rank}</div>
+                            <div style="font-size:10px; color:var(--text-muted); margin-top:2px;">Timeline: ${labels[idx]}</div>
+                        `;
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => ` ${context.dataset.label}: ${context.parsed.y} PTS`
+                        }
+                    }
+                },
+                scales: {
+                    x: { ticks: { color: isDark ? "#cbd5e1" : "#475569", font: { weight: "700", size: 10 } }, grid: { color: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)" } },
+                    y: { beginAtZero: true, ticks: { color: isDark ? "#cbd5e1" : "#475569", font: { weight: "700", size: 10 } }, grid: { color: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)" } }
+                }
+            }
+        });
+      };
+
+      // Helper function to render a single teacher's line graph (used by Teacher My Profile & Admin View)
+      window.renderGenericSingleTeacherGraph = async function(username, canvasId, feedbackId, mode = "all") {
+        const canvas = document.getElementById(canvasId);
+        if (!username || !canvas) return;
+
+        const tObj = await safeDataFetch(`teachers/${username}`) || {};
+        const currentPts = parseInt(tObj.points) || 0;
+        const allLogsObj = await safeDataFetch("teacher_points_logs") || {};
+        const dailyClaimsObj = await safeDataFetch(`teacher_daily_claims/${username}`) || {};
+
+        let myLogs = Object.values(allLogsObj)
+          .filter(l => l && l.username === username)
+          .sort((a, b) => Number(a.id) - Number(b.id));
+
+        const series = [{ label: "Start", total: 0, delta: 0, reason: "Account Initialized", date: tObj.regDate || "Initial" }];
+
+        if (myLogs.length > 0) {
+          myLogs.forEach((lg, idx) => {
+            series.push({
+              label: lg.date ? lg.date.slice(0, 5) : `#${idx + 1}`,
+              total: parseInt(lg.totalPoints) || 0,
+              delta: parseInt(lg.points) || 0,
+              reason: lg.reason || "Admin Point Update",
+              date: lg.date || "-"
+            });
+          });
+          if (series[series.length - 1].total !== currentPts) {
+            const diff = currentPts - series[series.length - 1].total;
+            series.push({
+              label: "Today",
+              total: currentPts,
+              delta: diff,
+              reason: diff > 0 ? "Daily Reward Claims (+50 PTS)" : "Points Sync",
+              date: getTodayFormattedDate()
+            });
+          }
+        } else {
+          const claimKeys = Object.keys(dailyClaimsObj).sort();
+          let running = 0;
+          claimKeys.forEach((k) => {
+            running += 50;
+            const parts = k.split("_");
+            const lbl = parts.length === 3 ? `${parts[2]}/${parts[1]}` : k;
+            series.push({
+              label: lbl,
+              total: running,
+              delta: 50,
+              reason: "Daily Reward Claimed 🎁",
+              date: lbl
+            });
+          });
+          if (running !== currentPts) {
+            series.push({
+              label: "Current",
+              total: currentPts,
+              delta: currentPts - running,
+              reason: "Current Standing",
+              date: getTodayFormattedDate()
+            });
+          }
+        }
+
+        const plotSeries = mode === "recent" ? series.slice(-5) : series;
+
+        const isDark = document.body.classList.contains("dark-mode");
+        const ctx = canvas.getContext("2d");
+        const grad = ctx.createLinearGradient(0, 0, 0, 220);
+        grad.addColorStop(0, isDark ? "rgba(168, 85, 247, 0.45)" : "rgba(124, 58, 237, 0.32)");
+        grad.addColorStop(1, "rgba(124, 58, 237, 0.0)");
+
+        const pointColors = plotSeries.map(p => p.delta < 0 ? "#ef4444" : "#10b981");
+
+        if (window["singleLineChart_" + canvasId]) window["singleLineChart_" + canvasId].destroy();
+        window["singleLineChart_" + canvasId] = new Chart(canvas, {
+          type: "line",
+          data: {
+            labels: plotSeries.map(p => p.label),
+            datasets: [{
+              label: "Total Points",
+              data: plotSeries.map(p => p.total),
+              borderColor: isDark ? "#c084fc" : "#7c3aed",
+              backgroundColor: grad,
+              borderWidth: 3,
+              fill: true,
+              tension: 0.38,
+              pointRadius: 6,
+              pointHoverRadius: 10,
+              pointBackgroundColor: pointColors,
+              pointBorderColor: isDark ? "#ffffff" : "#1e1b4b",
+              pointBorderWidth: 2
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            onClick: (evt, activeEls) => {
+              if (activeEls && activeEls.length > 0) {
+                const idx = activeEls[0].index;
+                const pt = plotSeries[idx];
+                if (pt) {
+                  const sign = pt.delta >= 0 ? `+${pt.delta}` : `${pt.delta}`;
+                  const color = pt.delta < 0 ? "#ef4444" : "#10b981";
+                  document.getElementById(feedbackId).innerHTML = `
+                    <div style="font-size:13px; font-weight:900; color:${color};">${pt.date} — ${sign} PTS (Total: ${pt.total} PTS)</div>
+                    <div style="font-size:11px; font-weight:700; color:var(--text-muted); margin-top:3px;">📌 Reason: ${pt.reason}</div>
+                  `;
+                }
+              }
+            },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: (context) => {
+                    const pt = plotSeries[context.dataIndex];
+                    const sign = pt.delta >= 0 ? `+${pt.delta}` : `${pt.delta}`;
+                    return ` Total: ${pt.total} PTS (${sign} PTS)`;
+                  },
+                  afterLabel: (context) => {
+                    const pt = plotSeries[context.dataIndex];
+                    return ` Reason: ${pt.reason}`;
+                  }
+                }
+              }
+            },
+            scales: {
+              x: { ticks: { color: isDark ? "#cbd5e1" : "#475569", font: { weight: "700", size: 10 } }, grid: { color: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)" } },
+              y: { beginAtZero: true, ticks: { color: isDark ? "#cbd5e1" : "#475569", font: { weight: "700", size: 10 } }, grid: { color: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)" } }
+            }
+          }
+        });
+      };
+
+      // Replace old Teacher Interactive Graph with generic one
+      window.renderTeacherInteractiveLineGraph = function() {
+        const loggedUser = localStorage.getItem("loggedUser");
+        window.renderGenericSingleTeacherGraph(loggedUser, "teacherPointsLineChart", "teacherGraphTapFeedback", currentTeacherGraphMode);
+      };
+
+      window.switchEditTeacherTab = function(tab) {
+        document.getElementById("eTchTabInfoBtn").classList.toggle("active", tab === "info");
+        document.getElementById("eTchTabStatusBtn").classList.toggle("active", tab === "status");
+        document.getElementById("eTchPaneInfo").style.display = tab === "info" ? "block" : "none";
+        document.getElementById("eTchPaneStatus").style.display = tab === "status" ? "block" : "none";
+
+        if (tab === "status") {
+          const username = document.getElementById("editTeacherOldUsername").value;
+          window.renderGenericSingleTeacherGraph(username, "eTchPointsLineChart", "eTchGraphTapFeedback", "all");
+        }
+      };
+
+      // Add renderMentorsProgressionGraph to load in Admin Dashboard switch
+      const originalRenderTeacherboardCardsTable = window.renderTeacherboardCardsTable;
+      window.renderTeacherboardCardsTable = async function() {
+        if(originalRenderTeacherboardCardsTable) await originalRenderTeacherboardCardsTable();
+        window.renderMentorsProgressionGraph('teacherMentorsProgressionChart', 'teacherMentorsGraphFeedback');
+      };
+      
+      const originalRenderAdminHomeTeacherboardCards = window.renderAdminHomeTeacherboardCards;
+      window.renderAdminHomeTeacherboardCards = async function() {
+        if(originalRenderAdminHomeTeacherboardCards) await originalRenderAdminHomeTeacherboardCards();
+        window.renderMentorsProgressionGraph('adminMentorsProgressionChart', 'adminMentorsGraphFeedback');
+      };
+
+
+
+      
     </script>
 </body>
 </html>
