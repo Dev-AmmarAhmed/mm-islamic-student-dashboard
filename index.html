@@ -4892,16 +4892,14 @@ Exact Output JSON Format Required:
     import { getFirestore, doc, setDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
       
-       // 🛡️ SECURE INITIALIZATION: Wait for external firebase-config.js to load
- if (!window.appFirebaseConfig) {
- console.error("CRITICAL ERROR: firebase-config.js is missing or blocked!");
- alert("Network Error: Could not connect to secure server. Please refresh the page.");
- return; // YE NAYI LINE APP KO FREEZE HONE SE ROKEGI
- }
- 
-const app = initializeApp(window.appFirebaseConfig);
+        // 🛡️ SECURE INITIALIZATION: Wait for external firebase-config.js to load
+    if (!window.appFirebaseConfig) {
+       console.error("CRITICAL ERROR: firebase-config.js is missing or blocked!");
+       alert("Network Error: Could not connect to secure server. Please refresh the page.");
+    }
+    
+    const app = initializeApp(window.appFirebaseConfig);
 
-      
     try {
       if (typeof initializeAppCheck === 'function' && window.appFirebaseConfig) {
         // App Check reCAPTCHA key should also ideally be in the config file later, but hardcoded is okay for now as it's public
@@ -5137,8 +5135,7 @@ const app = initializeApp(window.appFirebaseConfig);
 
       const allTests = await safeDataFetch("online_tests") || {};
       const allStudents = getLiveStudents();
-            // 🛡️ SECURITY FIX: Do not bulk download all test attempts. Fetch per test in the loop later.
-      // const allAttempts = await safeDataFetch("test_attempts") || {}; // Removed bulk fetch
+      const allAttempts = await safeDataFetch("test_attempts") || {};
 
       let testsList = [];
 
@@ -5198,51 +5195,40 @@ const app = initializeApp(window.appFirebaseConfig);
         const classStudents = allStudents.filter(s => cleanClassStr(s.class) === cleanClassStr(t.class));
         const totalStudentsCount = classStudents.length;
         
-            // 🚀 OPTIMIZATION: Only fetch attempts for this specific test
-        safeDataFetch(`test_attempts/${t.testId}`).then(testAttemptsData => {
-            testAttemptsData = testAttemptsData || {};
-            let attemptedCount = 0;
-            classStudents.forEach(st => {
-              if(testAttemptsData[st.admn]) attemptedCount++;
-            });
-            // Update the DOM dynamically for counts to save initial load time
-            const attemptDom = document.getElementById(`att_count_${t.testId}`);
-            const notAttemptDom = document.getElementById(`not_att_count_${t.testId}`);
-            if(attemptDom) attemptDom.innerText = attemptedCount;
-            if(notAttemptDom) notAttemptDom.innerText = Math.max(0, totalStudentsCount - attemptedCount);
+        const testAttemptsData = allAttempts[t.testId] || {};
+        let attemptedCount = 0;
+        classStudents.forEach(st => {
+          if(testAttemptsData[st.admn]) attemptedCount++;
         });
-        
-       let attemptedCountText = "..."; // Placeholder while fetching
- let notAttemptedCountText = "..."; // Placeholder while fetching
+        const notAttemptedCount = Math.max(0, totalStudentsCount - attemptedCount);
 
- const safeTestId = t.testId;
- const safeClass = t.class;
+        const safeTestId = t.testId;
+        const safeClass = t.class;
 
- if(selectedClass === "ALL") {
- tbody.innerHTML += `
- <tr>
- <td><b>${idx + 1}</b></td>
- <td style="text-align: left; padding-left: 8px; font-weight: 800; color: #0288d1; cursor: pointer; text-decoration: underline;" onclick="window.openAdminTestHistoryModal('${safeClass}', '${safeTestId}')">${t.title || t.testName || 'Test'}</td>
- <td><span class="class-badge" style="background:#0288d1; font-size:10px;">${t.class}</span></td>
- <td>${t.subject || '-'}</td>
- <td><b>${t.numQuestions || (t.questions ? t.questions.length : 0)}</b></td>
- <td><b id="att_count_${t.testId}" style="color: #16a34a;">${attemptedCountText}</b></td>
- <td><b id="not_att_count_${t.testId}" style="color: #dc2626;">${notAttemptedCountText}</b></td>
- </tr>
- `;
- } else {
- tbody.innerHTML += `
- <tr>
- <td><b>${idx + 1}</b></td>
- <td style="text-align: left; padding-left: 8px; font-weight: 800; color: #0288d1; cursor: pointer; text-decoration: underline;" onclick="window.openAdminTestHistoryModal('${safeClass}', '${safeTestId}')">${t.title || t.testName || 'Test'}</td>
- <td>${t.subject || '-'}</td>
- <td><b>${t.numQuestions || (t.questions ? t.questions.length : 0)}</b></td>
- <td><b id="att_count_${t.testId}" style="color: #16a34a;">${attemptedCountText}</b></td>
- <td><b id="not_att_count_${t.testId}" style="color: #dc2626;">${notAttemptedCountText}</b></td>
- </tr>
- `;
- }
-
+        if(selectedClass === "ALL") {
+          tbody.innerHTML += `
+            <tr>
+              <td><b>${idx + 1}</b></td>
+              <td style="text-align: left; padding-left: 8px; font-weight: 800; color: #0288d1; cursor: pointer; text-decoration: underline;" onclick="window.openAdminTestHistoryModal('${safeClass}', '${safeTestId}')">${t.title || t.testName || 'Test'}</td>
+              <td><span class="class-badge" style="background:#0288d1; font-size:10px;">${t.class}</span></td>
+              <td>${t.subject || '-'}</td>
+              <td><b>${t.numQuestions || (t.questions ? t.questions.length : 0)}</b></td>
+              <td><b style="color: #16a34a;">${attemptedCount}</b></td>
+              <td><b style="color: #dc2626;">${notAttemptedCount}</b></td>
+            </tr>
+          `;
+        } else {
+          tbody.innerHTML += `
+            <tr>
+              <td><b>${idx + 1}</b></td>
+              <td style="text-align: left; padding-left: 8px; font-weight: 800; color: #0288d1; cursor: pointer; text-decoration: underline;" onclick="window.openAdminTestHistoryModal('${safeClass}', '${safeTestId}')">${t.title || t.testName || 'Test'}</td>
+              <td>${t.subject || '-'}</td>
+              <td><b>${t.numQuestions || (t.questions ? t.questions.length : 0)}</b></td>
+              <td><b style="color: #16a34a;">${attemptedCount}</b></td>
+              <td><b style="color: #dc2626;">${notAttemptedCount}</b></td>
+            </tr>
+          `;
+        }
       });
     };
 
@@ -6046,9 +6032,8 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
         Object.keys(firestoreMediaCache).forEach(k => delete firestoreMediaCache[k]);
       }
       
-           // Stop all active Firebase Listeners (Very Important)
+      // Stop all active Firebase Listeners (Very Important)
       if (window.currentStudentsUnsubscribe) window.currentStudentsUnsubscribe();
-      if (window.currentNotifUnsubscribe) window.currentNotifUnsubscribe(); // Cleanup notification listener
 
       // 2. Firebase Sign-Out
       try {
@@ -6080,9 +6065,6 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
            window.indexedDB.deleteDatabase("firebase-app-check-database");
         }
       }
-                    if (activeLiveTestTimer) clearInterval(activeLiveTestTimer);
-      if (musterClockInterval) clearInterval(musterClockInterval);
-
 
       // 6. Hard Refresh the entire app to reset memory completely
       setTimeout(() => {
@@ -7218,13 +7200,9 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       }
     });
 
-    // 🚀 OPTIMIZATION: Debounce teacher student search to prevent DOM lag on typing
-    let teacherSearchTimer = null;
-    window.triggerTeacherStudentSearch = function() {
-      if (teacherSearchTimer) clearTimeout(teacherSearchTimer);
-      teacherSearchTimer = setTimeout(() => {
-        loadTeacherStudentsDirectory();
-      }, 150); // 150ms delay
+
+      window.triggerTeacherStudentSearch = function() {
+      loadTeacherStudentsDirectory();
     };
 
     function loadTeacherStudentsDirectory() {
@@ -7726,18 +7704,11 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
            const reportDiv = document.getElementById(targetContainerId);
       reportDiv.innerHTML = "";
 
-          // 🛡️ SECURITY & PERFORMANCE FIX: Never fetch the whole "attendance" root node!
-      let allAtt = {};
-      if(selectedAdmnVal === "ALL") {
-          // If fetching for whole class, fetch attendance for those specific students only, not the whole school
-          for (let st of students) {
-              const stAtt = await safeDataFetch(`attendance/${st.admn}/${monthVal}`);
-              if (stAtt) {
-                 if (!allAtt[st.admn]) allAtt[st.admn] = {};
-                 allAtt[st.admn][monthVal] = stAtt;
-              }
-          }
+      if(selectedAdmnVal !== "ALL" && students.length > 0) {
+        const st = students[0];
+        const mData = await safeDataFetch(`attendance/${st.admn}/${monthVal}`) || {};
       }
+      const allAtt = (selectedAdmnVal === "ALL") ? (await safeDataFetch("attendance") || {}) : {};
 
       if(selectedAdmnVal !== "ALL" && students.length > 0) {
         const st = students[0];
@@ -8590,15 +8561,7 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       return urduPattern.test(text);
     };
 
-      
-      window.startStudentLiveTest = async function(testId) {
-      // 🛡️ MEMORY LEAK FIX: Ensure NO ghost timers exist before starting a new test
-      if(activeLiveTestTimer) {
-          clearInterval(activeLiveTestTimer);
-          activeLiveTestTimer = null;
-      }
-
-      
+    window.startStudentLiveTest = async function(testId) {
       const classKey = cleanClassStr(assignedClass);
       const test = await safeDataFetch(`online_tests/${classKey}/${testId}`);
       if(!test) { alert("Test details not found or test has expired."); return; }
@@ -12678,8 +12641,7 @@ if (perms.photo && window.croppedPhotosMap["sUpdatePhotoInput"]) {
         }
       };
 
-
-            // Admin Modal Logic
+      // Admin Modal Logic
       window.switchEditTeacherTab = function(tab) {
         document.getElementById("eTchTabInfoBtn").classList.toggle("active", tab === "info");
         document.getElementById("eTchTabStatusBtn").classList.toggle("active", tab === "status");
@@ -12704,7 +12666,8 @@ if (perms.photo && window.croppedPhotosMap["sUpdatePhotoInput"]) {
         }
       };
 
+
+      
     </script>
 </body>
 </html>
-
