@@ -28,12 +28,10 @@
    <!-- PDF EXPORT ENGINE LIBRARIES -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   
-  <!-- EXTERNAL FIREBASE CONFIGURATION (SECURE) -->
-  <script src="./firebase-config.js"></script>
-
+  <!-- INTERACTIVE GRAPH ENGINE (CHART.JS) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
   <!-- ====================================================================
       SECTION 1: STYLESHEETS & REFINED PREMIUM DESIGN SYSTEM
        ==================================================================== -->
@@ -1759,81 +1757,80 @@ canvas { touch-action: pan-y !important; }
       </div>
     </div>
 
-        <!-- 2 SUB-TABS: INFO & STATUS -->
+    <!-- 2 SUB-TABS: INFO & STATUS -->
     <div class="sub-nav-tabs" style="margin-bottom: 16px;">
       <div class="sub-tab-btn active" id="tProfSubTabInfoBtn" onclick="window.switchTeacherMyProfileSubTab('info')">👤 Info</div>
-      <div class="sub-tab-btn" id="tProfSubTabStatusBtn" onclick="window.switchTeacherMyProfileSubTab('status')">📈 Mentor's Progression</div>
+      <div class="sub-tab-btn" id="tProfSubTabStatusBtn" onclick="window.switchTeacherMyProfileSubTab('status')">📈 Status (Points Graph)</div>
     </div>
 
-    <!-- WRAPPER FOR SLIDE ANIMATION -->
-    <div class="prof-slide-container" id="tProfSlideContainer">
-
-      <!-- SUB-TAB 1: PROFILE INFO -->
-      <div id="tProfSubPaneInfo" class="prof-slide-pane active">
-        <div style="text-align: center; margin-bottom: 12px;">
-          <input type="file" id="tMyProfPhotoInput" accept="image/*" style="display: none;">
-          <button type="button" id="tMyProfPhotoBtn" class="btn-primary btn-purple" style="width: auto; padding: 7px 16px; font-size: 11px; margin: 0 auto;" onclick="document.getElementById('tMyProfPhotoInput').click()">📷 Select & Crop Photo</button>
-        </div>
-
-        <label>Full Name:</label>
-        <input type="text" id="tMyProfNameInput" disabled>
-        <label>Login Username:</label>
-        <input type="text" id="tMyProfUserInput" disabled>
-        <label>Login Password:</label>
-        <input type="text" id="tMyProfPassInput" disabled>
-        <label>Phone / WhatsApp Number:</label>
-        <input type="text" id="tMyProfPhoneInput" disabled placeholder="10-Digit Mobile Number">
-        <label>Email Address:</label>
-        <input type="email" id="tMyProfEmailInput" disabled placeholder="teacher@example.com" style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; font-size: 13px; outline: none; background: var(--input-bg); color: var(--text-color);">
-        <label>Assigned Classes (Admin Controlled):</label>
-        <input type="text" id="tMyProfClassesReadonly" disabled style="background-color: rgba(0,0,0,0.06) !important; font-weight: 800;">
-
-        <button id="tMyProfSaveBtn" class="btn-primary btn-green" style="margin-top: 16px; display: none;" onclick="window.saveTeacherSelfProfileUpdate()">💾 Save Profile Changes</button>
-
-        <div id="tMyProfLockedBanner" style="margin-top: 16px; padding: 12px; border-radius: 12px; background: rgba(239, 68, 68, 0.12); border: 1px solid #ef4444; text-align: center; color: #ef4444; font-weight: 800; font-size: 12px;">
-          🔒 Profile fields are locked by Admin. Contact Admin to enable editing.
-        </div>
+    <!-- SUB-TAB 1: PROFILE INFO (GRAYED OR ENABLED BY ADMIN CONTROLS) -->
+    <div id="tProfSubPaneInfo">
+      <div style="text-align: center; margin-bottom: 12px;">
+        <input type="file" id="tMyProfPhotoInput" accept="image/*" style="display: none;">
+        <button type="button" id="tMyProfPhotoBtn" class="btn-primary btn-purple" style="width: auto; padding: 7px 16px; font-size: 11px; margin: 0 auto;" onclick="document.getElementById('tMyProfPhotoInput').click()">📷 Select & Crop Photo</button>
       </div>
 
-      <!-- SUB-TAB 2: INTERACTIVE POINTS LINE GRAPH & STATUS -->
-      <div id="tProfSubPaneStatus" class="prof-slide-pane hidden-right">
-        <div style="font-size: 12px; font-weight: 800; color: var(--text-muted); margin-bottom: 8px;">📊 Interactive Points Journey</div>
-        <!-- Graph Filters -->
-        <div class="class-chips-container" style="margin-bottom: 12px;">
-          <div class="class-chip active" onclick="window.setSingleTeacherGraphFilter('all', this, 'teacherMy')">All Time</div>
-          <div class="class-chip" onclick="window.setSingleTeacherGraphFilter('5days', this, 'teacherMy')">5 Days</div>
-          <div class="class-chip" onclick="window.setSingleTeacherGraphFilter('10days', this, 'teacherMy')">10 Days</div>
-          <div class="class-chip" onclick="window.setSingleTeacherGraphFilter('1month', this, 'teacherMy')">1 Month</div>
-          <div class="class-chip" onclick="window.setSingleTeacherGraphFilter('6month', this, 'teacherMy')">6 Months</div>
-          <div class="class-chip" onclick="window.setSingleTeacherGraphFilter('1year', this, 'teacherMy')">1 Year</div>
-        </div>
+      <label>Full Name:</label>
+      <input type="text" id="tMyProfNameInput" disabled>
 
-        <div style="position: relative; height: 240px; width: 100%; background: rgba(0,0,0,0.02); border-radius: 16px; padding: 12px; border: 1px solid var(--border-color);">
-          <canvas id="teacherPointsLineChart"></canvas>
-        </div>
+      <label>Login Username:</label>
+      <input type="text" id="tMyProfUserInput" disabled>
 
-        <!-- Interactive Point Tap Inspector -->
-        <div id="teacherGraphTapFeedback" style="margin-top: 12px; padding: 12px 14px; border-radius: 14px; background: rgba(124, 58, 237, 0.08); border: 1px dashed #7c3aed; font-size: 12px; font-weight: 800; color: var(--text-color); text-align: center;">
-          👆 Tap any point on the line graph above to inspect its exact date, points change & reason!
-        </div>
+      <label>Login Password:</label>
+      <input type="text" id="tMyProfPassInput" disabled>
 
-        <div class="stats-grid" style="margin-top: 14px; grid-template-columns: 1fr 1fr 1fr;">
-          <div class="stat-card blue" style="padding: 12px;">
-            <span style="font-size: 10px;">Current Points</span>
-            <h3 id="tStatCurrentPts" style="font-size: 17px;">0</h3>
-          </div>
-          <div class="stat-card" style="background: linear-gradient(135deg, #16a34a 0%, #15803d 100%); padding: 12px;">
-            <span style="font-size: 10px;">Highest Peak</span>
-            <h3 id="tStatPeakPts" style="font-size: 17px;">0</h3>
-          </div>
-          <div class="stat-card" style="background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%); padding: 12px;">
-            <span style="font-size: 10px;">Net Growth</span>
-            <h3 id="tStatGrowthText" style="font-size: 17px;">+0</h3>
-          </div>
-        </div>
+      <label>Phone / WhatsApp Number:</label>
+      <input type="text" id="tMyProfPhoneInput" disabled placeholder="10-Digit Mobile Number">
+
+      <label>Email Address:</label>
+      <input type="email" id="tMyProfEmailInput" disabled placeholder="teacher@example.com" style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; font-size: 13px; outline: none; background: var(--input-bg); color: var(--text-color);">
+
+      <label>Assigned Classes (Admin Controlled):</label>
+      <input type="text" id="tMyProfClassesReadonly" disabled style="background-color: rgba(0,0,0,0.06) !important; font-weight: 800;">
+
+      <button id="tMyProfSaveBtn" class="btn-primary btn-green" style="margin-top: 16px; display: none;" onclick="window.saveTeacherSelfProfileUpdate()">💾 Save Profile Changes</button>
+
+      <div id="tMyProfLockedBanner" style="margin-top: 16px; padding: 12px; border-radius: 12px; background: rgba(239, 68, 68, 0.12); border: 1px solid #ef4444; text-align: center; color: #ef4444; font-weight: 800; font-size: 12px;">
+        🔒 Profile fields are locked by Admin. Contact Admin to enable editing.
       </div>
     </div>
 
+    <!-- SUB-TAB 2: INTERACTIVE POINTS LINE GRAPH & STATUS -->
+    <div id="tProfSubPaneStatus" style="display: none;">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
+        <div style="font-size: 12px; font-weight: 800; color: var(--text-muted);">📊 Interactive Points Journey</div>
+        <div style="display: flex; gap: 6px;">
+          <button type="button" class="class-chip active" id="tGraphBtnAll" style="padding: 5px 12px; font-size: 10px;" onclick="window.setTeacherGraphRange('all', this)">All History</button>
+          <button type="button" class="class-chip" id="tGraphBtnRecent" style="padding: 5px 12px; font-size: 10px;" onclick="window.setTeacherGraphRange('recent', this)">Last 5</button>
+          <button type="button" class="class-chip" id="tGraphBtnAnalyze" style="padding: 5px 12px; font-size: 10px;" onclick="window.triggerTeacherGraphInsight()">✨ Analyze Trend</button>
+        </div>
+      </div>
+
+      <div style="position: relative; height: 240px; width: 100%; background: rgba(0,0,0,0.02); border-radius: 16px; padding: 12px; border: 1px solid var(--border-color);">
+        <canvas id="teacherPointsLineChart"></canvas>
+      </div>
+
+      <!-- Interactive Point Tap Inspector -->
+      <div id="teacherGraphTapFeedback" style="margin-top: 12px; padding: 12px 14px; border-radius: 14px; background: rgba(124, 58, 237, 0.08); border: 1px dashed #7c3aed; font-size: 12px; font-weight: 800; color: var(--text-color); text-align: center;">
+        👆 Tap any point on the line graph above to inspect its exact date, points change & reason!
+      </div>
+
+      <div class="stats-grid" style="margin-top: 14px; grid-template-columns: 1fr 1fr 1fr;">
+        <div class="stat-card blue" style="padding: 12px;">
+          <span style="font-size: 10px;">Current Points</span>
+          <h3 id="tStatCurrentPts" style="font-size: 17px;">0</h3>
+        </div>
+        <div class="stat-card" style="background: linear-gradient(135deg, #16a34a 0%, #15803d 100%); padding: 12px;">
+          <span style="font-size: 10px;">Highest Peak</span>
+          <h3 id="tStatPeakPts" style="font-size: 17px;">0</h3>
+        </div>
+        <div class="stat-card" style="background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%); padding: 12px;">
+          <span style="font-size: 10px;">Net Growth</span>
+          <h3 id="tStatGrowthText" style="font-size: 17px;">+0</h3>
+        </div>
+      </div>
+    </div>
+  </div>
 </section>
 
 
@@ -1884,45 +1881,19 @@ canvas { touch-action: pan-y !important; }
         </div>
       </div>
 
-          <!-- CARD 2: MENTORS STANDINGS (WITH GRAPH SUBTABS) -->
+      <!-- CARD 2: TEACHERBOARD STANDINGS -->
       <div class="card unfold-card" style="margin-top: 16px;">
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-color); padding-bottom: 8px; margin-bottom: 12px;">
-          <div class="card-title" style="border: none; margin-bottom: 0;">🏆 Mentors Standings</div>
+          <div class="card-title" style="border: none; margin-bottom: 0;">🏆 Teacherboard Standings</div>
           <button onclick="openModal('addTeacherPointsModal')" class="btn-primary btn-orange" style="margin-top: 0; width: auto; padding: 6px 14px; font-size: 11px;">
             ⭐ Add / Deduct Points
           </button>
         </div>
-        
-        <div class="sub-nav-tabs" style="margin-bottom: 12px;">
-          <div class="sub-tab-btn active" id="adminMsTabLbBtn" onclick="window.switchMentorsStandingTab('lb', 'admin')">🏆 Teacherboard</div>
-          <div class="sub-tab-btn" id="adminMsTabProgBtn" onclick="window.switchMentorsStandingTab('prog', 'admin')">📈 Mentors' Progression</div>
+
+        <div id="adminHomeTeacherboardCardsContainer">
+          <div style="font-size: 12px; color: var(--text-muted); text-align: center; padding: 10px;">Loading Teacherboard...</div>
         </div>
-
-        <div id="adminMsPaneLb">
-          <div id="adminHomeTeacherboardCardsContainer">
-            <div style="font-size: 12px; color: var(--text-muted); text-align: center; padding: 10px;">Loading Teacherboard...</div>
-          </div>
-        </div>
-
-
-                <div id="adminMsPaneProg" style="display:none;">
-          <!-- Graph Filters -->
-          <div class="class-chips-container" style="margin-bottom: 12px;">
-            <div class="class-chip active" onclick="window.setMentorsGraphFilter('all', this, 'admin')">All Time</div>
-            <div class="class-chip" onclick="window.setMentorsGraphFilter('5days', this, 'admin')">Last 5 Days</div>
-            <div class="class-chip" onclick="window.setMentorsGraphFilter('10days', this, 'admin')">10 Days</div>
-            <div class="class-chip" onclick="window.setMentorsGraphFilter('1month', this, 'admin')">1 Month</div>
-            <div class="class-chip" onclick="window.setMentorsGraphFilter('6month', this, 'admin')">6 Months</div>
-            <div class="class-chip" onclick="window.setMentorsGraphFilter('1year', this, 'admin')">1 Year</div>
-          </div>
-          <div style="position: relative; height: 280px; width: 100%; background: rgba(0,0,0,0.02); border-radius: 16px; padding: 12px; border: 1px solid var(--border-color);">
-            <canvas id="adminMentorsProgressionChart"></canvas>
-          </div>
-          <div id="adminMentorsGraphFeedback" style="margin-top: 12px; padding: 12px 14px; border-radius: 14px; background: rgba(2, 136, 209, 0.08); border: 1px dashed #0288d1; font-size: 12px; font-weight: 800; color: var(--text-color); text-align: center;">
-            👆 Tap any point on a mentor's line to view Rank & Details!
-          </div>
-        </div>
-
+      </div>
 
     </section>
 
@@ -2369,12 +2340,7 @@ canvas { touch-action: pan-y !important; }
     <div style="display: flex; justify-content: space-between; align-items: center;">
       <div>
         <h2 id="tWelcomeTeacherName" style="font-size: 19px; font-weight: 800; color: var(--text-color); margin-bottom: 4px; letter-spacing: 0.3px;">Teacher Name</h2>
-               <div style="font-size:13px; font-weight:700; margin-top:4px;">
-           Active Class: 
-           <select id="teacherActiveSelect" onchange="window.changeTeacherActiveClass(this.value)" style="padding: 4px 8px; font-size: 12px; font-weight: bold; border-radius: 8px; border: 1px solid #7c3aed; color: #7c3aed; background: rgba(124, 58, 237, 0.1); display: inline-block; width: auto; margin-left: 6px;">
-           </select>
-        </div>
-
+        <div style="font-size:13px; font-weight:700; margin-top:4px;">           Active Class:            <select id="teacherActiveSelect" onchange="window.changeTeacherActiveClass(this.value)" style="padding: 4px 8px; font-size: 12px; font-weight: bold; border-radius: 8px; border: 1px solid #7c3aed; color: #7c3aed; background: rgba(124, 58, 237, 0.1); display: inline-block; width: auto; appearance: auto !important; -webkit-appearance: auto !important; background-image: none !important; margin-left: 6px;">           </select>         </div>
         <p style="font-size:12px; color:var(--text-muted); margin-top:4px;">Manage attendance, study materials, tests, and claim daily rewards.</p>
       </div>
       
@@ -2419,40 +2385,13 @@ canvas { touch-action: pan-y !important; }
     </div>
   </div>
 
-    <!-- Mentors Standings Table & Progression Graph -->
+  <!-- Teacherboard Cards Table -->
   <div class="card unfold-card">
-    <div class="card-title">🏆 Mentors Standings</div>
-    
-    <div class="sub-nav-tabs" style="margin-bottom: 12px;">
-      <div class="sub-tab-btn active" id="tchMsTabLbBtn" onclick="window.switchMentorsStandingTab('lb', 'teacher')">🏆 Teacherboard</div>
-      <div class="sub-tab-btn" id="tchMsTabProgBtn" onclick="window.switchMentorsStandingTab('prog', 'teacher')">📈 Mentors' Progression</div>
+    <div class="card-title">🏆 Teacherboard Standings</div>
+    <div id="teacherboardTableCardsContainer">
+      <div style="font-size:12px; color:var(--text-muted); text-align:center; padding:10px;">Loading Teacherboard...</div>
     </div>
-
-    <div id="tchMsPaneLb">
-      <div id="teacherboardTableCardsContainer">
-        <div style="font-size:12px; color:var(--text-muted); text-align:center; padding:10px;">Loading Teacherboard...</div>
-      </div>
-    </div>
-
-
-        <div id="tchMsPaneProg" style="display:none;">
-      <!-- Graph Filters -->
-      <div class="class-chips-container" style="margin-bottom: 12px;">
-        <div class="class-chip active" onclick="window.setMentorsGraphFilter('all', this, 'teacher')">All Time</div>
-        <div class="class-chip" onclick="window.setMentorsGraphFilter('5days', this, 'teacher')">Last 5 Days</div>
-        <div class="class-chip" onclick="window.setMentorsGraphFilter('10days', this, 'teacher')">10 Days</div>
-        <div class="class-chip" onclick="window.setMentorsGraphFilter('1month', this, 'teacher')">1 Month</div>
-        <div class="class-chip" onclick="window.setMentorsGraphFilter('6month', this, 'teacher')">6 Months</div>
-        <div class="class-chip" onclick="window.setMentorsGraphFilter('1year', this, 'teacher')">1 Year</div>
-      </div>
-      <div style="position: relative; height: 280px; width: 100%; background: rgba(0,0,0,0.02); border-radius: 16px; padding: 12px; border: 1px solid var(--border-color);">
-        <canvas id="teacherMentorsProgressionChart"></canvas>
-      </div>
-      <div id="teacherMentorsGraphFeedback" style="margin-top: 12px; padding: 12px 14px; border-radius: 14px; background: rgba(124, 58, 237, 0.08); border: 1px dashed #7c3aed; font-size: 12px; font-weight: 800; color: var(--text-color); text-align: center;">
-        👆 Tap any point on a mentor's line to view Rank & Details!
-      </div>
-    </div>
-
+  </div>
 
   <!-- Notifications Board (Slide Down Entry) -->
   <div class="card unfold-card" id="tNotificationMainCard" style="display:none; margin-top: 16px;">
@@ -3852,8 +3791,7 @@ Exact Output JSON Format Required:
     </div>
   </div>
 
-
-    <!-- TEACHER PROFILE & MANAGEMENT MODAL (LIKE STUDENT PROFILE MODAL) -->
+   <!-- TEACHER PROFILE & MANAGEMENT MODAL (LIKE STUDENT PROFILE MODAL) -->
   <div id="editTeacherModal" class="modal-overlay">
     <div class="modal-content">
       <div class="modal-header">
@@ -3871,82 +3809,55 @@ Exact Output JSON Format Required:
           </div>
         </div>
 
-        <div class="sub-nav-tabs" style="margin-bottom:16px; display:flex;">
-          <div class="sub-tab-btn active" id="eTchTabInfoBtn" onclick="window.switchEditTeacherTab('info')">👤 Info</div>
-          <div class="sub-tab-btn" id="eTchTabStatusBtn" onclick="window.switchEditTeacherTab('status')">📈 Mentor's Progression</div>
+        <label>Teacher Full Name *:</label>
+        <input type="text" id="editTeacherName" placeholder="Teacher Full Name">
+
+        <label>Login Username * (Editable):</label>
+        <input type="text" id="editTeacherUser" style="font-weight: 800;">
+
+        <label>Login Password *:</label>
+        <input type="text" id="editTeacherPass" placeholder="Password">
+
+        <label>Mobile / WhatsApp Number:</label>
+        <input type="text" id="editTeacherPhone" placeholder="10-Digit Mobile Number">
+
+        <label>Email Address:</label>
+        <input type="email" id="editTeacherEmail" placeholder="teacher@example.com" style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; font-size: 13px; outline: none; background: var(--input-bg); color: var(--text-color);">
+
+        <label>Total Performance Points (+ / -):</label>
+        <input type="number" id="editTeacherPointsInput" placeholder="0">
+
+        <label>Change Photo (Optional):</label>
+        <input type="file" id="editTeacherPhotoInput" accept="image/*">
+
+        <label>Assign Classes (Select Multiple) *:</label>
+        <div class="checkbox-grid" id="editTeacherClassCheckboxes">
+          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="Nursery"> Nursery</div>
+          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="Jr. KG"> Jr. KG</div>
+          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="Sr. KG"> Sr. KG</div>
+          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="1"> Class 1</div>
+          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="2"> Class 2</div>
+          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="3"> Class 3</div>
+          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="4"> Class 4</div>
+          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="5"> Class 5</div>
+          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="6"> Class 6</div>
+          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="7"> Class 7</div>
+          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="8"> Class 8</div>
+          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="9"> Class 9</div>
+          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="10"> Class 10</div>
+          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="11"> Class 11</div>
+          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="12"> Class 12</div>
         </div>
 
-        <div id="eTchPaneInfo">
-          <label>Teacher Full Name *:</label>
-          <input type="text" id="editTeacherName" placeholder="Teacher Full Name">
-
-          <label>Login Username * (Editable):</label>
-          <input type="text" id="editTeacherUser" style="font-weight: 800;">
-
-          <label>Login Password *:</label>
-          <input type="text" id="editTeacherPass" placeholder="Password">
-
-          <label>Mobile / WhatsApp Number:</label>
-          <input type="text" id="editTeacherPhone" placeholder="10-Digit Mobile Number">
-
-          <label>Email Address:</label>
-          <input type="email" id="editTeacherEmail" placeholder="teacher@example.com" style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; font-size: 13px; outline: none; background: var(--input-bg); color: var(--text-color);">
-
-          <label>Total Performance Points (+ / -):</label>
-          <input type="number" id="editTeacherPointsInput" placeholder="0">
-
-          <label>Change Photo (Optional):</label>
-          <input type="file" id="editTeacherPhotoInput" accept="image/*">
-
-          <label>Assign Classes (Select Multiple) *:</label>
-          <div class="checkbox-grid" id="editTeacherClassCheckboxes">
-            <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="Nursery"> Nursery</div>
-            <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="Jr. KG"> Jr. KG</div>
-            <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="Sr. KG"> Sr. KG</div>
-            <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="1"> Class 1</div>
-            <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="2"> Class 2</div>
-            <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="3"> Class 3</div>
-            <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="4"> Class 4</div>
-            <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="5"> Class 5</div>
-            <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="6"> Class 6</div>
-            <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="7"> Class 7</div>
-            <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="8"> Class 8</div>
-            <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="9"> Class 9</div>
-            <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="10"> Class 10</div>
-            <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="11"> Class 11</div>
-            <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="12"> Class 12</div>
-          </div>
-
-          <button id="updateTeacherBtn" onclick="window.saveUpdatedTeacherDetails()" class="btn-primary btn-green" style="margin-top: 16px;">
-            💾 Update Teacher Profile
-          </button>
-          <button type="button" onclick="window.deleteTeacherFromModal()" class="btn-primary btn-red" style="margin-top: 8px;">
-            🗑️ Delete Teacher Account
-          </button>
-        </div>
-
-               <div id="eTchPaneStatus" style="display:none;">
-          <!-- Graph Filters -->
-          <div class="class-chips-container" style="margin-bottom: 12px;">
-            <div class="class-chip active" onclick="window.setSingleTeacherGraphFilter('all', this, 'adminEdit')">All Time</div>
-            <div class="class-chip" onclick="window.setSingleTeacherGraphFilter('5days', this, 'adminEdit')">5 Days</div>
-            <div class="class-chip" onclick="window.setSingleTeacherGraphFilter('10days', this, 'adminEdit')">10 Days</div>
-            <div class="class-chip" onclick="window.setSingleTeacherGraphFilter('1month', this, 'adminEdit')">1 Month</div>
-            <div class="class-chip" onclick="window.setSingleTeacherGraphFilter('6month', this, 'adminEdit')">6 Months</div>
-            <div class="class-chip" onclick="window.setSingleTeacherGraphFilter('1year', this, 'adminEdit')">1 Year</div>
-          </div>
-          <div style="position: relative; height: 260px; width: 100%; background: rgba(0,0,0,0.02); border-radius: 16px; padding: 12px; border: 1px solid var(--border-color);">
-            <canvas id="eTchPointsLineChart"></canvas>
-          </div>
-          <div id="eTchGraphTapFeedback" style="margin-top: 12px; padding: 12px 14px; border-radius: 14px; background: rgba(124, 58, 237, 0.08); border: 1px dashed #7c3aed; font-size: 12px; font-weight: 800; color: var(--text-color); text-align: center;">
-            👆 Tap any point on the line graph above to inspect details!
-          </div>
-        </div>
-
+        <button id="updateTeacherBtn" onclick="window.saveUpdatedTeacherDetails()" class="btn-primary btn-green" style="margin-top: 16px;">
+          💾 Update Teacher Profile
+        </button>
+        <button type="button" onclick="window.deleteTeacherFromModal()" class="btn-primary btn-red" style="margin-top: 8px;">
+          🗑️ Delete Teacher Account
+        </button>
       </div>
     </div>
   </div>
-
 
   <!-- REGISTER NEW TEACHER MODAL (WITH PHOTO, PHONE & EMAIL) -->
   <div id="registerTeacherModal" class="modal-overlay">
@@ -4773,12 +4684,10 @@ Exact Output JSON Format Required:
       activeSelectTarget = null;
     };
 
-
-      
-       // Native Picker ko roko, sheet open karo (Active class dropdown ab native Custom sheet me aayega)
+    // Native Picker ko roko, lekin sheet tabhi kholo jab user proper CLICK kare (scroll karte waqt galti se nahi khulega)
     document.addEventListener("mousedown", function(e) {
       const selectTarget = e.target.closest("select");
-      if (selectTarget && !selectTarget.disabled) {
+      if (selectTarget && !selectTarget.disabled && selectTarget.id !== "teacherActiveSelect") {
         e.preventDefault();
         selectTarget.blur();
       }
@@ -4786,13 +4695,12 @@ Exact Output JSON Format Required:
 
     document.addEventListener("click", function(e) {
       const selectTarget = e.target.closest("select");
-      if (selectTarget && !selectTarget.disabled) {
+      if (selectTarget && !selectTarget.disabled && selectTarget.id !== "teacherActiveSelect") {
         e.preventDefault();
         selectTarget.blur();
         window.openCustomSelectSheet(selectTarget);
       }
     }, true);
-
 
 
     document.addEventListener("click", function (e) {
@@ -4892,25 +4800,28 @@ Exact Output JSON Format Required:
     import { getFirestore, doc, setDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
       
-        // 🛡️ SECURE INITIALIZATION: Wait for external firebase-config.js to load
-    if (!window.appFirebaseConfig) {
-       console.error("CRITICAL ERROR: firebase-config.js is missing or blocked!");
-       alert("Network Error: Could not connect to secure server. Please refresh the page.");
-    }
-    
-    const app = initializeApp(window.appFirebaseConfig);
+    // M.M ISLAMIC ENGLISH SCHOOL FIREBASE CREDENTIALS
+    const firebaseConfig = {
+      apiKey: "AIzaSyBHpbgoGs7HFQ3-1tBn9BpGT4YYDaKkZB8",
+      authDomain: "mm-islamic-erp.firebaseapp.com",
+      databaseURL: "https://mm-islamic-erp-default-rtdb.firebaseio.com",
+      projectId: "mm-islamic-erp",
+      storageBucket: "mm-islamic-erp.firebasestorage.app",
+      messagingSenderId: "547338314533",
+      appId: "1:547338314533:web:3973c2b36ef8b3b01170cc"
+    };
 
+    const app = initializeApp(firebaseConfig);
     try {
-      if (typeof initializeAppCheck === 'function' && window.appFirebaseConfig) {
-        // App Check reCAPTCHA key should also ideally be in the config file later, but hardcoded is okay for now as it's public
+      if (typeof initializeAppCheck === 'function') {
         initializeAppCheck(app, {
           provider: new ReCaptchaEnterpriseProvider('6LefZbUtAAAAADOa8KBfn1qywMly7Ky2-UlX6zxW'),
           isTokenAutoRefreshEnabled: true
         });
       }
-    } catch (err) { console.warn("App Check bypass/dev mode:", err); }
+    } catch (err) { console.warn("App Check bypass:", err); }
 
-    const db = getDatabase(app);
+       const db = getDatabase(app);
     const auth = getAuth(app);
     const fsDb = getFirestore(app);
 
@@ -5005,113 +4916,64 @@ Exact Output JSON Format Required:
             let dbSaveTimeout = null;
 
             let studentsListenerAttached = false;
-           window.currentStudentsUnsubscribe = null;
-      window.attachSmartStudentsListener = function(role, sAdmn, targetClass) {
-        if (window.currentStudentsUnsubscribe) {
-            window.currentStudentsUnsubscribe(); // Stop listening to previous data
-        }
+      window.attachSmartStudentsListener = function(role, sAdmn) {
+        if (studentsListenerAttached) return;
+        studentsListenerAttached = true;
 
+        // Agar Student login hai, toh poore school ko real-time listen mat karo! Sirf us student ka profile listen karo
         if (role === "student" && sAdmn) {
-          // 🛡️ STRICT SECURITY: Student device ONLY downloads their own profile.
-          window.currentStudentsUnsubscribe = onValue(ref(db, `students/${sAdmn}`), (snap) => {
-            inMemoryStudentsData = {};
-            if (snap.exists()) inMemoryStudentsData[sAdmn] = snap.val();
-          });
-        } else if (role === "teacher") {
-          // 🛡️ STRICT SECURITY & PERFORMANCE: Teacher ONLY downloads their assigned class.
-          const activeCls = targetClass || assignedClass;
-          if (!activeCls) return;
-          const q = query(ref(db, 'students'), orderByChild('class'), equalTo(activeCls));
-          
-          window.currentStudentsUnsubscribe = onValue(q, (snap) => {
-            inMemoryStudentsData = {};
-            if (snap.exists()) inMemoryStudentsData = snap.val();
-            refreshAllTeacherData();
-            window.loadTeacherLeaderboard();
-          });
-        } else if (role === "admin") {
-          // 🚀 PERFORMANCE: Admin listens to all students for global tracking, BUT users/passwords are blocked.
-          window.currentStudentsUnsubscribe = onValue(ref(db, 'students'), (snap) => {
+          onValue(ref(db, `students/${sAdmn}`), (snap) => {
             if (snap.exists()) {
-              inMemoryStudentsData = snap.val();
-              if(dbSaveTimeout) clearTimeout(dbSaveTimeout);
-              dbSaveTimeout = setTimeout(() => {
-                  localStorage.setItem("offlineDbCache_students", JSON.stringify(inMemoryStudentsData));
-              }, 5000); 
-              renderAdminStudentsDirectory(true);
-            } else {
-              inMemoryStudentsData = {};
+              inMemoryStudentsData[sAdmn] = snap.val();
             }
           });
+          return;
         }
+
+        // Sirf Admin ya Teacher ke liye students list load karo
+        onValue(ref(db, 'students'), (snap) => {
+          if (snap.exists()) {
+            inMemoryStudentsData = snap.val();
+            if(dbSaveTimeout) clearTimeout(dbSaveTimeout);
+            dbSaveTimeout = setTimeout(() => {
+                localStorage.setItem("offlineDbCache_students", JSON.stringify(inMemoryStudentsData));
+            }, 5000); 
+
+            if(currentRole === "admin") renderAdminStudentsDirectory(true);
+            if(currentRole === "teacher") { refreshAllTeacherData(); window.loadTeacherLeaderboard(); }
+          } else {
+            inMemoryStudentsData = {};
+          }
+        });
       };
 
 
-
-         // 🛡️ ADVANCED CACHE SECURITY & CLEANUP ENGINE
-      window.enforceStrictCacheSecurity = function() {
+      window.cleanExpiredTestCaches = function() {
         try {
             const now = Date.now();
-            const loggedUser = localStorage.getItem("loggedUser");
             const keysToRemove = [];
-
             for (let i = 0; i < localStorage.length; i++) {
                 const key = localStorage.key(i);
-                if (!key) continue;
-
-                // 1. Check Online Test Caches (Expiry, Corrupt & Illegal Access)
-                if (key.startsWith("test_cache_")) {
-                    try {
-                        const cacheItem = localStorage.getItem(key);
-                        if (!cacheItem) { keysToRemove.push(key); continue; }
-                        
+                if (key && key.startsWith("test_cache_")) {
+                    const cacheItem = localStorage.getItem(key);
+                    if (cacheItem) {
                         const parsed = JSON.parse(cacheItem);
-                        
-                        // Rule A: Test expire ho gaya toh turant delete
-                        if (parsed.expiryTime && now > parsed.expiryTime) {
-                            keysToRemove.push(key);
-                            continue;
-                        }
-                        
-                        // Rule B: Illegal Access (Agar current user ka cache nahi hai toh delete karega)
-                        if (loggedUser && !key.endsWith(`_${loggedUser}`)) {
-                            keysToRemove.push(key);
-                        }
-                    } catch(e) { 
-                        // Rule C: Corrupted JSON data hai toh app crash bachane ke liye delete karega
-                        keysToRemove.push(key); 
+                        if (parsed.expiryTime && now > parsed.expiryTime) keysToRemove.push(key);
                     }
                 }
-
-                // 2. Wipe sensitive offline data if nobody is logged in (Ghost Data)
-                if (!loggedUser && key.startsWith("offlineDbCache")) {
-                    keysToRemove.push(key);
-                }
             }
-
-            // Remove all illegal/expired keys safely without breaking loops
-            keysToRemove.forEach(k => {
-                localStorage.removeItem(k);
-                console.log(`🛡️ Security Sweeper: Removed illegal/expired cache [${k}]`);
-            });
-
+            keysToRemove.forEach(k => localStorage.removeItem(k));
         } catch(e) { console.error("Cache cleanup error:", e); }
-      };
+    };
 
-    // 🚀 INITIALIZE SECURITY ENGINE & OFFLINE DATA ON STARTUP
+    // 🚀 Load Offline Data if No Internet on Startup
     window.addEventListener('load', () => {
-      window.enforceStrictCacheSecurity(); // Sabse pehle safai
-      
+      window.cleanExpiredTestCaches();
       if (!navigator.onLine) {
         const cachedStudents = localStorage.getItem("offlineDbCache_students");
         if (cachedStudents) {
-          try {
-            inMemoryStudentsData = JSON.parse(cachedStudents);
-            window.showCustomAlert("⚡ You are currently offline. Working from local backup. Data will auto-sync when online.");
-          } catch(err) {
-            // Agar offline file kharab hai toh use use mat karo
-            localStorage.removeItem("offlineDbCache_students");
-          }
+          inMemoryStudentsData = JSON.parse(cachedStudents);
+          window.showCustomAlert("⚡ You are currently offline. Working from local backup. Attendance will auto-sync when online.");
         }
       }
     });
@@ -5926,64 +5788,42 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
     };
 
     // 1. Standard Login (Supports User ID / Admission No OR Email + Password)
-      addSafeListener("loginBtn", "click", () => {
+    addSafeListener("loginBtn", "click", () => {
       const btn = document.getElementById("loginBtn");
-      const errorMsg = document.getElementById("loginError");
-      
       runWithBtnSpinner(btn, "PORTAL LOGIN", async () => {
         const rawInput = document.getElementById("loginUsername").value.trim();
         const p = document.getElementById("loginPassword").value.trim();
-        
-        if(!rawInput || !p) { 
-            errorMsg.style.display = "block";
-            errorMsg.innerText = "Please enter both User ID and Password.";
-            return; 
+        if(!rawInput || !p) { alert("Please enter both Username/Email and Password."); return; }
+
+        let targetUserId = rawInput;
+        if (rawInput.includes("@")) {
+          const resolved = await window.resolveUserIdByEmail(rawInput);
+          if (!resolved) {
+            document.getElementById("loginError").style.display = "block";
+            document.getElementById("loginError").innerText = "No active account linked with this email.";
+            return;
+          }
+          targetUserId = resolved;
         }
 
-        try {
-            let targetUserId = rawInput;
-            
-            // Step 1: If input is email, resolve it to User ID first
-            if (rawInput.includes("@")) {
-              const resolved = await window.resolveUserIdByEmail(rawInput);
-              if (!resolved) {
-                errorMsg.style.display = "block";
-                errorMsg.innerText = "No active account linked with this email address.";
-                return;
-              }
-              targetUserId = resolved;
-            }
-
-            // Step 2: Fetch the actual user data from Firestore/Realtime DB
-            const uData = await safeDataFetch(`users/${targetUserId}`);
-            
-            // Step 3: Validate Password securely
-            if(uData && uData.password === p) {
-              errorMsg.style.display = "none";
-              window.completePortalLoginSession(targetUserId, uData);
-            } else {
-              errorMsg.style.display = "block";
-              errorMsg.innerText = "Invalid User ID or Password. Please check and try again.";
-            }
-        } catch (error) {
-            console.error("Login verification failed:", error);
-            errorMsg.style.display = "block";
-            errorMsg.innerText = "Connection error. Please check your internet and try again.";
+        const uData = await safeDataFetch(`users/${targetUserId}`);
+        if(uData && uData.password === p) {
+          document.getElementById("loginError").style.display = "none";
+          window.completePortalLoginSession(targetUserId, uData);
+        } else {
+          document.getElementById("loginError").style.display = "block";
+          document.getElementById("loginError").innerText = "Invalid credentials. Please try again.";
         }
       });
     });
 
-
-
-      
-     // 2. Sign in with Google (Only pre-saved active emails allowed!)
+    // 2. Sign in with Google (Only pre-saved active emails allowed!)
     addSafeListener("googleLoginBtn", "click", () => {
       const btn = document.getElementById("googleLoginBtn");
       const originalHtml = btn.innerHTML;
       runWithBtnSpinner(btn, originalHtml, async () => {
         try {
           const provider = new GoogleAuthProvider();
-          // Prompt explicitly ask karega, popup error bypass karne ke liye
           provider.setCustomParameters({ prompt: "select_account" });
           const result = await signInWithPopup(auth, provider);
           const googleEmail = result.user ? result.user.email : null;
@@ -5997,7 +5837,7 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
           if (!resolvedUserId) {
             await auth.signOut().catch(() => {});
             await window.ensureFirebaseAuth();
-            window.showCustomAlert("Only active users allowed to sign in with Google. If you are authorized, contact Admin.");
+            window.showCustomAlert("Only active users allowed to sign in with Google");
             return;
           }
 
@@ -6005,48 +5845,42 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
           if (!uData) {
             await auth.signOut().catch(() => {});
             await window.ensureFirebaseAuth();
-            window.showCustomAlert("Only active users allowed to sign in with Google. If you are authorized, contact Admin.");
+            window.showCustomAlert("Only active users allowed to sign in with Google");
             return;
           }
 
           window.completePortalLoginSession(resolvedUserId, uData);
         } catch (err) {
-          // Silent catch for user cancellation, detailed alert for configuration issues
           if (err && err.code !== "auth/popup-closed-by-user" && err.code !== "auth/cancelled-popup-request") {
-             console.error("Google Auth Error:", err);
-             window.showCustomAlert("Google Sign-In is not configured correctly on this domain.\n\nEnsure this website URL is added to your Firebase Authorized Domains list.");
+            window.showCustomAlert("Google Sign-In failed. Please ensure Google Sign-In is enabled in Firebase Authentication.");
           }
         }
       });
     });
 
 
-             addSafeListener("logoutBtn", "click", async () => { 
-      window.showCustomAlert("⚠️ Logging out and wiping all local device data...");
-
-      // 1. Clear In-Memory Sensitive Variables
+          addSafeListener("logoutBtn", "click", async () => { 
+      // 1. In-Memory Variables & Firestore Media Cache Clear
       inMemoryStudentsData = {};
       fullDbCache = {};
       if (typeof cachedUsersMap !== "undefined") cachedUsersMap = {};
       if (typeof firestoreMediaCache !== "undefined") {
         Object.keys(firestoreMediaCache).forEach(k => delete firestoreMediaCache[k]);
       }
-      
-      // Stop all active Firebase Listeners (Very Important)
-      if (window.currentStudentsUnsubscribe) window.currentStudentsUnsubscribe();
 
-      // 2. Firebase Sign-Out
+      // 2. Firebase Auth Session & Sign-Out Clear
       try {
         if (typeof auth !== "undefined" && auth.currentUser) {
+          await remove(ref(db, `auth_sessions/${auth.currentUser.uid}`)).catch(() => {});
           await auth.signOut().catch(() => {});
         }
       } catch (e) {}
 
-      // 3. WIPE 1: LocalStorage & SessionStorage completely
+      // 3. Complete LocalStorage & SessionStorage Wipe (Offline DB cache, Test cache, Login data sab saaf)
       localStorage.clear();
       sessionStorage.clear();
 
-      // 4. WIPE 2: Browser App Caches & Service Worker Data
+      // 4. Browser Cache Storage & Service Worker Cache Clear (Await ke saath taaki delete hone se pehle reload na ho)
       if ('caches' in window) {
         try {
           const names = await caches.keys();
@@ -6054,33 +5888,18 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
         } catch (e) {}
       }
 
-      // 5. WIPE 3: Erase ALL IndexedDB Databases (Firebase Auth & Firestore Offline caches hide here!)
-      if ('indexedDB' in window) {
-        try {
-           const dbs = await window.indexedDB.databases();
-           dbs.forEach(db => { window.indexedDB.deleteDatabase(db.name); });
-        } catch (e) {
-           // Fallback for older browsers
-           window.indexedDB.deleteDatabase("firebaseLocalStorageDb");
-           window.indexedDB.deleteDatabase("firebase-app-check-database");
-        }
-      }
-
-      // 6. Hard Refresh the entire app to reset memory completely
-      setTimeout(() => {
-          window.location.href = window.location.pathname + "?wipe=true";
-      }, 800);
+      // 5. Fresh Reload from Server
+      window.location.replace(window.location.pathname);
     });
 
 
 
-         window.changeTeacherActiveClass = function(newClass) {
+     window.changeTeacherActiveClass = function(newClass) {
       assignedClass = newClass;
       document.getElementById("classBadgeContainer").innerText = `Class: ${newClass}`;
-      window.attachSmartStudentsListener("teacher", null, newClass); // Smart Re-fetch for new class
       if (typeof window.refreshTeacherDashboardData === 'function') window.refreshTeacherDashboardData();
+      refreshAllTeacherData();
     };
-
 
                       function renderDashboardForRole(role, aClass, sAdmn) {
       currentRole = role;
@@ -6296,17 +6115,19 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
 
 
 
-       async function renderAdminStudentsDirectory(skipNetworkFetch = false) {
+    async function renderAdminStudentsDirectory(skipNetworkFetch = false) {
       const container = document.getElementById("adminStudentsDirectoryContainer");
       if(!container) return;
 
-      // 🛡️ SECURITY FIX: Users (Passwords) node ka bulk download hata diya gaya hai!
+      if (!skipNetworkFetch && Object.keys(cachedUsersMap).length === 0) {
+        cachedUsersMap = await safeDataFetch("users") || {};
+      }
       const students = getLiveStudents();
       const searchInput = document.getElementById("adminStudentSearchInput");
       const query = searchInput ? searchInput.value.toLowerCase().trim() : "";
 
       if(students.length === 0) {
-        container.innerHTML = `<p style="font-size:12px; color:var(--text-muted); text-align:center;">No students registered yet.</p>`;
+        container.innerHTML = `<p style="font-size:12px; color:var(--text-muted);">No students registered yet.</p>`;
         document.getElementById("adminStudentCountText").innerText = "0"; return;
       }
 
@@ -6325,6 +6146,11 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
           const bMatch = bName.includes(query) || bAdmn.includes(query);
           if (aMatch && !bMatch) return -1;
           if (!aMatch && bMatch) return 1;
+
+          const aStarts = aName.startsWith(query) || aAdmn === query;
+          const bStarts = bName.startsWith(query) || bAdmn === query;
+          if (aStarts && !bStarts) return -1;
+          if (!aStarts && bStarts) return 1;
           return 0;
         });
       }
@@ -6333,26 +6159,24 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       document.getElementById("adminStudentCountText").innerText = count;
 
       if(count === 0) {
-        container.innerHTML = `<p style="font-size:12px; color:var(--text-muted); text-align:center;">No students found in ${selectedAdminClassFilter}.</p>`;
+        container.innerHTML = `<p style="font-size:12px; color:var(--text-muted);">No students found in ${selectedAdminClassFilter}.</p>`;
         return;
       }
 
-      // 🚀 PERFORMANCE FIX: Batch HTML Rendering (Removes UI Freezing)
+      // Single-pass HTML batch render (10x faster than appendChild calls!)
       let cardsHtml = "";
       filteredList.forEach(s => {
-        // Passwords ab list mein show nahi honge, sirf Edit Profile Modal kholne par dikhenge!
-        const pass = "🔒 Hidden"; 
+        const pass = cachedUsersMap[s.admn] ? cachedUsersMap[s.admn].password : "MM";
         const isMatched = query !== "" && ((s.name || "").toLowerCase().includes(query) || String(s.admn || "").toLowerCase().includes(query));
         const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(s.name || 'S')}&background=0288d1&color=fff&bold=true`;
         const avatarSrc = (s.photo && !s.photo.includes("via.placeholder.com")) ? s.photo : defaultAvatar;
         const matchStyle = isMatched ? "border: 2px solid #0288d1; background: rgba(2, 136, 209, 0.08);" : "";
         const matchBadge = isMatched ? '<span style="font-size:10px; background:#0288d1; color:white; padding:2px 6px; border-radius:6px; margin-left:4px;">Match</span>' : '';
 
-        cardsHtml += `<div class="student-grid-card" style="${matchStyle}" onclick="window.openStudentProfileModal('${s.admn}')"><img src="${avatarSrc}" loading="lazy" onerror="this.src='${defaultAvatar}'" class="student-avatar" alt="Avatar"><div style="flex:1;"><div style="font-size:13px; font-weight:800;">${s.name} ${matchBadge}</div><div style="font-size:11px; color:var(--text-muted);">ID: ${s.admn} | Class: ${s.class} | Pass: <b style="color:#ef4444;">${pass}</b></div><div style="font-size:10px; font-weight:700; color:#0288d1; margin-top:2px;">Phone: ${s.phone || '-'} | PTS: ${s.points || 0}</div></div><div style="font-size:16px;">✏️</div></div>`;
+        cardsHtml += `<div class="student-grid-card" style="${matchStyle}" onclick="window.openStudentProfileModal('${s.admn}')"><img src="${avatarSrc}" loading="lazy" onerror="this.src='${defaultAvatar}'" class="student-avatar" alt="Avatar"><div style="flex:1;"><div style="font-size:13px; font-weight:800;">${s.name} ${matchBadge}</div><div style="font-size:11px; color:var(--text-muted);">ID: ${s.admn} | Class: ${s.class} | Pass: <b>${pass}</b></div><div style="font-size:10px; font-weight:700; color:#0288d1; margin-top:2px;">Phone: ${s.phone || '-'} | PTS: ${s.points || 0}</div></div><div style="font-size:16px;">✏️</div></div>`;
       });
       container.innerHTML = cardsHtml;
     }
-
 
   
 
@@ -7125,53 +6949,32 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       });
     });
 
-        async function loadTeacherTodayAttendance() {
+    async function loadTeacherTodayAttendance() {
       const todayStr = getTodayFormattedDate();
       const currentMonth = getAutoMonthName();
       const todayNum = new Date().getDate();
-      
-      const dateTextEl = document.getElementById("todayAttendanceDateText");
-      if (dateTextEl) dateTextEl.innerText = todayStr;
+      document.getElementById("todayAttendanceDateText").innerText = todayStr;
 
-      const savedBox = document.getElementById("todayAttSavedStatusBox");
-      const holidayBox = document.getElementById("todayAttHolidayStatusBox");
-      if(savedBox) savedBox.style.display = "none";
-      if(holidayBox) holidayBox.style.display = "none";
-
-      const tbody = document.getElementById("todayAttendanceTableBody");
-      if (!tbody) return;
-      
-      // 1. CLEAR PREVIOUS DATA FIRST (Fixes the duplicate list bug)
-      tbody.innerHTML = "";
+      document.getElementById("todayAttSavedStatusBox").style.display = "none";
+      document.getElementById("todayAttHolidayStatusBox").style.display = "none";
 
       const students = getLiveStudents().filter(s => cleanClassStr(s.class) === cleanClassStr(assignedClass));
-      
-      if (students.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="2" style="text-align:center; color:var(--text-muted); padding:14px;">No students found in Class ${assignedClass}</td></tr>`;
-          return;
-      }
+      const tbody = document.getElementById("todayAttendanceTableBody");
+      tbody.innerHTML = "";
 
-      const allAtt = await safeDataFetch("attendance") || {};
+      const allAtt = await safeDataFetch("attendance");
       let isAnyMarked = false, isHoliday = false;
-      
-      // 2. BATCH HTML RENDERING (App ko hang hone se bachayega)
-      let tableHtml = "";
 
       students.forEach(st => {
-        const val = allAtt[st.admn] && allAtt[st.admn][currentMonth] ? allAtt[st.admn][currentMonth][`day_${todayNum}`] : undefined;
+        const val = allAtt && allAtt[st.admn] && allAtt[st.admn][currentMonth] ? allAtt[st.admn][currentMonth][`day_${todayNum}`] : undefined;
         if(val !== undefined) isAnyMarked = true;
         if(val === "H") isHoliday = true;
 
-        tableHtml += `<tr><td style="text-align:left; padding-left:10px; font-weight:700;">${st.name}</td><td><input type="checkbox" class="t-today-att-chk" data-admn="${st.admn}" ${val === true ? 'checked' : ''}></td></tr>`;
+        tbody.innerHTML += `<tr><td style="text-align:left; padding-left:10px; font-weight:700;">${st.name}</td><td><input type="checkbox" class="t-today-att-chk" data-admn="${st.admn}" ${val === true ? 'checked' : ''}></td></tr>`;
       });
-      
-      // Update DOM perfectly once
-      tbody.innerHTML = tableHtml;
-
-      if(isHoliday && holidayBox) holidayBox.style.display = "block";
-      else if(isAnyMarked && savedBox) savedBox.style.display = "block";
+      if(isHoliday) document.getElementById("todayAttHolidayStatusBox").style.display = "block";
+      else if(isAnyMarked) document.getElementById("todayAttSavedStatusBox").style.display = "block";
     }
-
 
     addSafeListener("saveTodayAttendanceBtn", "click", () => {
       const btn = document.getElementById("saveTodayAttendanceBtn");
@@ -9236,20 +9039,12 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       if(window.croppedPhotosMap) delete window.croppedPhotosMap["editTeacherPhotoInput"];
 
       const classArr = String(tObj.assignedClass || "1").split(",").map(s => s.trim());
-
-                  document.querySelectorAll(".t-edit-chk").forEach(chk => {
+      document.querySelectorAll(".t-edit-chk").forEach(chk => {
         chk.checked = classArr.includes(chk.value);
       });
 
-      // 🔥 AUTO-CLEANUP: Purane Duplicate Modals ko hata dega taaki Tabs perfectly chal sakein
-      document.querySelectorAll('.modal-overlay').forEach(m => {
-          if(document.querySelectorAll('#' + m.id).length > 1) m.remove();
-      });
-
-      if(window.switchEditTeacherTab) window.switchEditTeacherTab('info');
       window.openModal("editTeacherModal");
     };
-
 
     window.saveUpdatedTeacherDetails = function() {
       const btn = document.getElementById("updateTeacherBtn");
@@ -11988,7 +11783,17 @@ if (perms.photo && window.croppedPhotosMap["sUpdatePhotoInput"]) {
         await window.loadTeacherMyProfileData();
       };
 
-  
+      window.switchTeacherMyProfileSubTab = function(sub) {
+        document.getElementById("tProfSubTabInfoBtn").classList.toggle("active", sub === "info");
+        document.getElementById("tProfSubTabStatusBtn").classList.toggle("active", sub === "status");
+        document.getElementById("tProfSubPaneInfo").style.display = sub === "info" ? "block" : "none";
+        document.getElementById("tProfSubPaneStatus").style.display = sub === "status" ? "block" : "none";
+
+        if (sub === "status") {
+          window.renderTeacherInteractiveLineGraph();
+        }
+      };
+
       window.loadTeacherMyProfileData = async function() {
         const loggedUser = localStorage.getItem("loggedUser");
         if (!loggedUser) return;
@@ -12278,396 +12083,6 @@ if (perms.photo && window.croppedPhotosMap["sUpdatePhotoInput"]) {
         document.getElementById("teacherGraphTapFeedback").innerHTML = `<div style="color:#7c3aed; font-weight:900;">${trendMsg}</div>`;
       };
 
-
-      // =========================================================
-      // 📈 MENTORS PROGRESSION MULTI-LINE GRAPH ENGINE (Global)
-      // =========================================================
-      let mentorsMultiLineChart = null;
-      let currentMentorsGraphFilter_admin = "all";
-      let currentMentorsGraphFilter_teacher = "all";
-
-      window.switchMentorsStandingTab = function(tab, role) {
-        const prefix = role === "admin" ? "adminMs" : "tchMs";
-        document.getElementById(`${prefix}TabLbBtn`).classList.toggle("active", tab === "lb");
-        document.getElementById(`${prefix}TabProgBtn`).classList.toggle("active", tab === "prog");
-        document.getElementById(`${prefix}PaneLb`).style.display = tab === "lb" ? "block" : "none";
-        document.getElementById(`${prefix}PaneProg`).style.display = tab === "prog" ? "block" : "none";
-
-        if (tab === "prog") {
-          const canvasId = role === "admin" ? "adminMentorsProgressionChart" : "teacherMentorsProgressionChart";
-          const feedbackId = role === "admin" ? "adminMentorsGraphFeedback" : "teacherMentorsGraphFeedback";
-          const filter = role === "admin" ? currentMentorsGraphFilter_admin : currentMentorsGraphFilter_teacher;
-          window.renderMentorsProgressionGraph(canvasId, feedbackId, filter);
-        }
-      };
-
-      window.setMentorsGraphFilter = function(filter, btnEl, role) {
-          if(role === 'admin') currentMentorsGraphFilter_admin = filter;
-          else currentMentorsGraphFilter_teacher = filter;
-
-          const container = btnEl.parentElement;
-          container.querySelectorAll('.class-chip').forEach(c => c.classList.remove('active'));
-          btnEl.classList.add('active');
-
-          const canvasId = role === "admin" ? "adminMentorsProgressionChart" : "teacherMentorsProgressionChart";
-          const feedbackId = role === "admin" ? "adminMentorsGraphFeedback" : "teacherMentorsGraphFeedback";
-          window.renderMentorsProgressionGraph(canvasId, feedbackId, filter);
-      };
-
-      window.renderMentorsProgressionGraph = async function(canvasId, feedbackId, timeFilter = "all") {
-        const canvas = document.getElementById(canvasId);
-        if (!canvas) return;
-
-        const allTeachers = await safeDataFetch("teachers") || {};
-        const allLogsObj = await safeDataFetch("teacher_points_logs") || {};
-        const dailyClaimsObj = await safeDataFetch("teacher_daily_claims") || {};
-
-        let events = [];
-        Object.values(allLogsObj).forEach(lg => {
-            if(lg && lg.username) {
-                events.push({ time: Number(lg.id), username: lg.username, delta: parseInt(lg.points)||0, desc: lg.reason, dateStr: lg.date });
-            }
-        });
-
-        Object.entries(dailyClaimsObj).forEach(([uname, claims]) => {
-            Object.keys(claims).forEach(k => {
-                const parts = k.split("_");
-                if(parts.length === 3) {
-                    const t = new Date(parts[0], parts[1]-1, parts[2]).getTime();
-                    events.push({ time: t, username: uname, delta: 50, desc: "Daily Reward", dateStr: `${parts[2]}/${parts[1]}/${parts[0]}` });
-                }
-            });
-        });
-
-        events.sort((a,b) => a.time - b.time);
-
-        let dateSet = new Set();
-        events.forEach(e => dateSet.add(e.dateStr));
-        let labels = Array.from(dateSet);
-        if(labels.length === 0) labels = [getTodayFormattedDate()];
-
-        let runningTotals = {};
-        let datasetsMap = {};
-        const theme = window.getChartThemeColors();
-        const colors = theme.palette;
-        let cIdx = 0;
-
-        Object.keys(allTeachers).forEach(uname => {
-            runningTotals[uname] = 0;
-            datasetsMap[uname] = {
-                label: allTeachers[uname].name || uname,
-                data: new Array(labels.length).fill(0),
-                borderColor: colors[cIdx % colors.length],
-                backgroundColor: 'transparent',
-                borderWidth: 3,
-                tension: 0.38,
-                pointRadius: 0, // 👈 Hide Dots initially
-                pointHoverRadius: 8, // 👈 Show on Hover
-                pointHitRadius: 30, // 👈 HUGE Touch interaction area for mobile!
-                pointBackgroundColor: colors[cIdx % colors.length],
-                pointBorderColor: document.body.classList.contains("dark-mode") ? "#ffffff" : "#ffffff",
-                pointBorderWidth: 2,
-                _username: uname
-            };
-            cIdx++;
-        });
-
-        let eIdx = 0;
-        for (let i = 0; i < labels.length; i++) {
-            const currentLabel = labels[i];
-            while(eIdx < events.length && events[eIdx].dateStr === currentLabel) {
-                const ev = events[eIdx];
-                if(runningTotals[ev.username] !== undefined) {
-                    runningTotals[ev.username] += ev.delta;
-                }
-                eIdx++;
-            }
-            Object.keys(datasetsMap).forEach(uname => {
-                datasetsMap[uname].data[i] = runningTotals[uname];
-            });
-        }
-
-        Object.keys(allTeachers).forEach(uname => {
-            if(datasetsMap[uname]) {
-                const actualPoints = parseInt(allTeachers[uname].points)||0;
-                if(datasetsMap[uname].data[labels.length-1] !== actualPoints) {
-                    datasetsMap[uname].data[labels.length-1] = actualPoints;
-                }
-            }
-        });
-
-        // --- FILTERING LOGIC ---
-        let cutoffTime = 0;
-        const now = Date.now();
-        if(timeFilter === '5days') cutoffTime = now - (5 * 24 * 60 * 60 * 1000);
-        else if(timeFilter === '10days') cutoffTime = now - (10 * 24 * 60 * 60 * 1000);
-        else if(timeFilter === '1month') cutoffTime = now - (30 * 24 * 60 * 60 * 1000);
-        else if(timeFilter === '6month') cutoffTime = now - (180 * 24 * 60 * 60 * 1000);
-        else if(timeFilter === '1year') cutoffTime = now - (365 * 24 * 60 * 60 * 1000);
-
-        let filteredLabels = [];
-        let labelIndices = [];
-        labels.forEach((lbl, idx) => {
-             const parts = lbl.split('/');
-             if(parts.length === 3) {
-                 const t = new Date(parts[2], parts[1]-1, parts[0]).getTime();
-                 if(t >= cutoffTime) {
-                     filteredLabels.push(lbl);
-                     labelIndices.push(idx);
-                 }
-             }
-        });
-
-        if (filteredLabels.length === 0 && labels.length > 0 && timeFilter !== 'all') {
-             filteredLabels = [labels[labels.length - 1]];
-             labelIndices = [labels.length - 1];
-        } else if (labels.length === 0) {
-             filteredLabels = [getTodayFormattedDate()];
-             labelIndices = [0];
-        }
-
-        const datasets = Object.values(datasetsMap).map(ds => {
-             return { ...ds, data: labelIndices.map(i => ds.data[i] || 0) };
-        });
-
-        if(window['multiLineChart_' + canvasId]) window['multiLineChart_' + canvasId].destroy();
-
-        const isDark = document.body.classList.contains("dark-mode");
-        window['multiLineChart_' + canvasId] = new Chart(canvas, {
-            type: 'line',
-            data: { labels: filteredLabels, datasets: datasets },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: { mode: 'nearest', intersect: true },
-                onClick: (evt, activeEls) => {
-                    if (activeEls && activeEls.length > 0) {
-                        const idx = activeEls[0].index;
-                        const dsIdx = activeEls[0].datasetIndex;
-                        const ds = datasets[dsIdx];
-                        const ptVal = ds.data[idx];
-                        
-                        let rankArr = [];
-                        datasets.forEach(d => rankArr.push({ name: d.label, val: d.data[idx] }));
-                        rankArr.sort((a,b) => b.val - a.val);
-                        const rank = rankArr.findIndex(r => r.name === ds.label) + 1;
-
-                        document.getElementById(feedbackId).innerHTML = `
-                            <div style="color:${ds.borderColor}; font-size:14px; font-weight:900;">${ds.label}</div>
-                            <div style="font-size:12px; color:var(--text-color); font-weight:800;">Total Points: ${ptVal} PTS | 🏆 Rank: #${rank}</div>
-                            <div style="font-size:10px; color:var(--text-muted); margin-top:2px;">Timeline: ${filteredLabels[idx]}</div>
-                        `;
-                    }
-                },
-                plugins: { legend: { display: false }, tooltip: { enabled: true } },
-                scales: {
-                    x: { ticks: { color: isDark ? "#cbd5e1" : "#475569", font: { weight: "700", size: 10 }, maxTicksLimit: 7 }, grid: { color: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)" } },
-                    y: { beginAtZero: true, ticks: { color: isDark ? "#cbd5e1" : "#475569", font: { weight: "700", size: 10 } }, grid: { color: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)" } }
-                }
-            }
-        });
-      };
-
-
-      // =========================================================
-      // 👤 INDIVIDUAL TEACHER SINGLE LINE GRAPH (WITH FILTERS)
-      // =========================================================
-      window.setSingleTeacherGraphFilter = function(filter, btnEl, mode) {
-        const container = btnEl.parentElement;
-        container.querySelectorAll('.class-chip').forEach(c => c.classList.remove('active'));
-        btnEl.classList.add('active');
-
-        if (mode === "teacherMy") {
-            const loggedUser = localStorage.getItem("loggedUser");
-            window.renderGenericSingleTeacherGraph(loggedUser, "teacherPointsLineChart", "teacherGraphTapFeedback", filter);
-        } else {
-            const username = document.getElementById("editTeacherOldUsername").value;
-            window.renderGenericSingleTeacherGraph(username, "eTchPointsLineChart", "eTchGraphTapFeedback", filter);
-        }
-      };
-
-      window.renderGenericSingleTeacherGraph = async function(username, canvasId, feedbackId, timeFilter = "all") {
-        const canvas = document.getElementById(canvasId);
-        if (!username || !canvas) return;
-
-        const tObj = await safeDataFetch(`teachers/${username}`) || {};
-        const currentPts = parseInt(tObj.points) || 0;
-        const allLogsObj = await safeDataFetch("teacher_points_logs") || {};
-        const dailyClaimsObj = await safeDataFetch(`teacher_daily_claims/${username}`) || {};
-
-        let series = [{ label: "Start", total: 0, delta: 0, reason: "Account Initialized", date: tObj.regDate || "Initial", timestamp: 0 }];
-
-        let myLogs = Object.values(allLogsObj).filter(l => l && l.username === username);
-        
-        myLogs.forEach((lg) => {
-            series.push({
-              label: lg.date ? lg.date.slice(0, 5) : `#`,
-              total: parseInt(lg.totalPoints) || 0,
-              delta: parseInt(lg.points) || 0,
-              reason: lg.reason || "Admin Point Update",
-              date: lg.date || "-",
-              timestamp: Number(lg.id)
-            });
-        });
-
-        const claimKeys = Object.keys(dailyClaimsObj);
-        claimKeys.forEach(k => {
-            const parts = k.split("_");
-            if(parts.length === 3) {
-                 const t = new Date(parts[0], parts[1]-1, parts[2]).getTime();
-                 const lbl = `${parts[2]}/${parts[1]}`;
-                 series.push({ label: lbl, total: 0, delta: 50, reason: "Daily Reward Claimed 🎁", date: lbl, timestamp: t });
-            }
-        });
-
-        series.sort((a, b) => a.timestamp - b.timestamp);
-        
-        let running = 0;
-        series.forEach(s => {
-            if(s.reason.includes("Daily Reward")) {
-                 running += 50;
-                 s.total = running;
-            } else {
-                 running = s.total;
-            }
-        });
-
-        if (series.length > 0 && series[series.length - 1].total !== currentPts) {
-            series.push({ label: "Current", total: currentPts, delta: currentPts - running, reason: "Points Synchronization", date: getTodayFormattedDate(), timestamp: Date.now() });
-        }
-
-        let cutoffTime = 0;
-        const now = Date.now();
-        if(timeFilter === '5days') cutoffTime = now - (5 * 24 * 60 * 60 * 1000);
-        else if(timeFilter === '10days') cutoffTime = now - (10 * 24 * 60 * 60 * 1000);
-        else if(timeFilter === '1month') cutoffTime = now - (30 * 24 * 60 * 60 * 1000);
-        else if(timeFilter === '6month') cutoffTime = now - (180 * 24 * 60 * 60 * 1000);
-        else if(timeFilter === '1year') cutoffTime = now - (365 * 24 * 60 * 60 * 1000);
-
-        let plotSeries = series.filter(s => s.timestamp >= cutoffTime);
-        if(plotSeries.length === 0 && series.length > 0 && timeFilter !== 'all') {
-             plotSeries = [series[series.length - 1]];
-        } else if (plotSeries.length === 0) {
-             plotSeries = [series[0]];
-        }
-
-        const isDark = document.body.classList.contains("dark-mode");
-        const ctx = canvas.getContext("2d");
-        const grad = ctx.createLinearGradient(0, 0, 0, 220);
-        grad.addColorStop(0, isDark ? "rgba(168, 85, 247, 0.45)" : "rgba(124, 58, 237, 0.32)");
-        grad.addColorStop(1, "rgba(124, 58, 237, 0.0)");
-        const pointColors = plotSeries.map(p => p.delta < 0 ? "#ef4444" : "#10b981");
-
-        if (window["singleLineChart_" + canvasId]) window["singleLineChart_" + canvasId].destroy();
-        window["singleLineChart_" + canvasId] = new Chart(canvas, {
-          type: "line",
-          data: {
-            labels: plotSeries.map(p => p.label),
-            datasets: [{
-              label: "Total Points",
-              data: plotSeries.map(p => p.total),
-              borderColor: isDark ? "#c084fc" : "#7c3aed",
-              backgroundColor: grad,
-              borderWidth: 3,
-              fill: true,
-              tension: 0.38,
-              pointRadius: 0, // 👈 Hide Dots initially
-              pointHoverRadius: 8, // 👈 Show on Hover
-              pointHitRadius: 30, // 👈 Easy Touch Radius
-              pointBackgroundColor: pointColors,
-              pointBorderColor: isDark ? "#ffffff" : "#1e1b4b",
-              pointBorderWidth: 2
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: { mode: 'nearest', intersect: true },
-            onClick: (evt, activeEls) => {
-              if (activeEls && activeEls.length > 0) {
-                const idx = activeEls[0].index;
-                const pt = plotSeries[idx];
-                if (pt) {
-                  const sign = pt.delta >= 0 ? `+${pt.delta}` : `${pt.delta}`;
-                  const color = pt.delta < 0 ? "#ef4444" : "#10b981";
-                  document.getElementById(feedbackId).innerHTML = `
-                    <div style="font-size:13px; font-weight:900; color:${color};">${pt.date} — ${sign} PTS (Total: ${pt.total} PTS)</div>
-                    <div style="font-size:11px; font-weight:700; color:var(--text-muted); margin-top:3px;">📌 Reason: ${pt.reason}</div>
-                  `;
-                }
-              }
-            },
-            plugins: { legend: { display: false }, tooltip: { enabled: true } },
-            scales: {
-              x: { ticks: { color: isDark ? "#cbd5e1" : "#475569", font: { weight: "700", size: 10 }, maxTicksLimit: 7 }, grid: { color: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)" } },
-              y: { beginAtZero: true, ticks: { color: isDark ? "#cbd5e1" : "#475569", font: { weight: "700", size: 10 } }, grid: { color: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)" } }
-            }
-          }
-        });
-      };
-
-      // Reset tabs safely for Admin's Teacher Edit Modal
-         // Universal Height Auto-Adjust for All Animated Modals
-      window.syncProfileModalHeight = function() {
-          document.querySelectorAll(".prof-slide-container").forEach(container => {
-              const activePane = container.querySelector(".prof-slide-pane.active");
-              if (activePane) {
-                  container.style.height = (activePane.scrollHeight + 40) + "px";
-              }
-          });
-      };
-
-      // Teacher Tab Dashboard Logic
-      window.switchTeacherMyProfileSubTab = function(sub) {
-        document.getElementById("tProfSubTabInfoBtn").classList.toggle("active", sub === "info");
-        document.getElementById("tProfSubTabStatusBtn").classList.toggle("active", sub === "status");
-        
-        const infoPane = document.getElementById("tProfSubPaneInfo");
-        const statusPane = document.getElementById("tProfSubPaneStatus");
-        
-        if (infoPane && statusPane) {
-            [infoPane, statusPane].forEach(p => p.className = "prof-slide-pane");
-
-            if (sub === "info") {
-                infoPane.classList.add("active");
-                statusPane.classList.add("hidden-right");
-                setTimeout(() => window.syncProfileModalHeight(), 150);
-            } else if (sub === "status") {
-                infoPane.classList.add("hidden-left");
-                statusPane.classList.add("active");
-                window.renderTeacherInteractiveLineGraph();
-                setTimeout(() => window.syncProfileModalHeight(), 150);
-            }
-        }
-      };
-
-      // Admin Modal Logic
-      window.switchEditTeacherTab = function(tab) {
-        document.getElementById("eTchTabInfoBtn").classList.toggle("active", tab === "info");
-        document.getElementById("eTchTabStatusBtn").classList.toggle("active", tab === "status");
-        
-        const infoPane = document.getElementById("eTchPaneInfo");
-        const statusPane = document.getElementById("eTchPaneStatus");
-
-        if (infoPane && statusPane) {
-            [infoPane, statusPane].forEach(p => p.className = "prof-slide-pane");
-
-            if (tab === "info") {
-                infoPane.classList.add("active");
-                statusPane.classList.add("hidden-right");
-                setTimeout(() => window.syncProfileModalHeight(), 150);
-            } else if (tab === "status") {
-                infoPane.classList.add("hidden-left");
-                statusPane.classList.add("active");
-                const username = document.getElementById("editTeacherOldUsername").value;
-                window.renderGenericSingleTeacherGraph(username, "eTchPointsLineChart", "eTchGraphTapFeedback", "all");
-                setTimeout(() => window.syncProfileModalHeight(), 150);
-            }
-        }
-      };
-
-
-      
     </script>
 </body>
 </html>
