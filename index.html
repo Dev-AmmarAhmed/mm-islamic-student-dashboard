@@ -4867,7 +4867,7 @@ Exact Output JSON Format Required:
 
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js";
-    import { getDatabase, ref, onValue, set, update, remove, child, get } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+    import { getDatabase, ref, onValue, set, update, remove, child, get, query, orderByChild, equalTo } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
     import { getAuth, signInAnonymously, onAuthStateChanged, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
     import { getFirestore, doc, setDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
@@ -5804,32 +5804,19 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       return String(email || "").trim().toLowerCase().replace(/[.#$\[\]\/]/g, "_");
     };
 
-    window.resolveUserIdByEmail = async function(emailInput) {
+       window.resolveUserIdByEmail = async function(emailInput) {
       const cleanEmail = String(emailInput || "").trim().toLowerCase();
       if (!cleanEmail || !cleanEmail.includes("@")) return null;
 
-      // 1. Check fast email_lookup index first
+      // 🔥 FIX: Pre-login data leak removed. Ab bina login kiye poora database download nahi hoga.
+      // Sirf email_lookup index use hoga. Puraani fallback search hata di gayi hai.
       const emailKey = window.encodeEmailKey(cleanEmail);
       const mappedId = await safeDataFetch(`email_lookup/${emailKey}`);
+      
       if (mappedId) return String(mappedId);
-
-      // 2. Fallback: Search in students & teachers if email was saved before index existed
-      const allStudents = await safeDataFetch("students") || {};
-      for (const [admn, st] of Object.entries(allStudents)) {
-        if (st && st.email && String(st.email).trim().toLowerCase() === cleanEmail) {
-          await update(ref(db), { [`email_lookup/${emailKey}`]: String(admn) }).catch(() => {});
-          return String(admn);
-        }
-      }
-      const allTeachers = await safeDataFetch("teachers") || {};
-      for (const [uname, tch] of Object.entries(allTeachers)) {
-        if (tch && tch.email && String(tch.email).trim().toLowerCase() === cleanEmail) {
-          await update(ref(db), { [`email_lookup/${emailKey}`]: String(uname) }).catch(() => {});
-          return String(uname);
-        }
-      }
       return null;
     };
+
 
     window.completePortalLoginSession = function(resolvedUserId, uData) {
       const previousUser = localStorage.getItem("loggedUser");
@@ -5847,8 +5834,10 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
           caches.keys().then(names => { for (let name of names) caches.delete(name); });
         }
       }
-      localStorage.setItem("loggedUser", resolvedUserId);
-      localStorage.setItem("loggedPass", uData.password);
+
+              localStorage.setItem("loggedUser", resolvedUserId);
+      // 🔥 FIX: Plain text password localStorage se hata diya. Sirf session token save hoga.
+      localStorage.setItem("sessionToken", btoa(uData.password + resolvedUserId)); 
       localStorage.setItem("loggedRole", uData.role);
       if(uData.assignedClass) localStorage.setItem("assignedClass", uData.assignedClass);
       if(uData.admn) localStorage.setItem("studentAdmn", uData.admn);
@@ -5859,9 +5848,21 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       renderDashboardForRole(uData.role, uData.assignedClass, uData.admn);
     };
 
-    // 1. Standard Login (Supports User ID / Admission No OR Email + Password)
+
+      // 1. Standard Login (Supports User ID / Admission No OR Email + Password) + 🔥 BRUTE FORCE FIX
     addSafeListener("loginBtn", "click", () => {
       const btn = document.getElementById("loginBtn");
+      const errorEl = document.getElementById("loginError");
+
+      // Check Lockout Status
+      const lockoutTime = localStorage.getItem("lockoutUntil");
+      if (lockoutTime && Date.now() < parseInt(lockoutTime)) {
+        const timeLeft = Math.ceil((parseInt(lockoutTime) - Date.now()) / 1000);
+        errorEl.style.display = "block";
+        errorEl.innerText = `Too many failed attempts! Please try again in ${timeLeft} seconds.`;
+        return;
+      }
+
       runWithBtnSpinner(btn, "PORTAL LOGIN", async () => {
         const rawInput = document.getElementById("loginUsername").value.trim();
         const p = document.getElementById("loginPassword").value.trim();
@@ -5871,8 +5872,7 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
         if (rawInput.includes("@")) {
           const resolved = await window.resolveUserIdByEmail(rawInput);
           if (!resolved) {
-            document.getElementById("loginError").style.display = "block";
-            document.getElementById("loginError").innerText = "No active account linked with this email.";
+            handleFailedLogin(errorEl);
             return;
           }
           targetUserId = resolved;
@@ -5880,14 +5880,35 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
 
         const uData = await safeDataFetch(`users/${targetUserId}`);
         if(uData && uData.password === p) {
-          document.getElementById("loginError").style.display = "none";
+          // Success - Reset Failed Attempts
+          localStorage.removeItem("loginFails");
+          localStorage.removeItem("lockoutUntil");
+          errorEl.style.display = "none";
           window.completePortalLoginSession(targetUserId, uData);
         } else {
-          document.getElementById("loginError").style.display = "block";
-          document.getElementById("loginError").innerText = "Invalid credentials. Please try again.";
+          handleFailedLogin(errorEl);
         }
       });
     });
+
+    // Helper Function: Failed Login Handler for Brute Force Protection
+    function handleFailedLogin(errorEl) {
+      let fails = parseInt(localStorage.getItem("loginFails")) || 0;
+      fails += 1;
+      localStorage.setItem("loginFails", fails);
+
+      if (fails >= 3) {
+        // Lockout for 60 seconds after 3 failed attempts
+        const lockUntil = Date.now() + 60000;
+        localStorage.setItem("lockoutUntil", lockUntil);
+        errorEl.style.display = "block";
+        errorEl.innerText = `Too many failed attempts. You are locked out for 60 seconds.`;
+      } else {
+        errorEl.style.display = "block";
+        errorEl.innerText = `Invalid credentials. Attempt ${fails}/3 failed.`;
+      }
+    }
+
 
     // 2. Sign in with Google (Only pre-saved active emails allowed!)
     addSafeListener("googleLoginBtn", "click", () => {
@@ -5978,34 +5999,42 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       window.attachSmartStudentsListener(role, sAdmn || localStorage.getItem("studentAdmn"));
 
                         
-           // 🛡️ GHOST LOGIN FIX & FIREBASE AUTH SESSION SYNC
+               // 🛡️ GHOST LOGIN & PRIVILEGE ESCALATION FIX (Phase 1)
       const loggedUser = localStorage.getItem("loggedUser");
-      const loggedPass = localStorage.getItem("loggedPass");
+      const sessionToken = localStorage.getItem("sessionToken");
+      const claimedRole = localStorage.getItem("loggedRole");
+      
       window.syncAuthSessionRole(role, loggedUser || sAdmn, aClass);
 
       if(loggedUser) {
         onValue(ref(db, `users/${loggedUser}`), (snap) => {
-          // Check 1: Account delete ho gaya (snap doesn't exist)
-          // Check 2: Admin ne password change kar diya (saved password se match nahi kar raha)
-          if(!snap.exists() || (snap.exists() && snap.val().password !== loggedPass)) {
-            
-            // Saari sensitive login details hata do (Themes wagaira delete nahi honge)
-            localStorage.removeItem("loggedUser");
-            localStorage.removeItem("loggedRole");
-            localStorage.removeItem("loggedPass");
-            localStorage.removeItem("assignedClass");
-            localStorage.removeItem("studentAdmn");
-
-            // Native alert ki jagah Custom Alert (ye background tabs me bhi kaam karta hai)
-            window.showCustomAlert("⚠️ SESSION EXPIRED: Your account was deleted or password was changed by Admin.");
-            
-            // 3 second baad app automatically login screen par chali jayegi
-            setTimeout(() => {
-               window.location.reload(true);
-            }, 3000);
+          if(!snap.exists()) return forceLogout("⚠️ ACCOUNT DELETED: Your account no longer exists.");
+          
+          const dbUser = snap.val();
+          const expectedToken = btoa(dbUser.password + loggedUser);
+          
+          // Check 1: Token mismatch (Password changed by admin)
+          if(sessionToken !== expectedToken) {
+            return forceLogout("⚠️ SESSION EXPIRED: Password was changed by Admin.");
+          }
+          
+          // Check 2: Privilege Escalation (Hack attempt: localStorage role != DB role)
+          if(claimedRole !== dbUser.role || role !== dbUser.role) {
+            return forceLogout("🚨 SECURITY ALERT: Role manipulation detected. Logging out.");
           }
         });
       }
+
+      function forceLogout(msg) {
+        localStorage.removeItem("loggedUser");
+        localStorage.removeItem("loggedRole");
+        localStorage.removeItem("sessionToken");
+        localStorage.removeItem("assignedClass");
+        localStorage.removeItem("studentAdmn");
+        window.showCustomAlert(msg);
+        setTimeout(() => { window.location.reload(true); }, 3000);
+      }
+
 
       // Split assigned classes by comma and pick the first one as default
       const tClasses = (aClass || "1").split(",");
@@ -6491,13 +6520,25 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       if(document.getElementById("sHomePresentCount")) document.getElementById("sHomePresentCount").innerText = pCount;
       if(document.getElementById("sHomeAbsentCount")) document.getElementById("sHomeAbsentCount").innerText = aCount;
 
-      await calculateRealtimeStudentDues(student);
+            await calculateRealtimeStudentDues(student);
 
-      const allStudentsMap = await safeDataFetch("students") || {};
-      const classStudents = Object.values(allStudentsMap).filter(s => s && cleanClassStr(s.class) === assignedClass);
+      // 🔥 FIX: Student ab poore school ka data download nahi karega. 
+      // Firebase Query use karke sirf aur sirf apni class ke students mangwayega.
+      let classStudents = [];
+      try {
+        const classQuery = query(ref(db, 'students'), orderByChild('class'), equalTo(student.class));
+        const snap = await get(classQuery);
+        if (snap.exists()) {
+          classStudents = Object.values(snap.val()).filter(s => s != null);
+        }
+      } catch (err) {
+        console.warn("Class data fetch error", err);
+      }
+      
       classStudents.sort((a,b) => (b.points || 0) - (a.points || 0));
 
       const myRankIndex = classStudents.findIndex(s => String(s.admn) === String(student.admn));
+
       const rankStr = myRankIndex !== -1 ? `#${myRankIndex + 1}` : "#-";
       const pts = student.points || 0;
       const stars = Math.floor(pts / 10);
