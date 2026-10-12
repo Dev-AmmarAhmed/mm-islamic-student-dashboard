@@ -12237,7 +12237,7 @@ if (perms.photo && window.croppedPhotosMap["sUpdatePhotoInput"]) {
         });
       };
 
-         // Global Multi-Line Mentors Progression Graph
+           // Global Multi-Line Mentors Progression Graph
       window.renderMentorsProgression = async function(role, range, btnEl) {
         const canvasId = role === 'admin' ? "mentorsProgressionChartAdmin" : "mentorsProgressionChartTeacher";
         const feedbackId = role === 'admin' ? "adminGraphTapFeedback" : "teacherHomeGraphTapFeedback";
@@ -12247,7 +12247,7 @@ if (perms.photo && window.croppedPhotosMap["sUpdatePhotoInput"]) {
 
         // Reset Feedback Box
         if (feedbackEl) {
-          feedbackEl.innerHTML = `👆 Tap any point on the line graph above to inspect its exact date, points change & reason!`;
+          feedbackEl.innerHTML = `👆 Tap any point on the lines above to inspect its exact date, points & rank!`;
           feedbackEl.style.backgroundColor = "rgba(0,0,0,0.03)";
           feedbackEl.style.borderColor = "var(--border-color)";
         }
@@ -12307,16 +12307,18 @@ if (perms.photo && window.croppedPhotosMap["sUpdatePhotoInput"]) {
              let ptDelta = 0;
 
              if(dLogs.length > 0) {
-               const maxPts = Math.max(...dLogs.map(l => parseInt(l.totalPoints) || 0));
-               currentRunningPts = maxPts;
-               ptReason = dLogs[dLogs.length - 1].reason || "Point Update";
-               ptDelta = dLogs.reduce((sum, l) => sum + (parseInt(l.points) || 0), 0);
+               // Sort logs of that day to get the final total
+               const sortedDLogs = dLogs.sort((a,b) => Number(a.id) - Number(b.id));
+               const lastLog = sortedDLogs[sortedDLogs.length - 1];
+               currentRunningPts = parseInt(lastLog.totalPoints) || 0;
+               ptReason = lastLog.reason || "Point Update";
+               ptDelta = sortedDLogs.reduce((sum, l) => sum + (parseInt(l.points) || 0), 0);
              } else {
                ptReason = "No updates on this day (Carried forward)";
                ptDelta = 0;
              }
 
-             // For the final date node (Today), show their actual live points
+             // For the final date node (Today), sync live points if changed without explicit logs
              if (d === todayStr) {
                  const livePts = t.points || 0;
                  if (currentRunningPts !== livePts && dLogs.length === 0) {
@@ -12337,13 +12339,17 @@ if (perms.photo && window.croppedPhotosMap["sUpdatePhotoInput"]) {
           datasets.push({
             label: t.name,
             data: pointsArray,
-            customInfo: customDataArray, // Metadata attaching here
+            customInfo: customDataArray, 
             borderColor: teacherColor,
             backgroundColor: teacherColor,
             borderWidth: 3,
-            tension: 0.3,
-            pointRadius: 4,
-            pointHoverRadius: 8
+            tension: 0.35, // Smooth curves
+            pointRadius: 0, // POINTS HIDDEN BY DEFAULT
+            pointHitRadius: 25, // PRECISE LARGE TOUCH TARGET FOR MOBILE
+            pointHoverRadius: 7, // SHOWS BOLD DOT ONLY ON TOUCH
+            pointHoverBackgroundColor: isDark ? "#ffffff" : "#000000",
+            pointHoverBorderColor: teacherColor,
+            pointHoverBorderWidth: 3
           });
           cIdx++;
         });
@@ -12354,48 +12360,57 @@ if (perms.photo && window.croppedPhotosMap["sUpdatePhotoInput"]) {
         const newChart = new Chart(canvas, {
           type: 'line',
           data: {
-            labels: sortedDates.map(d => d.slice(0,5)), // Trim to DD/MM for UI space
+            labels: sortedDates.map(d => d.slice(0,5)), // Trim to DD/MM
             datasets: datasets
           },
           options: {
             responsive: true,
             maintainAspectRatio: false,
             interaction: {
-              mode: 'nearest', 
-              intersect: true, // Only triggers on exact point touch
+              mode: 'nearest', // EXACT nearest point
+              intersect: true, // Only trigger when actively touched near a line
             },
-            onClick: (evt, activeEls) => {
+            onClick: (evt, activeEls, chart) => {
               if (activeEls && activeEls.length > 0 && feedbackEl) {
-                // Fetch the exactly clicked point details
-                const datasetIndex = activeEls[0].datasetIndex;
-                const dataIndex = activeEls[0].index;
-                const dataset = newChart.data.datasets[datasetIndex];
+                // Get the Exact SINGLE point touched
+                const activeEl = activeEls[0];
+                const datasetIndex = activeEl.datasetIndex;
+                const dataIndex = activeEl.index;
+                const dataset = chart.data.datasets[datasetIndex];
                 const ptInfo = dataset.customInfo[dataIndex];
                 const teacherName = dataset.label;
                 const teacherColor = dataset.borderColor;
 
                 // Calculate Rank live for that specific day
-                const allVals = newChart.data.datasets.map(ds => ({name: ds.label, val: ds.data[dataIndex]}));
+                const allVals = chart.data.datasets.map(ds => ({name: ds.label, val: ds.data[dataIndex]}));
                 allVals.sort((a,b) => b.val - a.val);
                 const rank = allVals.findIndex(v => v.name === teacherName) + 1;
 
-                const sign = ptInfo.delta > 0 ? `+${ptInfo.delta}` : `${ptInfo.delta}`;
+                let sign = ptInfo.delta > 0 ? `+${ptInfo.delta}` : `${ptInfo.delta}`;
+                if (ptInfo.delta === 0) sign = "0"; // Handle zero beautifully
                 const deltaColor = ptInfo.delta < 0 ? "#ef4444" : (ptInfo.delta > 0 ? "#10b981" : "var(--text-muted)");
                 
-                // Set Breakdown Box Styling
-                feedbackEl.style.backgroundColor = `${teacherColor}15`; // Add light transparency 
+                // Beautiful Breakdown UI matching the Image Shared
+                feedbackEl.style.backgroundColor = `${teacherColor}15`; 
                 feedbackEl.style.borderColor = teacherColor;
                 feedbackEl.innerHTML = `
-                  <div style="font-size:14px; font-weight:900; color:${teacherColor}; margin-bottom: 4px;">👤 ${teacherName} | 🏆 Rank: #${rank}</div>
-                  <div style="font-size:13px; font-weight:800; color:var(--text-color);">📅 ${ptInfo.date} — <span style="color:${deltaColor}">${sign} PTS</span> (Total: ${ptInfo.total} PTS)</div>
-                  <div style="font-size:11px; font-weight:700; color:var(--text-muted); margin-top:4px;">📌 Reason: ${ptInfo.reason}</div>
+                  <div style="display:flex; justify-content:center; align-items:center; gap:10px; margin-bottom: 8px;">
+                    <div style="font-size:15px; font-weight:900; color:${teacherColor};">👤 ${teacherName}</div>
+                    <div style="font-size:11px; background:${teacherColor}; color:#fff; padding:2px 8px; border-radius:12px; font-weight:800;">🏆 Rank: #${rank}</div>
+                  </div>
+                  <div style="font-size:13px; font-weight:800; color:var(--text-color); margin-bottom:6px;">
+                    📅 ${ptInfo.date} ─ <span style="color:${deltaColor}">${sign} PTS</span> <span style="font-size:11px; color:var(--text-muted);">(Total: ${ptInfo.total} PTS)</span>
+                  </div>
+                  <div style="font-size:11px; font-weight:700; color:var(--text-muted); background:rgba(0,0,0,0.02); padding:6px; border-radius:8px; display:inline-block; border:1px solid var(--border-color);">
+                    📌 Reason: ${ptInfo.reason}
+                  </div>
                 `;
               }
             },
             plugins: {
               legend: { display: false },
               tooltip: {
-                backgroundColor: isDark ? 'rgba(15,23,42,0.9)' : 'rgba(255,255,255,0.9)',
+                backgroundColor: isDark ? 'rgba(15,23,42,0.95)' : 'rgba(255,255,255,0.95)',
                 titleColor: isDark ? '#f8fafc' : '#0f172a',
                 bodyColor: isDark ? '#cbd5e1' : '#475569',
                 borderColor: 'var(--border-color)',
@@ -12406,7 +12421,6 @@ if (perms.photo && window.croppedPhotosMap["sUpdatePhotoInput"]) {
                     const allVals = context.chart.data.datasets.map(ds => ({name: ds.label, val: ds.data[currentDataIndex]}));
                     allVals.sort((a,b) => b.val - a.val);
                     const rank = allVals.findIndex(v => v.name === context.dataset.label) + 1;
-
                     return ` ${context.dataset.label} : ${context.raw} PTS | Rank: #${rank}`;
                   }
                 }
