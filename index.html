@@ -5936,19 +5936,61 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
     };
 
 
-      // 1. Standard Login (Supports User ID / Admission No OR Email + Password) + 🔥 BRUTE FORCE FIX
+
+          // --- LIVE BRUTE FORCE TIMER SETUP ---
+    let lockoutTimerInterval;
+    function startLiveLockoutTimer() {
+      const lockoutTime = localStorage.getItem("lockoutUntil");
+      if (!lockoutTime) return;
+
+      const errorEl = document.getElementById("loginError");
+      const btn = document.getElementById("loginBtn");
+
+      if (Date.now() < parseInt(lockoutTime)) {
+        // Button disable aur gray karo
+        btn.disabled = true;
+        btn.style.opacity = "0.5";
+        btn.style.cursor = "not-allowed";
+        errorEl.style.display = "block";
+        errorEl.style.color = "#ea580c"; // Orange warning color
+
+        if (lockoutTimerInterval) clearInterval(lockoutTimerInterval);
+
+        // Har 1 second baad live timer update
+        lockoutTimerInterval = setInterval(() => {
+          const timeLeft = Math.ceil((parseInt(lockoutTime) - Date.now()) / 1000);
+          if (timeLeft > 0) {
+            errorEl.innerText = `🚨 Too many failed attempts! Wait ${timeLeft} seconds.`;
+          } else {
+            // Timer khatam hone par sab reset
+            clearInterval(lockoutTimerInterval);
+            localStorage.removeItem("loginFails");
+            localStorage.removeItem("lockoutUntil");
+            errorEl.style.display = "none";
+            errorEl.style.color = "red";
+            btn.disabled = false;
+            btn.style.opacity = "1";
+            btn.style.cursor = "pointer";
+            btn.innerText = "PORTAL LOGIN";
+          }
+        }, 1000);
+      } else {
+        localStorage.removeItem("loginFails");
+        localStorage.removeItem("lockoutUntil");
+      }
+    }
+
+    // Page load ya refresh hone par foran check karega ke timer on hai ya nahi
+    startLiveLockoutTimer();
+
+    // 1. Standard Login (Supports User ID / Admission No OR Email + Password) + 🔥 BRUTE FORCE (Live Timer)
     addSafeListener("loginBtn", "click", () => {
       const btn = document.getElementById("loginBtn");
       const errorEl = document.getElementById("loginError");
 
-      // Check Lockout Status
+      // Agar timer pehle se chal raha hai toh naya request mat bhejo
       const lockoutTime = localStorage.getItem("lockoutUntil");
-      if (lockoutTime && Date.now() < parseInt(lockoutTime)) {
-        const timeLeft = Math.ceil((parseInt(lockoutTime) - Date.now()) / 1000);
-        errorEl.style.display = "block";
-        errorEl.innerText = `Too many failed attempts! Please try again in ${timeLeft} seconds.`;
-        return;
-      }
+      if (lockoutTime && Date.now() < parseInt(lockoutTime)) return;
 
       runWithBtnSpinner(btn, "PORTAL LOGIN", async () => {
         const rawInput = document.getElementById("loginUsername").value.trim();
@@ -5967,7 +6009,7 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
 
         const uData = await safeDataFetch(`users/${targetUserId}`);
         if(uData && uData.password === p) {
-          // Success - Reset Failed Attempts
+          // Success - Sab attempts clear karo
           localStorage.removeItem("loginFails");
           localStorage.removeItem("lockoutUntil");
           errorEl.style.display = "none";
@@ -5978,23 +6020,24 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       });
     });
 
-    // Helper Function: Failed Login Handler for Brute Force Protection
+    // Helper Function: Failed Login Handler
     function handleFailedLogin(errorEl) {
       let fails = parseInt(localStorage.getItem("loginFails")) || 0;
       fails += 1;
       localStorage.setItem("loginFails", fails);
 
       if (fails >= 3) {
-        // Lockout for 60 seconds after 3 failed attempts
+        // Lockout for 60 seconds aur Live timer shuru karo
         const lockUntil = Date.now() + 60000;
         localStorage.setItem("lockoutUntil", lockUntil);
-        errorEl.style.display = "block";
-        errorEl.innerText = `Too many failed attempts. You are locked out for 60 seconds.`;
+        startLiveLockoutTimer(); 
       } else {
         errorEl.style.display = "block";
+        errorEl.style.color = "red";
         errorEl.innerText = `Invalid credentials. Attempt ${fails}/3 failed.`;
       }
     }
+
 
 
     // 2. Sign in with Google (Only pre-saved active emails allowed!)
