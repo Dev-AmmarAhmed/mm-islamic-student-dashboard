@@ -1881,19 +1881,41 @@ canvas { touch-action: pan-y !important; }
         </div>
       </div>
 
-      <!-- CARD 2: TEACHERBOARD STANDINGS -->
+            <!-- CARD 2: MENTORS STANDING -->
       <div class="card unfold-card" style="margin-top: 16px;">
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-color); padding-bottom: 8px; margin-bottom: 12px;">
-          <div class="card-title" style="border: none; margin-bottom: 0;">🏆 Teacherboard Standings</div>
+          <div class="card-title" style="border: none; margin-bottom: 0;">🏆 Mentors Standing</div>
           <button onclick="openModal('addTeacherPointsModal')" class="btn-primary btn-orange" style="margin-top: 0; width: auto; padding: 6px 14px; font-size: 11px;">
             ⭐ Add / Deduct Points
           </button>
         </div>
 
-        <div id="adminHomeTeacherboardCardsContainer">
-          <div style="font-size: 12px; color: var(--text-muted); text-align: center; padding: 10px;">Loading Teacherboard...</div>
+        <div class="sub-nav-tabs" style="margin-bottom: 12px;">
+          <div class="sub-tab-btn active" id="adminTbTabTeacherboardBtn" onclick="window.switchAdminTbTab('teacherboard')">📋 Teacherboard</div>
+          <div class="sub-tab-btn" id="adminTbTabStatusBtn" onclick="window.switchAdminTbTab('status')">📈 Mentors' Progression</div>
+        </div>
+
+        <div id="adminTbPaneTeacherboard">
+          <div id="adminHomeTeacherboardCardsContainer">
+            <div style="font-size: 12px; color: var(--text-muted); text-align: center; padding: 10px;">Loading Mentors Standing...</div>
+          </div>
+        </div>
+
+        <div id="adminTbPaneStatus" style="display: none;">
+          <div style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: none;">
+            <button class="class-chip" id="admGraphBtnAll" onclick="window.renderMentorsProgression('admin', 'all', this)">All</button>
+            <button class="class-chip active" id="admGraphBtn5d" onclick="window.renderMentorsProgression('admin', '5', this)">5 day</button>
+            <button class="class-chip" id="admGraphBtn10d" onclick="window.renderMentorsProgression('admin', '10', this)">10 day</button>
+            <button class="class-chip" id="admGraphBtn1m" onclick="window.renderMentorsProgression('admin', '30', this)">1 month</button>
+            <button class="class-chip" id="admGraphBtn6m" onclick="window.renderMentorsProgression('admin', '180', this)">6 month</button>
+            <button class="class-chip" id="admGraphBtn1y" onclick="window.renderMentorsProgression('admin', '365', this)">1 year</button>
+          </div>
+          <div style="position: relative; height: 300px; width: 100%; background: rgba(0,0,0,0.02); border-radius: 16px; padding: 12px; border: 1px solid var(--border-color); margin-top: 8px;">
+            <canvas id="mentorsProgressionChartAdmin"></canvas>
+          </div>
         </div>
       </div>
+
 
     </section>
 
@@ -2385,11 +2407,35 @@ canvas { touch-action: pan-y !important; }
     </div>
   </div>
 
-  <!-- Teacherboard Cards Table -->
+   <!-- Mentors Standing Cards Table -->
   <div class="card unfold-card">
-    <div class="card-title">🏆 Teacherboard Standings</div>
-    <div id="teacherboardTableCardsContainer">
-      <div style="font-size:12px; color:var(--text-muted); text-align:center; padding:10px;">Loading Teacherboard...</div>
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-color); padding-bottom: 8px; margin-bottom: 12px;">
+      <div class="card-title" style="border: none; margin-bottom: 0;">🏆 Mentors Standing</div>
+    </div>
+    
+    <div class="sub-nav-tabs" style="margin-bottom: 12px;">
+      <div class="sub-tab-btn active" id="teacherTbTabTeacherboardBtn" onclick="window.switchTeacherTbTab('teacherboard')">📋 Teacherboard</div>
+      <div class="sub-tab-btn" id="teacherTbTabStatusBtn" onclick="window.switchTeacherTbTab('status')">📈 Mentors' Progression</div>
+    </div>
+
+    <div id="teacherTbPaneTeacherboard">
+      <div id="teacherboardTableCardsContainer">
+        <div style="font-size:12px; color:var(--text-muted); text-align:center; padding:10px;">Loading Mentors Standing...</div>
+      </div>
+    </div>
+    
+    <div id="teacherTbPaneStatus" style="display: none;">
+      <div style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: none;">
+        <button class="class-chip" id="tchGraphBtnAll" onclick="window.renderMentorsProgression('teacher', 'all', this)">All</button>
+        <button class="class-chip active" id="tchGraphBtn5d" onclick="window.renderMentorsProgression('teacher', '5', this)">5 day</button>
+        <button class="class-chip" id="tchGraphBtn10d" onclick="window.renderMentorsProgression('teacher', '10', this)">10 day</button>
+        <button class="class-chip" id="tchGraphBtn1m" onclick="window.renderMentorsProgression('teacher', '30', this)">1 month</button>
+        <button class="class-chip" id="tchGraphBtn6m" onclick="window.renderMentorsProgression('teacher', '180', this)">6 month</button>
+        <button class="class-chip" id="tchGraphBtn1y" onclick="window.renderMentorsProgression('teacher', '365', this)">1 year</button>
+      </div>
+      <div style="position: relative; height: 300px; width: 100%; background: rgba(0,0,0,0.02); border-radius: 16px; padding: 12px; border: 1px solid var(--border-color); margin-top: 8px;">
+        <canvas id="mentorsProgressionChartTeacher"></canvas>
+      </div>
     </div>
   </div>
 
@@ -3792,7 +3838,7 @@ Exact Output JSON Format Required:
   </div>
 
    <!-- TEACHER PROFILE & MANAGEMENT MODAL (LIKE STUDENT PROFILE MODAL) -->
-  <div id="editTeacherModal" class="modal-overlay">
+   <div id="editTeacherModal" class="modal-overlay">
     <div class="modal-content">
       <div class="modal-header">
         <span>👩‍🏫 Teacher Profile</span>
@@ -3809,55 +3855,71 @@ Exact Output JSON Format Required:
           </div>
         </div>
 
-        <label>Teacher Full Name *:</label>
-        <input type="text" id="editTeacherName" placeholder="Teacher Full Name">
-
-        <label>Login Username * (Editable):</label>
-        <input type="text" id="editTeacherUser" style="font-weight: 800;">
-
-        <label>Login Password *:</label>
-        <input type="text" id="editTeacherPass" placeholder="Password">
-
-        <label>Mobile / WhatsApp Number:</label>
-        <input type="text" id="editTeacherPhone" placeholder="10-Digit Mobile Number">
-
-        <label>Email Address:</label>
-        <input type="email" id="editTeacherEmail" placeholder="teacher@example.com" style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; font-size: 13px; outline: none; background: var(--input-bg); color: var(--text-color);">
-
-        <label>Total Performance Points (+ / -):</label>
-        <input type="number" id="editTeacherPointsInput" placeholder="0">
-
-        <label>Change Photo (Optional):</label>
-        <input type="file" id="editTeacherPhotoInput" accept="image/*">
-
-        <label>Assign Classes (Select Multiple) *:</label>
-        <div class="checkbox-grid" id="editTeacherClassCheckboxes">
-          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="Nursery"> Nursery</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="Jr. KG"> Jr. KG</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="Sr. KG"> Sr. KG</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="1"> Class 1</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="2"> Class 2</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="3"> Class 3</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="4"> Class 4</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="5"> Class 5</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="6"> Class 6</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="7"> Class 7</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="8"> Class 8</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="9"> Class 9</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="10"> Class 10</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="11"> Class 11</div>
-          <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="12"> Class 12</div>
+        <div class="sub-nav-tabs" style="margin-bottom: 16px;">
+          <div class="sub-tab-btn active" id="eTchSubTabInfoBtn" onclick="window.switchEditTeacherSubTab('info')">👤 Info</div>
+          <div class="sub-tab-btn" id="eTchSubTabStatusBtn" onclick="window.switchEditTeacherSubTab('status')">📈 Status</div>
         </div>
 
-        <button id="updateTeacherBtn" onclick="window.saveUpdatedTeacherDetails()" class="btn-primary btn-green" style="margin-top: 16px;">
-          💾 Update Teacher Profile
-        </button>
-        <button type="button" onclick="window.deleteTeacherFromModal()" class="btn-primary btn-red" style="margin-top: 8px;">
-          🗑️ Delete Teacher Account
-        </button>
+        <div id="eTchPaneInfo">
+            <label>Teacher Full Name *:</label>
+            <input type="text" id="editTeacherName" placeholder="Teacher Full Name">
+
+            <label>Login Username * (Editable):</label>
+            <input type="text" id="editTeacherUser" style="font-weight: 800;">
+
+            <label>Login Password *:</label>
+            <input type="text" id="editTeacherPass" placeholder="Password">
+
+            <label>Mobile / WhatsApp Number:</label>
+            <input type="text" id="editTeacherPhone" placeholder="10-Digit Mobile Number">
+
+            <label>Email Address:</label>
+            <input type="email" id="editTeacherEmail" placeholder="teacher@example.com" style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; font-size: 13px; outline: none; background: var(--input-bg); color: var(--text-color);">
+
+            <label>Total Performance Points (+ / -):</label>
+            <input type="number" id="editTeacherPointsInput" placeholder="0">
+
+            <label>Change Photo (Optional):</label>
+            <input type="file" id="editTeacherPhotoInput" accept="image/*">
+
+            <label>Assign Classes (Select Multiple) *:</label>
+            <div class="checkbox-grid" id="editTeacherClassCheckboxes">
+              <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="Nursery"> Nursery</div>
+              <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="Jr. KG"> Jr. KG</div>
+              <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="Sr. KG"> Sr. KG</div>
+              <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="1"> Class 1</div>
+              <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="2"> Class 2</div>
+              <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="3"> Class 3</div>
+              <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="4"> Class 4</div>
+              <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="5"> Class 5</div>
+              <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="6"> Class 6</div>
+              <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="7"> Class 7</div>
+              <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="8"> Class 8</div>
+              <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="9"> Class 9</div>
+              <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="10"> Class 10</div>
+              <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="11"> Class 11</div>
+              <div class="checkbox-item"><input type="checkbox" class="t-edit-chk" value="12"> Class 12</div>
+            </div>
+
+            <button id="updateTeacherBtn" onclick="window.saveUpdatedTeacherDetails()" class="btn-primary btn-green" style="margin-top: 16px;">
+              💾 Update Teacher Profile
+            </button>
+            <button type="button" onclick="window.deleteTeacherFromModal()" class="btn-primary btn-red" style="margin-top: 8px;">
+              🗑️ Delete Teacher Account
+            </button>
+        </div>
+
+        <div id="eTchPaneStatus" style="display:none;">
+          <div style="font-size: 12px; font-weight: 800; color: var(--text-muted); margin-bottom: 12px;">📊 Mentor's Progression</div>
+          <div style="position: relative; height: 240px; width: 100%; background: rgba(0,0,0,0.02); border-radius: 16px; padding: 12px; border: 1px solid var(--border-color);">
+            <canvas id="editTeacherPointsLineChart"></canvas>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>
+
 
   <!-- REGISTER NEW TEACHER MODAL (WITH PHOTO, PHONE & EMAIL) -->
   <div id="registerTeacherModal" class="modal-overlay">
@@ -12078,7 +12140,7 @@ if (perms.photo && window.croppedPhotosMap["sUpdatePhotoInput"]) {
         });
       };
 
-      window.triggerTeacherGraphInsight = function() {
+           window.triggerTeacherGraphInsight = function() {
         if (!cachedTeacherPointSeries || cachedTeacherPointSeries.length === 0) return;
         const lastPt = cachedTeacherPointSeries[cachedTeacherPointSeries.length - 1];
         const prevPt = cachedTeacherPointSeries.length > 1 ? cachedTeacherPointSeries[cachedTeacherPointSeries.length - 2] : { total: 0 };
@@ -12089,6 +12151,209 @@ if (perms.photo && window.croppedPhotosMap["sUpdatePhotoInput"]) {
         document.getElementById("teacherGraphTapFeedback").innerHTML = `<div style="color:#7c3aed; font-weight:900;">${trendMsg}</div>`;
       };
 
+      // =========================================================
+      // 🏆 MENTORS' PROGRESSION & SUB-TABS ENGINE (NEW MULTI-LINE GRAPH)
+      // =========================================================
+      
+      let mentorsProgChartAdmin = null;
+      let mentorsProgChartTeacher = null;
+      let editTeacherLineChart = null;
+      const teacherLineColors = ['#0288d1', '#16a34a', '#d97706', '#9333ea', '#dc2626', '#38bdf8', '#e11d48', '#059669', '#ea580c', '#4f46e5'];
+
+      // Admin Home Dashboard Sub-Tabs
+      window.switchAdminTbTab = function(tab) {
+        document.getElementById("adminTbTabTeacherboardBtn").classList.toggle("active", tab === 'teacherboard');
+        document.getElementById("adminTbTabStatusBtn").classList.toggle("active", tab === 'status');
+        document.getElementById("adminTbPaneTeacherboard").style.display = tab === 'teacherboard' ? "block" : "none";
+        document.getElementById("adminTbPaneStatus").style.display = tab === 'status' ? "block" : "none";
+        // Default to 5 days on open
+        if (tab === 'status') window.renderMentorsProgression('admin', '5', document.getElementById("admGraphBtn5d"));
+      };
+
+      // Teacher Home Dashboard Sub-Tabs
+      window.switchTeacherTbTab = function(tab) {
+        document.getElementById("teacherTbTabTeacherboardBtn").classList.toggle("active", tab === 'teacherboard');
+        document.getElementById("teacherTbTabStatusBtn").classList.toggle("active", tab === 'status');
+        document.getElementById("teacherTbPaneTeacherboard").style.display = tab === 'teacherboard' ? "block" : "none";
+        document.getElementById("teacherTbPaneStatus").style.display = tab === 'status' ? "block" : "none";
+        // Default to 5 days on open
+        if (tab === 'status') window.renderMentorsProgression('teacher', '5', document.getElementById("tchGraphBtn5d"));
+      };
+
+      // Admin -> Edit Teacher Modal Sub-Tabs
+      window.switchEditTeacherSubTab = function(tab) {
+        document.getElementById("eTchSubTabInfoBtn").classList.toggle("active", tab === 'info');
+        document.getElementById("eTchSubTabStatusBtn").classList.toggle("active", tab === 'status');
+        document.getElementById("eTchPaneInfo").style.display = tab === 'info' ? "block" : "none";
+        document.getElementById("eTchPaneStatus").style.display = tab === 'status' ? "block" : "none";
+        if (tab === 'status') window.renderEditTeacherGraph();
+      };
+
+      // Single Teacher Graph (For Admin's Teacher Profile Modal)
+      window.renderEditTeacherGraph = async function() {
+        const username = document.getElementById("editTeacherOldUsername").value;
+        const canvas = document.getElementById("editTeacherPointsLineChart");
+        if (!username || !canvas) return;
+
+        const tObj = await safeDataFetch(`teachers/${username}`) || {};
+        const currentPts = parseInt(tObj.points) || 0;
+        const allLogsObj = await safeDataFetch("teacher_points_logs") || {};
+
+        let myLogs = Object.values(allLogsObj).filter(l => l && l.username === username).sort((a, b) => Number(a.id) - Number(b.id));
+        const series = [{ label: "Start", total: 0, date: tObj.regDate || "Initial" }];
+
+        myLogs.forEach((lg, idx) => {
+          series.push({ label: lg.date ? lg.date.slice(0, 5) : `#${idx + 1}`, total: parseInt(lg.totalPoints) || 0, date: lg.date || "-" });
+        });
+        if (series[series.length - 1].total !== currentPts) {
+          series.push({ label: "Today", total: currentPts, date: getTodayFormattedDate() });
+        }
+
+        const isDark = document.body.classList.contains("dark-mode");
+        if (editTeacherLineChart) editTeacherLineChart.destroy();
+        editTeacherLineChart = new Chart(canvas, {
+          type: "line",
+          data: {
+            labels: series.map(p => p.label),
+            datasets: [{
+              label: "Mentor's Progression",
+              data: series.map(p => p.total),
+              borderColor: isDark ? "#c084fc" : "#7c3aed",
+              backgroundColor: "rgba(124, 58, 237, 0.1)",
+              borderWidth: 3, fill: true, tension: 0.38, pointRadius: 5
+            }]
+          },
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+        });
+      };
+
+      // Global Multi-Line Mentors Progression Graph
+      window.renderMentorsProgression = async function(role, range, btnEl) {
+        const canvasId = role === 'admin' ? "mentorsProgressionChartAdmin" : "mentorsProgressionChartTeacher";
+        const canvas = document.getElementById(canvasId);
+        if(!canvas) return;
+
+        // Button highlight logic
+        const btnContainer = btnEl ? btnEl.parentElement : null;
+        if(btnContainer) {
+          btnContainer.querySelectorAll('.class-chip').forEach(c => c.classList.remove('active'));
+          btnEl.classList.add('active');
+        }
+
+        const teachersObj = await safeDataFetch("teachers") || {};
+        const logsObj = await safeDataFetch("teacher_points_logs") || {};
+
+        // Calculate time cutoff
+        const now = new Date().getTime();
+        let cutoff = 0;
+        if (range !== 'all') {
+          cutoff = now - (parseInt(range) * 24 * 60 * 60 * 1000);
+        }
+
+        // Filter valid logs based on selected days range
+        let allDatesSet = new Set();
+        let validLogs = Object.values(logsObj).filter(l => {
+          const logTime = Number(l.id); // Timestamp
+          if(range !== 'all' && logTime < cutoff) return false;
+          allDatesSet.add(l.date || getTodayFormattedDate());
+          return true;
+        });
+
+        // Ensure "Today" is always present on X-Axis
+        const todayStr = getTodayFormattedDate();
+        allDatesSet.add(todayStr);
+
+        // Sort dates chronologically (DD/MM/YYYY)
+        let sortedDates = Array.from(allDatesSet).sort((a,b) => {
+           const pA = a.split('/'); const pB = b.split('/');
+           if(pA.length!==3 || pB.length!==3) return 0;
+           return new Date(`${pA[2]}-${pA[1]}-${pA[0]}`).getTime() - new Date(`${pB[2]}-${pB[1]}-${pB[0]}`).getTime();
+        });
+
+        const datasets = [];
+        const isDark = document.body.classList.contains("dark-mode");
+        let cIdx = 0;
+
+        // Create a line dataset for each teacher
+        Object.values(teachersObj).forEach(t => {
+          if(!t.username || !t.name) return;
+          
+          let pointsArray = [];
+          let currentRunningPts = 0; 
+
+          sortedDates.forEach(d => {
+             const dLogs = validLogs.filter(l => l.username === t.username && l.date === d);
+             if(dLogs.length > 0) {
+               const maxPts = Math.max(...dLogs.map(l => parseInt(l.totalPoints) || 0));
+               currentRunningPts = maxPts;
+             }
+             // For the final date node (Today), show their actual live points
+             if (d === todayStr) currentRunningPts = t.points || 0;
+             pointsArray.push(currentRunningPts);
+          });
+
+          datasets.push({
+            label: t.name,
+            data: pointsArray,
+            borderColor: teacherLineColors[cIdx % teacherLineColors.length],
+            backgroundColor: teacherLineColors[cIdx % teacherLineColors.length],
+            borderWidth: 3,
+            tension: 0.3,
+            pointRadius: 4,
+            pointHoverRadius: 8
+          });
+          cIdx++;
+        });
+
+        const chartInstance = role === 'admin' ? mentorsProgChartAdmin : mentorsProgChartTeacher;
+        if(chartInstance) chartInstance.destroy();
+
+        const newChart = new Chart(canvas, {
+          type: 'line',
+          data: {
+            labels: sortedDates.map(d => d.slice(0,5)), // Trim to DD/MM for UI space
+            datasets: datasets
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+              mode: 'index',
+              intersect: false,
+            },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                backgroundColor: isDark ? 'rgba(15,23,42,0.9)' : 'rgba(255,255,255,0.9)',
+                titleColor: isDark ? '#f8fafc' : '#0f172a',
+                bodyColor: isDark ? '#cbd5e1' : '#475569',
+                borderColor: 'var(--border-color)',
+                borderWidth: 1,
+                callbacks: {
+                  label: function(context) {
+                    // Logic to calculate dynamic rank on hover
+                    const currentDataIndex = context.dataIndex;
+                    const allVals = context.chart.data.datasets.map(ds => ({name: ds.label, val: ds.data[currentDataIndex]}));
+                    allVals.sort((a,b) => b.val - a.val);
+                    const rank = allVals.findIndex(v => v.name === context.dataset.label) + 1;
+
+                    return ` ${context.dataset.label} : ${context.raw} PTS | Rank: #${rank}`;
+                  }
+                }
+              }
+            },
+            scales: {
+              x: { grid: { color: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)" }, ticks: { font: { weight: "700" } } },
+              y: { grid: { color: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)" }, ticks: { font: { weight: "700" } } }
+            }
+          }
+        });
+
+        if(role === 'admin') mentorsProgChartAdmin = newChart;
+        else mentorsProgChartTeacher = newChart;
+      };
+
     </script>
+  
 </body>
 </html>
