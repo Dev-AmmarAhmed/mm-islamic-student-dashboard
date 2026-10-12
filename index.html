@@ -1400,14 +1400,15 @@ canvas { touch-action: pan-y !important; }
 
   <div class="drawer-body">
 
-        <!-- STUDENT DRAWER OPTIONS -->
+
+            <!-- STUDENT DRAWER OPTIONS -->
     <div class="student-only" style="display:none;">
       <div style="padding: 10px 18px 4px 18px; font-size:11px; font-weight:800; color:var(--text-muted);">STUDENT ACCOUNT</div>
-      <div class="drawer-item" onclick="openModal('studentProfileDrawerModal')">👤 My Profile & Fees Card</div>
+      <div class="drawer-item" onclick="window.openStudentMyProfileTab(event)" style="color: #0288d1; font-weight: 900;">👤 My Profile & Progression</div>
       <div class="drawer-item" onclick="window.openLeaveTab(event)">📅 Leave Application</div>
-      <div class="drawer-item" onclick="openModal('studentUpdateModal')">✏️ Update Profile Info</div>
       <div class="drawer-item" onclick="openModal('customThemeModal')" style="color: #0288d1; font-weight: 800;">🎨 Custom Theme</div>
     </div>
+
 
         <!-- TEACHER DRAWER OPTIONS -->
     <div class="teacher-only" style="display:none;">
@@ -2581,9 +2582,76 @@ canvas { touch-action: pan-y !important; }
       </div>
     </section>
 
-      <!-- STUDENT DASHBOARD SECTIONS -->
+          <!-- STUDENT DASHBOARD SECTIONS -->
+
+    <!-- STUDENT MY PROFILE & PROGRESSION SECTION -->
+    <section id="studentTabProfile" class="tab-section student-tab">
+      <div class="card unfold-card">
+        <div style="text-align: center; margin-bottom: 14px;">
+          <img id="sMyProfAvatar" src="https://via.placeholder.com/150" style="width: 92px; height: 92px; border-radius: 50%; object-fit: cover; border: 3px solid #0288d1; box-shadow: 0 6px 18px rgba(2, 136, 209, 0.28);">
+          <h2 id="sMyProfHeaderName" style="font-size: 18px; font-weight: 900; margin-top: 8px; color: var(--text-color);">Student Name</h2>
+          <div style="margin-top: 6px;">
+            <span id="sMyProfClassBadge" class="class-badge" style="background: #0288d1;">Class: -</span>
+            <span id="sMyProfPointsBadge" class="pts-chip" style="margin-left: 6px; background: #fbbf24; color: #0f172a !important;">0 PTS</span>
+          </div>
+        </div>
+
+        <!-- 2 SUB-TABS: INFO & PROGRESSION -->
+        <div class="sub-nav-tabs" style="margin-bottom: 16px;">
+          <div class="sub-tab-btn active" id="sProfSubTabInfoBtn" onclick="window.switchStudentMyProfileSubTab('info')">👤 Info</div>
+          <div class="sub-tab-btn" id="sProfSubTabProgressionBtn" onclick="window.switchStudentMyProfileSubTab('progression')">📈 Progression</div>
+        </div>
+
+        <!-- SUB-TAB 1: PROFILE INFO -->
+        <div id="sProfSubPaneInfo">
+          <div style="text-align: center; margin-bottom: 12px;">
+            <input type="file" id="sUpdatePhotoInput" accept="image/*" style="display: none;">
+            <button type="button" id="sUpdatePhotoBtn" class="btn-primary btn-blue" style="width: auto; padding: 7px 16px; font-size: 11px; margin: 0 auto;" onclick="document.getElementById('sUpdatePhotoInput').click()">📷 Select & Crop Photo</button>
+          </div>
+
+          <label>Full Name:</label>
+          <input type="text" id="sGrayedName" disabled>
+
+          <label>Login Password:</label>
+          <input type="text" id="sGrayedPassword" disabled>
+
+          <label>WhatsApp Phone:</label>
+          <input type="text" id="sGrayedPhone" disabled>
+
+          <label>Date of Birth (DOB):</label>
+          <input type="text" id="sGrayedDob" disabled placeholder="DD/MM/YYYY">
+
+          <label>Email Address:</label>
+          <input type="email" id="sGrayedEmail" disabled placeholder="student@example.com" style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; font-size: 13px; outline: none; background: var(--input-bg); color: var(--text-color);">
+
+          <button id="sSaveProfileChangesBtn" class="btn-primary btn-green" style="margin-top: 16px; display: none;" onclick="window.saveStudentSelfProfileUpdate()">💾 Update Profile</button>
+
+          <div id="sProfileLockedNotice" style="margin-top: 16px; padding: 12px; border-radius: 12px; background: rgba(239, 68, 68, 0.12); border: 1px solid #ef4444; text-align: center; color: #ef4444; font-weight: 800; font-size: 12px;">
+            🔒 Contact Teacher to Unlock Profile Editing
+          </div>
+        </div>
+
+        <!-- SUB-TAB 2: PROGRESSION -->
+        <div id="sProfSubPaneProgression" style="display: none;">
+          <div style="font-size: 12px; font-weight: 800; color: var(--text-muted); margin-bottom: 12px;">📊 My Progression & Records</div>
+          
+          <button id="sGenerateFeesCardBtn" class="btn-primary btn-orange" style="margin-bottom: 12px;">💳 Generate Fees Card</button>
+          <button id="sMyPointHistoryBtn" class="btn-primary btn-purple">⭐ My Point History</button>
+
+          <div class="card" id="sFeesCardViewArea" style="display:none; margin-top:16px; background: rgba(0,0,0,0.02); border: 1px solid var(--border-color); box-shadow: none;">
+            <div class="table-container">
+              <table style="min-width: 100%;">
+                <thead id="sFeesCardHead"></thead>
+                <tbody id="sFeesCardBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section id="studentTabHome" class="tab-section student-tab">
-      <div class="card unfold-card" style="text-align:center; padding:24px 16px;">
+  <div class="card unfold-card" style="text-align:center; padding:24px 16px;">
         <img id="sHomeAvatar" src="https://via.placeholder.com/150" style="width:90px; height:90px; border-radius:50%; object-fit:cover; border:3px solid #0288d1; margin-bottom:10px;">
         <h2 id="sHomeName" style="font-size:18px; font-weight:900; color:#0288d1;">Student Name</h2>
         <span id="sHomeClassBadge" class="class-badge" style="background:#0288d1; margin-top:4px;">Class 1</span>
@@ -11542,10 +11610,11 @@ window.syncProfileModalHeight = function() {
         document.getElementById("photoCropperModal").classList.remove("active");
       };
 
-      // Attach Crop & Preview Window to all Profile & Registration Photo Inputs
+
+            // Attach Crop & Preview Window to all Profile & Registration Photo Inputs
       window.initPhotoCropperForInput("profPhotoFileInput", "profAvatarDisplay");
       window.initPhotoCropperForInput("regPhotoFile", null);
-      window.initPhotoCropperForInput("sUpdatePhotoInput", "sUpdateAvatarPreview");
+      window.initPhotoCropperForInput("sUpdatePhotoInput", "sMyProfAvatar");
 
       // ==========================================
       // 🔓 ADMIN "STUDENT ALLOWED" PERMISSIONS LOGIC
@@ -11597,12 +11666,30 @@ window.syncProfileModalHeight = function() {
         });
       };
 
-      // ==========================================
+     
+            // ==========================================
       // 🎓 STUDENT SELF-UPDATE PROFILE LOGIC
       // ==========================================
+      
+      window.openStudentMyProfileTab = async function(e) {
+        if (e) e.stopPropagation();
+        window.closeDrawer();
+        window.switchTab("studentTabProfile", null, e);
+        window.switchStudentMyProfileSubTab("info");
+        await window.openStudentSelfUpdateModal();
+      };
+
+      window.switchStudentMyProfileSubTab = function(sub) {
+        document.getElementById("sProfSubTabInfoBtn").classList.toggle("active", sub === "info");
+        document.getElementById("sProfSubTabProgressionBtn").classList.toggle("active", sub === "progression");
+        document.getElementById("sProfSubPaneInfo").style.display = sub === "info" ? "block" : "none";
+        document.getElementById("sProfSubPaneProgression").style.display = sub === "progression" ? "block" : "none";
+      };
+
       window.openStudentSelfUpdateModal = async function() {
         const student = await getStudentRecord(currentStudentAdmn);
-        if (!student) return;
+
+      if (!student) return;
 
         const clsKey = cleanClassStr(student.class);
         const classPerms = await safeDataFetch(`student_permissions/${clsKey}`);
@@ -11611,9 +11698,21 @@ window.syncProfileModalHeight = function() {
 
         const userObj = await safeDataFetch(`users/${student.admn}`) || {};
 
-        const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(student.name || 'S')}&background=0288d1&color=fff&bold=true`;
+                const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(student.name || 'S')}&background=0288d1&color=fff&bold=true`;
+        const avatarSrc = (student.photo && !student.photo.includes("via.placeholder.com")) ? student.photo : defaultAvatar;
+        
         const prevImg = document.getElementById("sUpdateAvatarPreview");
-        if (prevImg) prevImg.src = (student.photo && !student.photo.includes("via.placeholder.com")) ? student.photo : defaultAvatar;
+        if (prevImg) prevImg.src = avatarSrc;
+
+        // Set Tab Headers
+        const tabAvatar = document.getElementById("sMyProfAvatar");
+        if (tabAvatar) tabAvatar.src = avatarSrc;
+        const tabName = document.getElementById("sMyProfHeaderName");
+        if (tabName) tabName.innerText = student.name || "Student";
+        const tabClass = document.getElementById("sMyProfClassBadge");
+        if (tabClass) tabClass.innerText = `Class: ${student.class || '-'}`;
+        const tabPts = document.getElementById("sMyProfPointsBadge");
+        if (tabPts) tabPts.innerText = `${student.points || 0} PTS`;
 
         delete window.croppedPhotosMap["sUpdatePhotoInput"];
         if (document.getElementById("sUpdatePhotoInput")) document.getElementById("sUpdatePhotoInput").value = "";
