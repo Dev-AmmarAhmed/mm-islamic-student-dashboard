@@ -1596,18 +1596,19 @@ canvas { touch-action: pan-y !important; }
 
 
   
-    <section id="loginScreen" class="tab-section active animate-in">
+      <section id="loginScreen" class="tab-section active animate-in">
     <div class="login-box">
       <div>
         <h2 style="color: #0288d1; font-size: 16px; font-weight: 800; margin-bottom: 4px;">M.M ISLAMIC ENGLISH SCHOOL</h2>
-        <h4 style="color: #e65100; font-size: 12px; font-weight: 800; letter-spacing: 0.5px;">PORTAL LOGIN</h4>
+      <h4 style="color: #e65100; font-size: 12px; font-weight: 800; letter-spacing: 0.5px;">PORTAL LOGIN</h4>
       </div>
 
       <input type="text" id="loginUsername" placeholder="User ID / Admission No / Email">
       <input type="password" id="loginPassword" placeholder="Password">
-      <button id="loginBtn" class="btn-primary">PORTAL LOGIN</button>
+               <button id="loginBtn" class="btn-primary">PORTAL LOGIN</button>
       <p id="loginError" style="color:red; font-size:12px; display:none;"></p>
     </div>
+
 
     <!-- SAME LENGTH GOOGLE SIGN-IN BUTTON BELOW LOGIN CARD -->
     <div style="width: 100%; max-width: 360px; margin-top: 18px;">
@@ -2596,10 +2597,12 @@ canvas { touch-action: pan-y !important; }
           </div>
         </div>
 
-        <!-- 2 SUB-TABS: INFO & PROGRESSION -->
+
+                <!-- 3 SUB-TABS: INFO, PROGRESSION & FEES -->
         <div class="sub-nav-tabs" style="margin-bottom: 16px;">
           <div class="sub-tab-btn active" id="sProfSubTabInfoBtn" onclick="window.switchStudentMyProfileSubTab('info')">👤 Info</div>
           <div class="sub-tab-btn" id="sProfSubTabProgressionBtn" onclick="window.switchStudentMyProfileSubTab('progression')">📈 Progression</div>
+          <div class="sub-tab-btn" id="sProfSubTabFeesBtn" onclick="window.switchStudentMyProfileSubTab('fees')">💳 Fees</div>
         </div>
 
         <!-- SUB-TAB 1: PROFILE INFO -->
@@ -2631,12 +2634,25 @@ canvas { touch-action: pan-y !important; }
           </div>
         </div>
 
-        <!-- SUB-TAB 2: PROGRESSION -->
+              <!-- SUB-TAB 2: PROGRESSION (POINTS & SYLLABUS GRAPHS) -->
         <div id="sProfSubPaneProgression" style="display: none;">
-          <div style="font-size: 12px; font-weight: 800; color: var(--text-muted); margin-bottom: 12px;">📊 My Progression & Records</div>
+          <div style="font-size: 12px; font-weight: 800; color: var(--text-muted); margin-bottom: 12px;">📊 Points History Timeline</div>
+          <div style="position: relative; height: 240px; width: 100%; background: rgba(0,0,0,0.02); border-radius: 16px; padding: 12px; border: 1px solid var(--border-color); margin-bottom: 20px;">
+            <canvas id="studentPointsLineChart"></canvas>
+          </div>
+          
+          <div style="font-size: 12px; font-weight: 800; color: var(--text-muted); margin-bottom: 12px; border-top: 1px solid var(--border-color); padding-top: 12px;">📚 Subject-wise Syllabus Status</div>
+          <div id="sProfSyllabusGraphsContainer">
+            <!-- Dynamically populated donut graphs -->
+            <div style="text-align:center; padding:12px; font-size:11px; color:var(--text-muted);">Loading Syllabus Data...</div>
+          </div>
+        </div>
+
+        <!-- SUB-TAB 3: FEES CARD -->
+        <div id="sProfSubPaneFees" style="display: none;">
+          <div style="font-size: 12px; font-weight: 800; color: var(--text-muted); margin-bottom: 12px;">💳 My Fees Record</div>
           
           <button id="sGenerateFeesCardBtn" class="btn-primary btn-orange" style="margin-bottom: 12px;">💳 Generate Fees Card</button>
-          <button id="sMyPointHistoryBtn" class="btn-primary btn-purple">⭐ My Point History</button>
 
           <div class="card" id="sFeesCardViewArea" style="display:none; margin-top:16px; background: rgba(0,0,0,0.02); border: 1px solid var(--border-color); box-shadow: none;">
             <div class="table-container">
@@ -2646,9 +2662,12 @@ canvas { touch-action: pan-y !important; }
               </table>
             </div>
           </div>
+          <button id="sMyPointHistoryBtn" style="display:none;"></button>
         </div>
       </div>
     </section>
+
+  
 
     <section id="studentTabHome" class="tab-section student-tab">
   <div class="card unfold-card" style="text-align:center; padding:24px 16px;">
@@ -11671,7 +11690,185 @@ window.syncProfileModalHeight = function() {
       // 🎓 STUDENT SELF-UPDATE PROFILE LOGIC
       // ==========================================
       
-      window.openStudentMyProfileTab = async function(e) {
+         let studentLineChartInstance = null;
+      let sProfIndividualCharts = {};
+
+      window.switchStudentMyProfileSubTab = function(sub) {
+        document.getElementById("sProfSubTabInfoBtn").classList.toggle("active", sub === "info");
+        document.getElementById("sProfSubTabProgressionBtn").classList.toggle("active", sub === "progression");
+        document.getElementById("sProfSubTabFeesBtn").classList.toggle("active", sub === "fees");
+        
+        document.getElementById("sProfSubPaneInfo").style.display = sub === "info" ? "block" : "none";
+        document.getElementById("sProfSubPaneProgression").style.display = sub === "progression" ? "block" : "none";
+        document.getElementById("sProfSubPaneFees").style.display = sub === "fees" ? "block" : "none";
+
+        if (sub === "progression") {
+            window.renderStudentPointsLineGraph();
+            window.renderStudentProfileSyllabusGraphs();
+        }
+      };
+
+      // 📈 Student Points Line Graph (Same Teacher UI style)
+      window.renderStudentPointsLineGraph = async function() {
+        const canvas = document.getElementById("studentPointsLineChart");
+        if (!canvas) return;
+
+        const student = await getStudentRecord(currentStudentAdmn);
+        const currentPts = student ? (student.points || 0) : 0;
+        
+        const testsData = await safeDataFetch(`tests/${currentStudentAdmn}`) || {};
+        const dailyClaims = await safeDataFetch(`daily_claims/${currentStudentAdmn}`) || {};
+        
+        let events = [];
+        
+        // Add Tests Events
+        Object.values(testsData).forEach(t => {
+            if (t.awardedPoints) {
+                events.push({ date: t.date, delta: t.awardedPoints, reason: `Test: ${t.name}` });
+            }
+        });
+        
+        // Add Daily Rewards
+        Object.keys(dailyClaims).forEach(k => {
+            if (dailyClaims[k] === true) {
+                const parts = k.split("_");
+                if(parts.length === 3) {
+                   const dStr = `${String(parts[2]).padStart(2,'0')}/${String(parts[1]).padStart(2,'0')}/${parts[0]}`;
+                   const dayDate = new Date(`${parts[0]}-${parts[1]}-${parts[2]}`);
+                   const isWeekend = (dayDate.getDay() === 0 || dayDate.getDay() === 6);
+                   events.push({ date: dStr, delta: isWeekend ? 80 : 50, reason: "Daily Reward Claimed" });
+                }
+            }
+        });
+        
+        // Sort events chronologically
+        events.sort((a,b) => {
+            const pA = a.date.split('/'); const pB = b.date.split('/');
+            if(pA.length !== 3 || pB.length !== 3) return 0;
+            return new Date(`${pA[2]}-${pA[1]}-${pA[0]}`).getTime() - new Date(`${pB[2]}-${pB[1]}-${pB[0]}`).getTime();
+        });
+        
+        let series = [{ label: "Start", total: 0, date: student ? student.regDate || "Initial" : "-" }];
+        let running = 0;
+        
+        events.forEach((ev) => {
+            running += ev.delta;
+            series.push({ label: ev.date.slice(0,5), total: running, date: ev.date, delta: ev.delta, reason: ev.reason });
+        });
+        if (running !== currentPts) {
+            series.push({ label: "Today", total: currentPts, date: getTodayFormattedDate(), delta: currentPts - running, reason: "Manual Update / Sync" });
+        }
+
+        const isDark = document.body.classList.contains("dark-mode");
+        const ctx = canvas.getContext("2d");
+        const grad = ctx.createLinearGradient(0, 0, 0, 220);
+        grad.addColorStop(0, isDark ? "rgba(56, 189, 248, 0.45)" : "rgba(2, 136, 209, 0.32)");
+        grad.addColorStop(1, "rgba(2, 136, 209, 0.0)");
+
+        if (studentLineChartInstance) studentLineChartInstance.destroy();
+        studentLineChartInstance = new Chart(canvas, {
+          type: "line",
+          data: {
+            labels: series.map(p => p.label),
+            datasets: [{
+              label: "My Points",
+              data: series.map(p => p.total),
+              customInfo: series,
+              borderColor: isDark ? "#38bdf8" : "#0288d1",
+              backgroundColor: grad,
+              borderWidth: 3, fill: true, tension: 0.35,
+              pointRadius: 0, pointHitRadius: 25, pointHoverRadius: 7,
+              pointHoverBackgroundColor: isDark ? "#ffffff" : "#000000",
+              pointHoverBorderColor: isDark ? "#38bdf8" : "#0288d1", pointHoverBorderWidth: 3
+            }]
+          },
+          options: { 
+            responsive: true, maintainAspectRatio: false, 
+            interaction: { mode: 'nearest', intersect: true },
+            plugins: { 
+              legend: { display: false },
+              tooltip: {
+                backgroundColor: isDark ? 'rgba(15,23,42,0.95)' : 'rgba(255,255,255,0.95)',
+                titleColor: isDark ? '#f8fafc' : '#0f172a', bodyColor: isDark ? '#cbd5e1' : '#475569',
+                borderColor: 'var(--border-color)', borderWidth: 1,
+                callbacks: {
+                  label: function(context) {
+                    const pt = context.dataset.customInfo[context.dataIndex];
+                    if(!pt.reason) return ` Total: ${pt.total} PTS`;
+                    const sign = pt.delta > 0 ? `+${pt.delta}` : `${pt.delta}`;
+                    return ` ${pt.date}: ${pt.total} PTS (${sign}) \n ${pt.reason}`;
+                  }
+                }
+              }
+            },
+            scales: {
+              x: { grid: { color: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)" }, ticks: { font: { weight: "700" } } },
+              y: { grid: { color: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)" }, ticks: { font: { weight: "700" } } }
+            }
+          }
+        });
+      };
+
+      // 📚 Student Syllabus Progression (Donut Charts one below another)
+      window.renderStudentProfileSyllabusGraphs = async function() {
+        const student = await getStudentRecord(currentStudentAdmn);
+        if(!student) return;
+        const cls = cleanClassStr(student.class);
+        const theme = window.getChartThemeColors();
+        
+        const enabledSubjects = await safeDataFetch(`enabled_syllabus/${cls}`) || {};
+        const allChapters = await safeDataFetch(`syllabus_chapters/${cls}`) || {};
+        const myProgress = await safeDataFetch(`syllabus_progress/${currentStudentAdmn}`) || {};
+
+        const container = document.getElementById("sProfSyllabusGraphsContainer");
+        if(!container) return;
+        
+        let html = "";
+        Object.keys(enabledSubjects).forEach((sub, idx) => {
+            if(enabledSubjects[sub]) {
+                const subChaps = allChapters[sub] || [];
+                if(subChaps.length === 0) return;
+
+                let subCompleted = 0;
+                subChaps.forEach(ch => { if(myProgress[sub] && myProgress[sub][`ch_${ch.no}`]) subCompleted++; });
+
+                const subPercent = Math.round((subCompleted / subChaps.length) * 100);
+
+                html += `
+                <div style="margin-bottom:12px; padding:16px; display:flex; align-items:center; gap:16px; background:rgba(0,0,0,0.02); border:1px solid var(--border-color); border-radius:14px;">
+                    <div style="position:relative; width:65px; height:65px;"><canvas id="sProfSylChart_${idx}" style="touch-action: pan-y;"></canvas></div>
+                    <div style="flex:1;">
+                        <div style="font-size:14px; font-weight:900; color:var(--text-color);">${sub}</div>
+                        <div style="font-size:11px; font-weight:700; color:var(--text-muted); margin-top:4px;">${subCompleted} out of ${subChaps.length} Chaps</div>
+                        <div style="font-size:18px; font-weight:900; color:${theme.isDark ? '#4ade80' : '#16a34a'}; margin-top:4px;">${subPercent}%</div>
+                    </div>
+                </div>`;
+            }
+        });
+
+        container.innerHTML = html || "<div style='text-align:center; padding:16px; color:var(--text-muted); font-weight:800;'>No syllabus data available yet.</div>";
+
+        // Initialize Individual Donut Charts
+        Object.keys(enabledSubjects).forEach((sub, idx) => {
+            if(enabledSubjects[sub]) {
+                const ctx = document.getElementById(`sProfSylChart_${idx}`);
+                if(!ctx) return;
+                const subChaps = allChapters[sub] || [];
+                let subCompleted = 0;
+                subChaps.forEach(ch => { if(myProgress[sub] && myProgress[sub][`ch_${ch.no}`]) subCompleted++; });
+                const remain = subChaps.length - subCompleted;
+
+                if(sProfIndividualCharts[idx]) sProfIndividualCharts[idx].destroy();
+                sProfIndividualCharts[idx] = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: { labels: ['Done', 'Left'], datasets: [{ data: [subCompleted, remain], backgroundColor: [theme.isDark ? '#4ade80' : '#16a34a', theme.emptyArc], borderWidth: 1, borderColor: theme.borderColor, hoverOffset: 5 }] },
+                    options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { display: false }, tooltip: { enabled: true } } }
+                });
+            }
+        });
+      };
+
+           window.openStudentMyProfileTab = async function(e) {
         if (e) e.stopPropagation();
         window.closeDrawer();
         window.switchTab("studentTabProfile", null, e);
@@ -11682,8 +11879,16 @@ window.syncProfileModalHeight = function() {
       window.switchStudentMyProfileSubTab = function(sub) {
         document.getElementById("sProfSubTabInfoBtn").classList.toggle("active", sub === "info");
         document.getElementById("sProfSubTabProgressionBtn").classList.toggle("active", sub === "progression");
+        document.getElementById("sProfSubTabFeesBtn").classList.toggle("active", sub === "fees");
+        
         document.getElementById("sProfSubPaneInfo").style.display = sub === "info" ? "block" : "none";
         document.getElementById("sProfSubPaneProgression").style.display = sub === "progression" ? "block" : "none";
+        document.getElementById("sProfSubPaneFees").style.display = sub === "fees" ? "block" : "none";
+
+        if (sub === "progression") {
+            window.renderStudentPointsLineGraph();
+            window.renderStudentProfileSyllabusGraphs();
+        }
       };
 
       window.openStudentSelfUpdateModal = async function() {
