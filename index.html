@@ -1901,7 +1901,7 @@ canvas { touch-action: pan-y !important; }
           </div>
         </div>
 
-        <div id="adminTbPaneStatus" style="display: none;">
+             <div id="adminTbPaneStatus" style="display: none;">
           <div style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: none;">
             <button class="class-chip" id="admGraphBtnAll" onclick="window.renderMentorsProgression('admin', 'all', this)">All</button>
             <button class="class-chip active" id="admGraphBtn5d" onclick="window.renderMentorsProgression('admin', '5', this)">5 day</button>
@@ -1913,8 +1913,13 @@ canvas { touch-action: pan-y !important; }
           <div style="position: relative; height: 300px; width: 100%; background: rgba(0,0,0,0.02); border-radius: 16px; padding: 12px; border: 1px solid var(--border-color); margin-top: 8px;">
             <canvas id="mentorsProgressionChartAdmin"></canvas>
           </div>
+          
+          <!-- Tap Breakdown Feedback Box -->
+          <div id="adminGraphTapFeedback" style="margin-top: 12px; padding: 12px 14px; border-radius: 14px; background: rgba(0,0,0,0.03); border: 1px dashed var(--border-color); font-size: 12px; font-weight: 800; color: var(--text-color); text-align: center;">
+            👆 Tap any point on the line graph above to inspect its exact date, points change & reason!
+          </div>
         </div>
-      </div>
+
 
 
     </section>
@@ -2436,8 +2441,13 @@ canvas { touch-action: pan-y !important; }
       <div style="position: relative; height: 300px; width: 100%; background: rgba(0,0,0,0.02); border-radius: 16px; padding: 12px; border: 1px solid var(--border-color); margin-top: 8px;">
         <canvas id="mentorsProgressionChartTeacher"></canvas>
       </div>
+      
+      <!-- Tap Breakdown Feedback Box -->
+      <div id="teacherHomeGraphTapFeedback" style="margin-top: 12px; padding: 12px 14px; border-radius: 14px; background: rgba(0,0,0,0.03); border: 1px dashed var(--border-color); font-size: 12px; font-weight: 800; color: var(--text-color); text-align: center;">
+        👆 Tap any point on the line graph above to inspect its exact date, points change & reason!
+      </div>
     </div>
-  </div>
+
 
   <!-- Notifications Board (Slide Down Entry) -->
   <div class="card unfold-card" id="tNotificationMainCard" style="display:none; margin-top: 16px;">
@@ -12227,11 +12237,20 @@ if (perms.photo && window.croppedPhotosMap["sUpdatePhotoInput"]) {
         });
       };
 
-      // Global Multi-Line Mentors Progression Graph
+         // Global Multi-Line Mentors Progression Graph
       window.renderMentorsProgression = async function(role, range, btnEl) {
         const canvasId = role === 'admin' ? "mentorsProgressionChartAdmin" : "mentorsProgressionChartTeacher";
+        const feedbackId = role === 'admin' ? "adminGraphTapFeedback" : "teacherHomeGraphTapFeedback";
         const canvas = document.getElementById(canvasId);
+        const feedbackEl = document.getElementById(feedbackId);
         if(!canvas) return;
+
+        // Reset Feedback Box
+        if (feedbackEl) {
+          feedbackEl.innerHTML = `👆 Tap any point on the line graph above to inspect its exact date, points change & reason!`;
+          feedbackEl.style.backgroundColor = "rgba(0,0,0,0.03)";
+          feedbackEl.style.borderColor = "var(--border-color)";
+        }
 
         // Button highlight logic
         const btnContainer = btnEl ? btnEl.parentElement : null;
@@ -12279,24 +12298,48 @@ if (perms.photo && window.croppedPhotosMap["sUpdatePhotoInput"]) {
           if(!t.username || !t.name) return;
           
           let pointsArray = [];
+          let customDataArray = [];
           let currentRunningPts = 0; 
 
           sortedDates.forEach(d => {
              const dLogs = validLogs.filter(l => l.username === t.username && l.date === d);
+             let ptReason = "";
+             let ptDelta = 0;
+
              if(dLogs.length > 0) {
                const maxPts = Math.max(...dLogs.map(l => parseInt(l.totalPoints) || 0));
                currentRunningPts = maxPts;
+               ptReason = dLogs[dLogs.length - 1].reason || "Point Update";
+               ptDelta = dLogs.reduce((sum, l) => sum + (parseInt(l.points) || 0), 0);
+             } else {
+               ptReason = "No updates on this day (Carried forward)";
+               ptDelta = 0;
              }
+
              // For the final date node (Today), show their actual live points
-             if (d === todayStr) currentRunningPts = t.points || 0;
+             if (d === todayStr) {
+                 const livePts = t.points || 0;
+                 if (currentRunningPts !== livePts && dLogs.length === 0) {
+                     ptDelta = livePts - currentRunningPts;
+                     currentRunningPts = livePts;
+                     ptReason = ptDelta > 0 ? "Daily Reward Claims (+50 PTS)" : "Points Sync";
+                 } else if (dLogs.length === 0) {
+                     currentRunningPts = livePts;
+                 }
+             }
+
              pointsArray.push(currentRunningPts);
+             customDataArray.push({ reason: ptReason, delta: ptDelta, total: currentRunningPts, date: d });
           });
+
+          const teacherColor = teacherLineColors[cIdx % teacherLineColors.length];
 
           datasets.push({
             label: t.name,
             data: pointsArray,
-            borderColor: teacherLineColors[cIdx % teacherLineColors.length],
-            backgroundColor: teacherLineColors[cIdx % teacherLineColors.length],
+            customInfo: customDataArray, // Metadata attaching here
+            borderColor: teacherColor,
+            backgroundColor: teacherColor,
             borderWidth: 3,
             tension: 0.3,
             pointRadius: 4,
@@ -12318,8 +12361,36 @@ if (perms.photo && window.croppedPhotosMap["sUpdatePhotoInput"]) {
             responsive: true,
             maintainAspectRatio: false,
             interaction: {
-              mode: 'index',
-              intersect: false,
+              mode: 'nearest', 
+              intersect: true, // Only triggers on exact point touch
+            },
+            onClick: (evt, activeEls) => {
+              if (activeEls && activeEls.length > 0 && feedbackEl) {
+                // Fetch the exactly clicked point details
+                const datasetIndex = activeEls[0].datasetIndex;
+                const dataIndex = activeEls[0].index;
+                const dataset = newChart.data.datasets[datasetIndex];
+                const ptInfo = dataset.customInfo[dataIndex];
+                const teacherName = dataset.label;
+                const teacherColor = dataset.borderColor;
+
+                // Calculate Rank live for that specific day
+                const allVals = newChart.data.datasets.map(ds => ({name: ds.label, val: ds.data[dataIndex]}));
+                allVals.sort((a,b) => b.val - a.val);
+                const rank = allVals.findIndex(v => v.name === teacherName) + 1;
+
+                const sign = ptInfo.delta > 0 ? `+${ptInfo.delta}` : `${ptInfo.delta}`;
+                const deltaColor = ptInfo.delta < 0 ? "#ef4444" : (ptInfo.delta > 0 ? "#10b981" : "var(--text-muted)");
+                
+                // Set Breakdown Box Styling
+                feedbackEl.style.backgroundColor = `${teacherColor}15`; // Add light transparency 
+                feedbackEl.style.borderColor = teacherColor;
+                feedbackEl.innerHTML = `
+                  <div style="font-size:14px; font-weight:900; color:${teacherColor}; margin-bottom: 4px;">👤 ${teacherName} | 🏆 Rank: #${rank}</div>
+                  <div style="font-size:13px; font-weight:800; color:var(--text-color);">📅 ${ptInfo.date} — <span style="color:${deltaColor}">${sign} PTS</span> (Total: ${ptInfo.total} PTS)</div>
+                  <div style="font-size:11px; font-weight:700; color:var(--text-muted); margin-top:4px;">📌 Reason: ${ptInfo.reason}</div>
+                `;
+              }
             },
             plugins: {
               legend: { display: false },
@@ -12331,7 +12402,6 @@ if (perms.photo && window.croppedPhotosMap["sUpdatePhotoInput"]) {
                 borderWidth: 1,
                 callbacks: {
                   label: function(context) {
-                    // Logic to calculate dynamic rank on hover
                     const currentDataIndex = context.dataIndex;
                     const allVals = context.chart.data.datasets.map(ds => ({name: ds.label, val: ds.data[currentDataIndex]}));
                     allVals.sort((a,b) => b.val - a.val);
@@ -12352,6 +12422,7 @@ if (perms.photo && window.croppedPhotosMap["sUpdatePhotoInput"]) {
         if(role === 'admin') mentorsProgChartAdmin = newChart;
         else mentorsProgChartTeacher = newChart;
       };
+
 
     </script>
   
