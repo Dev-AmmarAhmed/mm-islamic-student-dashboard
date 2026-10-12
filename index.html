@@ -6949,7 +6949,7 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       });
     });
 
-    async function loadTeacherTodayAttendance() {
+      async function loadTeacherTodayAttendance() {
       const todayStr = getTodayFormattedDate();
       const currentMonth = getAutoMonthName();
       const todayNum = new Date().getDate();
@@ -6959,10 +6959,12 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       document.getElementById("todayAttHolidayStatusBox").style.display = "none";
 
       const students = getLiveStudents().filter(s => cleanClassStr(s.class) === cleanClassStr(assignedClass));
-      const tbody = document.getElementById("todayAttendanceTableBody");
-      tbody.innerHTML = "";
-
+      
+      // FIX: Data pehle fetch karo, phir HTML construct karke 1 hi baar print karo
       const allAtt = await safeDataFetch("attendance");
+      
+      const tbody = document.getElementById("todayAttendanceTableBody");
+      let html = "";
       let isAnyMarked = false, isHoliday = false;
 
       students.forEach(st => {
@@ -6970,11 +6972,15 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
         if(val !== undefined) isAnyMarked = true;
         if(val === "H") isHoliday = true;
 
-        tbody.innerHTML += `<tr><td style="text-align:left; padding-left:10px; font-weight:700;">${st.name}</td><td><input type="checkbox" class="t-today-att-chk" data-admn="${st.admn}" ${val === true ? 'checked' : ''}></td></tr>`;
+        html += `<tr><td style="text-align:left; padding-left:10px; font-weight:700;">${st.name}</td><td><input type="checkbox" class="t-today-att-chk" data-admn="${st.admn}" ${val === true ? 'checked' : ''}></td></tr>`;
       });
+      
+      tbody.innerHTML = html; // DOM update strictly once
+      
       if(isHoliday) document.getElementById("todayAttHolidayStatusBox").style.display = "block";
       else if(isAnyMarked) document.getElementById("todayAttSavedStatusBox").style.display = "block";
     }
+
 
     addSafeListener("saveTodayAttendanceBtn", "click", () => {
       const btn = document.getElementById("saveTodayAttendanceBtn");
