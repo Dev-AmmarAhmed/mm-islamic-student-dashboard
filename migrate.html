@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AccuEngine - Users Migration</title>
-    <!-- Firebase v10 Compat SDKs (App Check + Enterprise reCAPTCHA Support) -->
+    <title>AccuEngine - Full Data Migration Console</title>
+    <!-- Firebase v10 Compat SDKs -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
@@ -12,23 +12,25 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <style>
         body { font-family: sans-serif; background: #0f172a; color: #f8fafc; padding: 25px; }
-        .card { max-width: 680px; margin: auto; background: #1e293b; border-radius: 12px; padding: 25px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+        .card { max-width: 720px; margin: auto; background: #1e293b; border-radius: 12px; padding: 25px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
         h2 { color: #38bdf8; margin-top: 0; }
         .status-badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: bold; margin-bottom: 12px; }
         .status-badge.active { background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid #16a34a; }
         .status-badge.error { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid #dc2626; }
-        button { background: #0288d1; color: white; border: none; padding: 12px 24px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.2s; }
+        button { background: #0288d1; color: white; border: none; padding: 12px 24px; font-size: 15px; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.2s; margin-right: 10px; margin-top: 6px; }
         button:hover { background: #0369a1; }
         button:disabled { background: #475569; cursor: not-allowed; }
-        #logs { margin-top: 20px; background: #000; color: #4ade80; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 13px; height: 300px; overflow-y: auto; white-space: pre-wrap; line-height: 1.5; }
+        #logs { margin-top: 20px; background: #000; color: #4ade80; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 13px; height: 340px; overflow-y: auto; white-space: pre-wrap; line-height: 1.5; }
     </style>
 </head>
 <body>
     <div class="card">
-        <h2>AccuEngine Migration Console</h2>
+        <h2>AccuEngine Full Migration Console</h2>
         <div id="appCheckBadge" class="status-badge">App Check Status: Initializing...</div>
-        <p>Yeh tool <b>users</b> ko Realtime Database se Firestore mein copy karega aur RTDB mein 10-byte ka <b>user_status</b> flag banayega.</p>
-        <button id="startBtn" onclick="runMigration()">Start Users Migration</button>
+        <p>Yeh script Realtime Database se <b>Fees Matrix, Fees Entries, Attendance, Offline Tests & Online Tests</b> ko Firestore collections mein transfer karega.</p>
+        
+        <button id="startAllBtn" onclick="runCompleteMigration()">🚀 Migrate All Data (Fees + Attend + Tests)</button>
+        
         <div id="logs">Console ready...</div>
     </div>
 
@@ -55,100 +57,207 @@
             box.scrollTop = box.scrollHeight;
         }
 
-        // --- App Check Initialization ---
-        let isAppCheckReady = false;
         try {
             const appCheck = firebase.appCheck();
             appCheck.activate(
                 new firebase.appCheck.ReCaptchaEnterpriseProvider('6LefZbUtAAAAADOa8KBfn1qywMly7Ky2-UlX6zxW'),
                 true
             );
-            isAppCheckReady = true;
             document.getElementById("appCheckBadge").className = "status-badge active";
-            document.getElementById("appCheckBadge").innerText = "✔ App Check Active (reCAPTCHA Enterprise)";
-            log("[App Check] reCAPTCHA Enterprise provider successfully configured.");
+            document.getElementById("appCheckBadge").innerText = "✔ App Check Active";
+            log("[App Check] reCAPTCHA Enterprise ready.");
         } catch (err) {
             document.getElementById("appCheckBadge").className = "status-badge error";
-            document.getElementById("appCheckBadge").innerText = "⚠ App Check Initialization Warning";
-            log("[App Check Warning] " + err.message, true);
+            document.getElementById("appCheckBadge").innerText = "⚠ App Check Warning";
+            log("[App Check] " + err.message, true);
         }
 
-        async function runMigration() {
-            const btn = document.getElementById("startBtn");
+        // Batch helper: Har 400 operations ke baad auto commit karega
+        class FirestoreBatchWriter {
+            constructor(db) {
+                this.db = db;
+                this.batch = db.batch();
+                this.count = 0;
+                this.total = 0;
+            }
+
+            async set(docRef, data, options = { merge: true }) {
+                this.batch.set(docRef, data, options);
+                this.count++;
+                this.total++;
+                if (this.count >= 380) {
+                    await this.batch.commit();
+                    log(`    [Batch] ${this.total} records committed to Firestore...`);
+                    this.batch = this.db.batch();
+                    this.count = 0;
+                }
+            }
+
+            async commit() {
+                if (this.count > 0) {
+                    await this.batch.commit();
+                    log(`    [Batch] Final ${this.total} records committed.`);
+                    this.count = 0;
+                }
+            }
+        }
+
+        async function runCompleteMigration() {
+            const btn = document.getElementById("startAllBtn");
             btn.disabled = true;
-            log("[AccuEngine] Migration shuru ki ja rahi hai...");
+            log("\n============================================");
+            log("[AccuEngine] Master Migration shuru ho rahi hai...");
 
             try {
-                // Step 0: Ensure Firebase Auth token active (Security Rules block na karein)
-                log("[0/3] Checking Firebase Security Token...");
-                try {
-                    if (!auth.currentUser) {
-                        await auth.signInAnonymously();
-                        log("[Auth] Anonymous Auth session established.");
-                    }
-                } catch (authErr) {
-                    log("[Auth Warning] Anonymous auth bypass: " + authErr.message);
+                if (!auth.currentUser) {
+                    await auth.signInAnonymously();
+                    log("[Auth] Security token verified.");
                 }
 
-                // Step 1: Realtime Database se users fetch karna
-                log("[1/3] Reading /users from Realtime Database...");
-                const snapshot = await rtdb.ref("users").once("value");
-                const users = snapshot.val();
+                const writer = new FirestoreBatchWriter(firestore);
 
-                if (!users) {
-                    log("Realtime Database mein /users par koi data nahi mila!", true);
-                    btn.disabled = false;
-                    return;
+                // ----------------------------------------------------
+                // 1. FEES MATRIX MIGRATION
+                // ----------------------------------------------------
+                log("\n[1/5] Reading /fees_matrix from RTDB...");
+                const snapMatrix = await rtdb.ref("fees_matrix").once("value");
+                const feesMatrix = snapMatrix.val() || {};
+                const matrixKeys = Object.keys(feesMatrix);
+                log(`Found ${matrixKeys.length} students with fee matrix records.`);
+
+                for (const admn of matrixKeys) {
+                    const record = feesMatrix[admn];
+                    const docRef = firestore.collection("fees_matrix").doc(String(admn));
+                    await writer.set(docRef, {
+                        admn: String(admn),
+                        matrix: record,
+                        updatedAt: new Date().toISOString()
+                    });
                 }
+                await writer.commit();
+                log("✔ Fees Matrix successfully shifted to Firestore.");
 
-                const keys = Object.keys(users);
-                log(`[2/3] ${keys.length} users mile. Firestore batch migration start ho rahi hai...`);
+                // ----------------------------------------------------
+                // 2. FEES ENTRIES (RECEIPTS / LOGS) MIGRATION
+                // ----------------------------------------------------
+                log("\n[2/5] Reading /fees_entries from RTDB...");
+                const snapEntries = await rtdb.ref("fees_entries").once("value");
+                const feesEntries = snapEntries.val() || {};
+                let totalEntriesCount = 0;
 
-                // Step 2: Firestore Batch Transfer
-                let batch = firestore.batch();
-                let count = 0;
-                let totalSaved = 0;
-                const statusFlags = {};
-
-                for (const key of keys) {
-                    const userData = users[key];
-                    const docRef = firestore.collection("users").doc(String(key));
-
-                    batch.set(docRef, {
-                        ...userData,
-                        migratedAt: new Date().toISOString()
-                    }, { merge: true });
-
-                    // Har user ke liye RTDB mein status flag
-                    statusFlags[`user_status/${key}`] = "active";
-
-                    count++;
-                    totalSaved++;
-
-                    if (count === 400) {
-                        await batch.commit();
-                        log(`--> Batch write complete: ${totalSaved} users save ho gaye.`);
-                        batch = firestore.batch();
-                        count = 0;
+                for (const admn of Object.keys(feesEntries)) {
+                    const studentEntries = feesEntries[admn] || {};
+                    for (const entryId of Object.keys(studentEntries)) {
+                        const entryData = studentEntries[entryId];
+                        const docRef = firestore.collection("fees_entries").doc(`${admn}_${entryId}`);
+                        await writer.set(docRef, {
+                            ...entryData,
+                            admn: String(admn),
+                            entryId: String(entryId)
+                        });
+                        totalEntriesCount++;
                     }
                 }
+                await writer.commit();
+                log(`✔ ${totalEntriesCount} Fee entries & receipts shifted to Firestore.`);
 
-                if (count > 0) {
-                    await batch.commit();
-                    log(`--> Final batch write complete: ${totalSaved} users transfer ho gaye.`);
+                // ----------------------------------------------------
+                // 3. ATTENDANCE RECORDS MIGRATION
+                // ----------------------------------------------------
+                log("\n[3/5] Reading /attendance from RTDB...");
+                const snapAtt = await rtdb.ref("attendance").once("value");
+                const attData = snapAtt.val() || {};
+                let totalAttMonths = 0;
+
+                for (const admn of Object.keys(attData)) {
+                    const monthsObj = attData[admn] || {};
+                    for (const month of Object.keys(monthsObj)) {
+                        const monthDays = monthsObj[month];
+                        const docRef = firestore.collection("attendance").doc(`${admn}_${month}`);
+                        await writer.set(docRef, {
+                            admn: String(admn),
+                            month: String(month),
+                            days: monthDays,
+                            updatedAt: new Date().toISOString()
+                        });
+                        totalAttMonths++;
+                    }
                 }
+                await writer.commit();
+                log(`✔ ${totalAttMonths} Student attendance monthly records shifted to Firestore.`);
 
-                // Step 3: RTDB user_status update (Kill-switch flags)
-                log("[3/3] RTDB lightweight status flags set kiye ja rahe hain...");
-                await rtdb.ref().update(statusFlags);
+                // ----------------------------------------------------
+                // 4. OFFLINE TESTS (MARKS & POINTS) MIGRATION
+                // ----------------------------------------------------
+                log("\n[4/5] Reading /tests (Offline Test Marks) from RTDB...");
+                const snapTests = await rtdb.ref("tests").once("value");
+                const testsData = snapTests.val() || {};
+                let totalTestsCount = 0;
 
-                log("\n🎉 [SUCCESS] Mubarak ho! Saare users safely Firestore mein shift ho chuke hain aur RTDB flags tayar hain!");
+                for (const admn of Object.keys(testsData)) {
+                    const studentTests = testsData[admn] || {};
+                    for (const testId of Object.keys(studentTests)) {
+                        const tObj = studentTests[testId];
+                        const docRef = firestore.collection("tests").doc(`${admn}_${testId}`);
+                        await writer.set(docRef, {
+                            ...tObj,
+                            admn: String(admn),
+                            testId: String(testId)
+                        });
+                        totalTestsCount++;
+                    }
+                }
+                await writer.commit();
+                log(`✔ ${totalTestsCount} Test score records shifted to Firestore.`);
+
+                // ----------------------------------------------------
+                // 5. ONLINE TESTS & ATTEMPTS MIGRATION
+                // ----------------------------------------------------
+                log("\n[5/5] Reading /online_tests & /test_attempts from RTDB...");
+                const snapOnline = await rtdb.ref("online_tests").once("value");
+                const onlineData = snapOnline.val() || {};
+                let onlineTestCount = 0;
+
+                for (const clsKey of Object.keys(onlineData)) {
+                    const classTests = onlineData[clsKey] || {};
+                    for (const testId of Object.keys(classTests)) {
+                        const testObj = classTests[testId];
+                        const docRef = firestore.collection("online_tests").doc(String(testId));
+                        await writer.set(docRef, {
+                            ...testObj,
+                            class: String(clsKey),
+                            id: String(testId)
+                        });
+                        onlineTestCount++;
+                    }
+                }
+                await writer.commit();
+                log(`✔ ${onlineTestCount} Online Tests shifted to Firestore.`);
+
+                // Attempts Migration
+                const snapAttempts = await rtdb.ref("test_attempts").once("value");
+                const attemptsData = snapAttempts.val() || {};
+                let attemptsCount = 0;
+
+                for (const testId of Object.keys(attemptsData)) {
+                    const studentAttempts = attemptsData[testId] || {};
+                    for (const admn of Object.keys(studentAttempts)) {
+                        const attObj = studentAttempts[admn];
+                        const docRef = firestore.collection("test_attempts").doc(`${testId}_${admn}`);
+                        await writer.set(docRef, {
+                            ...attObj,
+                            testId: String(testId),
+                            admn: String(admn)
+                        });
+                        attemptsCount++;
+                    }
+                }
+                await writer.commit();
+                log(`✔ ${attemptsCount} Student online test attempts shifted to Firestore.`);
+
+                log("\n🎉 [ALL COMPLETED] Mubarak ho! Saara data (Fees, Attendance, Offline & Online Tests) Firestore mein migrate ho chuka hai!");
             } catch (err) {
-                log("\n[MIGRATION FAILED] Error details:", true);
-                log(err.message, true);
-                if (err.code === "permission-denied") {
-                    log("Tip: Agar Permission Denied aaya hai, toh Firebase Console mein App Check ya Security Rules verify karein ke localhost/github.io allowed hai.", true);
-                }
+                log("\n[MIGRATION ERROR] " + err.message, true);
                 btn.disabled = false;
             }
         }
