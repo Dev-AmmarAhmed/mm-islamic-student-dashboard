@@ -70,3 +70,17 @@ self.addEventListener("notificationclick", (event) => {
     })
   );
 });
+
+
+// Background Sync Event Listener
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'accuengine-sync-queue') {
+    event.waitUntil(
+      self.clients.matchAll().then((clients) => {
+        clients.forEach((client) => {
+          client.postMessage({ type: 'TRIGGER_ACCUENGINE_SYNC' });
+        });
+      })
+    );
+  }
+});
