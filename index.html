@@ -6703,18 +6703,16 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
 
             await calculateRealtimeStudentDues(student);
 
-      // 🔥 FIX: Student ab poore school ka data download nahi karega. 
-      // Firebase Query use karke sirf aur sirf apni class ke students mangwayega.
+          // 🚀 AccuEngine / Firestore se students load karke class filter karna
       let classStudents = [];
       try {
-        const classQuery = query(ref(db, 'students'), orderByChild('class'), equalTo(student.class));
-        const snap = await get(classQuery);
-        if (snap.exists()) {
-          classStudents = Object.values(snap.val()).filter(s => s != null);
-        }
+        const allStudentsData = await safeDataFetch("students") || {};
+        const allList = Object.values(allStudentsData).filter(s => s && typeof s === "object");
+        classStudents = allList.filter(s => cleanClassStr(s.class) === cleanClassStr(student.class));
       } catch (err) {
         console.warn("Class data fetch error", err);
       }
+
       
       classStudents.sort((a,b) => (b.points || 0) - (a.points || 0));
 
@@ -12946,4 +12944,3 @@ if (perms.photo && window.croppedPhotosMap["sUpdatePhotoInput"]) {
   
 </body>
 </html>
-l
