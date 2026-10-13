@@ -3,139 +3,225 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RTDB Direct REST Purge Tool</title>
+  <title>AccuEngine - Dedicated Fees Migrator</title>
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0b1329; color: #f8fafc; padding: 18px; margin: 0; }
-    .container { max-width: 680px; margin: auto; background: #131d36; border-radius: 16px; padding: 20px; border: 1px solid #1e293b; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0b1329; color: #f8fafc; padding: 20px; margin: 0; }
+    .container { max-width: 860px; margin: auto; background: #131d36; border-radius: 16px; padding: 24px; border: 1px solid #1e293b; box-shadow: 0 10px 35px rgba(0,0,0,0.5); }
     h1 { color: #38bdf8; font-size: 20px; margin-top: 0; }
-    p { color: #94a3b8; font-size: 13px; line-height: 1.5; margin-bottom: 16px; }
-    .btn-all { background: #dc2626; color: white; border: none; padding: 14px 20px; border-radius: 12px; font-weight: 800; font-size: 14px; cursor: pointer; width: 100%; margin-bottom: 18px; transition: opacity 0.2s; }
-    .btn-all:hover { opacity: 0.9; }
-    .btn-all:disabled { background: #475569; cursor: not-allowed; }
-    .node-list { display: flex; flex-direction: column; gap: 8px; max-height: 280px; overflow-y: auto; padding-right: 6px; }
-    .node-row { display: flex; justify-content: space-between; align-items: center; background: #1e293b; padding: 10px 14px; border-radius: 10px; border: 1px solid #334155; }
-    .node-name { font-family: monospace; font-size: 13px; font-weight: 700; color: #f1f5f9; }
-    .node-status { font-size: 11px; font-weight: 700; margin-right: 10px; }
-    .btn-del-single { background: #ea580c; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: 800; cursor: pointer; }
-    .btn-del-single:disabled { background: #475569; cursor: not-allowed; }
-    #logBox { background: #000; color: #4ade80; padding: 12px; border-radius: 10px; font-family: monospace; font-size: 11px; height: 180px; overflow-y: auto; white-space: pre-wrap; margin-top: 16px; border: 1px solid #1e293b; }
+    p { color: #94a3b8; font-size: 13px; line-height: 1.5; }
+    .card { background: #1e293b; padding: 16px; border-radius: 12px; margin: 16px 0; border: 1px solid #334155; }
+    input[type="file"] { background: #0f172a; border: 1px dashed #38bdf8; padding: 14px; border-radius: 8px; width: 100%; box-sizing: border-box; color: #cbd5e1; cursor: pointer; }
+    button { background: #16a34a; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: 800; font-size: 14px; cursor: pointer; width: 100%; transition: opacity 0.2s; }
+    button:disabled { background: #475569 !important; cursor: not-allowed; }
+    .progress-bar-bg { width: 100%; height: 8px; background: #1e293b; border-radius: 6px; overflow: hidden; margin: 14px 0; }
+    .progress-bar-fill { height: 100%; width: 0%; background: #22c55e; transition: width 0.3s; }
+    #logBox { background: #000; color: #4ade80; padding: 14px; border-radius: 10px; font-family: monospace; font-size: 12px; height: 320px; overflow-y: auto; white-space: pre-wrap; line-height: 1.6; border: 1px solid #1e293b; }
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 800; background: rgba(34, 197, 94, 0.2); color: #4ade80; }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>⚡ RTDB Instant Cloud Purge</h1>
-    <p>Aapke Realtime Database se sirf wahi 13 nodes delete hongi jo Firestore mein ja chuki hain. Baaqi light data (muster, notifications, timetable wagera) safe rahega.</p>
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h1>💳 Complete Fees & Matrix Migrator</h1>
+      <span class="badge">Fees Priority Engine</span>
+    </div>
+    <p>
+      Yeh tool aapki 12.58 MB backup JSON file se <b>fees_matrix</b> (kis bache ki konse month ki fees paid hai), <b>fees_entries</b> (receipts), aur <b>fees_records</b> ko padh kar seedha Cloud Firestore mein save karega.
+    </p>
 
-    <button id="btnCleanAll" class="btn-all" onclick="purgeAllNodes()">🚀 1-Click: Delete All 13 Unused Nodes</button>
+    <div class="card">
+      <label style="font-size:12px; font-weight:800; color:#38bdf8; display:block; margin-bottom:8px;">
+        RTDB Backup JSON File Choose Karein:
+      </label>
+      <input type="file" id="jsonFile" accept=".json">
+      <button id="btnStart" style="margin-top:14px;" onclick="migrateAllFeesData()" disabled>
+        🚀 Migrate All Fees & Matrices to Firestore
+      </button>
+    </div>
 
-    <div style="font-size: 12px; font-weight: 800; color: #94a3b8; margin-bottom: 8px;">Ya ek-ek karke delete karein:</div>
-    <div class="node-list" id="nodesContainer"></div>
+    <div class="progress-bar-bg">
+      <div id="progBar" class="progress-bar-fill"></div>
+    </div>
 
-    <div id="logBox">Console ready. Click karke delete karein...</div>
+    <div id="logBox">Console Ready. Backup JSON file select karein...</div>
   </div>
 
   <script>
-    const RTDB_BASE = "https://mm-islamic-erp-default-rtdb.firebaseio.com";
+    const firebaseConfig = {
+      apiKey: "AIzaSyBHpbgoGs7HFQ3-1tBn9BpGT4YYDaKkZB8",
+      authDomain: "mm-islamic-erp.firebaseapp.com",
+      databaseURL: "https://mm-islamic-erp-default-rtdb.firebaseio.com",
+      projectId: "mm-islamic-erp",
+      storageBucket: "mm-islamic-erp.firebasestorage.app",
+      messagingSenderId: "547338314533",
+      appId: "1:547338314533:web:3973c2b36ef8b3b01170cc"
+    };
 
-    // Screenshot ke mutabiq wahi 13 nodes jo Firestore me shift ho chuki hain
-    const TARGET_NODES = [
-      "attendance",
-      "expenses",
-      "fees",
-      "fees_entries",
-      "fees_matrix",
-      "fees_records",
-      "points",
-      "student_test_attempts",
-      "students",
-      "teachers",
-      "tests",
-      "test_attempts",
-      "users"
-    ];
+    firebase.initializeApp(firebaseConfig);
+    const firestore = firebase.firestore();
+    const auth = firebase.auth();
 
     function log(msg, isErr = false) {
-      const box = document.getElementById("logBox");
-      box.textContent += "\n" + (isErr ? "❌ " : "👉 ") + msg;
-      box.scrollTop = box.scrollHeight;
+      const b = document.getElementById("logBox");
+      b.textContent += "\n" + (isErr ? "❌ " : "👉 ") + msg;
+      b.scrollTop = b.scrollHeight;
     }
 
-    function renderRows() {
-      const container = document.getElementById("nodesContainer");
-      container.innerHTML = "";
-      TARGET_NODES.forEach(node => {
-        const row = document.createElement("div");
-        row.className = "node-row";
-        row.id = `row_${node}`;
-        row.innerHTML = `
-          <span class="node-name">/${node}</span>
-          <div style="display:flex; align-items:center;">
-            <span class="node-status" id="status_${node}" style="color:#94a3b8;">Pending</span>
-            <button class="btn-del-single" id="btn_${node}" onclick="deleteSingleNode('${node}')">Delete</button>
-          </div>
-        `;
-        container.appendChild(row);
-      });
+    function setProg(pct) {
+      document.getElementById("progBar").style.width = pct + "%";
     }
 
-    async function deleteNodeFromCloud(node) {
-      const statusEl = document.getElementById(`status_${node}`);
-      const btn = document.getElementById(`btn_${node}`);
-      if (statusEl) { statusEl.innerText = "Deleting ⏳"; statusEl.style.color = "#fbbf24"; }
-      if (btn) btn.disabled = true;
+    // Auto Anonymous session establish
+    auth.signInAnonymously().catch(e => {
+      log("Auth Warning: " + e.message);
+    });
 
-      log(`Deleting /${node}...`);
+    document.getElementById("jsonFile").addEventListener("change", function() {
+      document.getElementById("btnStart").disabled = !this.files.length;
+      if (this.files.length) {
+        log(`Selected File: ${this.files[0].name} (${(this.files[0].size / (1024*1024)).toFixed(2)} MB)`);
+      }
+    });
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s timeout
-
-      try {
-        const res = await fetch(`${RTDB_BASE}/${node}.json`, {
-          method: "DELETE",
-          signal: controller.signal
-        });
-        clearTimeout(timeoutId);
-
-        if (res.ok) {
-          log(`✔ /${node} delete ho gaya.`);
-          if (statusEl) { statusEl.innerText = "Deleted ✔"; statusEl.style.color = "#4ade80"; }
-          return true;
-        } else {
-          log(`/${node} fail hua. Status: ${res.status}`, true);
-          if (statusEl) { statusEl.innerText = "Failed ❌"; statusEl.style.color = "#f87171"; }
-          if (btn) btn.disabled = false;
-          return false;
+    class ChunkedBatchWriter {
+      constructor() {
+        this.batch = firestore.batch();
+        this.count = 0;
+        this.total = 0;
+      }
+      async set(docRef, data) {
+        this.batch.set(docRef, data, { merge: true });
+        this.count++;
+        this.total++;
+        if (this.count >= 250) {
+          await this.batch.commit();
+          log(`   [Firestore] ${this.total} fees records saved...`);
+          this.batch = firestore.batch();
+          this.count = 0;
         }
-      } catch (err) {
-        clearTimeout(timeoutId);
-        log(`Error on /${node}: ${err.message}`, true);
-        if (statusEl) { statusEl.innerText = "Error ❌"; statusEl.style.color = "#f87171"; }
-        if (btn) btn.disabled = false;
-        return false;
+      }
+      async commit() {
+        if (this.count > 0) {
+          await this.batch.commit();
+          log(`   [Batch Completed] Total ${this.total} items written.`);
+          this.count = 0;
+          this.batch = firestore.batch();
+        }
       }
     }
 
-    async function deleteSingleNode(node) {
-      await deleteNodeFromCloud(node);
+    async function migrateAllFeesData() {
+      const fileInput = document.getElementById("jsonFile");
+      if (!fileInput.files[0]) return;
+
+      const btn = document.getElementById("btnStart");
+      btn.disabled = true;
+
+      log("\n========================================================");
+      log("Reading JSON file into memory...");
+
+      const reader = new FileReader();
+      reader.onload = async function(e) {
+        try {
+          const fullData = JSON.parse(e.target.result);
+          log("JSON file parsed successfully! Checking Fees nodes...");
+
+          const writer = new ChunkedBatchWriter();
+
+          // 1. FEES MATRIX (Main Record: Konse Month Ki Fees Paid Hai)
+          const matrixNode = fullData.fees_matrix || fullData.fees_records || {};
+          const matrixKeys = Object.keys(matrixNode);
+
+          log(`\n[1/3] Found ${matrixKeys.length} Students in fees_matrix.`);
+          if (matrixKeys.length > 0) {
+            for (let admn of matrixKeys) {
+              const studentMatrix = matrixNode[admn] || {};
+              
+              // Structure verify karo
+              let paidMonthsCount = 0;
+              Object.keys(studentMatrix).forEach(m => {
+                if (studentMatrix[m] && (studentMatrix[m].paid === true || studentMatrix[m] === true)) {
+                  paidMonthsCount++;
+                }
+              });
+
+              // Firestore collection 'fees_matrix' mein save
+              await writer.set(firestore.collection("fees_matrix").doc(String(admn)), {
+                admn: String(admn),
+                matrix: studentMatrix,
+                updatedAt: new Date().toISOString()
+              });
+
+              // Log sample details
+              if (paidMonthsCount > 0) {
+                log(`   Admn ${admn}: ${paidMonthsCount} paid entries recorded.`);
+              }
+            }
+            await writer.commit();
+            setProg(50);
+            log(`✔ Successfully migrated ${matrixKeys.length} student fee matrices to Firestore!`);
+          } else {
+            log("⚠️ 'fees_matrix' node khali tha ya nahi mila.", true);
+          }
+
+          // 2. FEES ENTRIES (Payment Receipts & Logs)
+          const entriesNode = fullData.fees_entries || {};
+          const entryStudentKeys = Object.keys(entriesNode);
+
+          log(`\n[2/3] Found ${entryStudentKeys.length} Students with fee payment receipts.`);
+          let totalReceipts = 0;
+
+          if (entryStudentKeys.length > 0) {
+            for (let admn of entryStudentKeys) {
+              const studentEntries = entriesNode[admn] || {};
+              for (let entryId of Object.keys(studentEntries)) {
+                const entryData = studentEntries[entryId];
+                if (entryData && typeof entryData === 'object') {
+                  totalReceipts++;
+                  await writer.set(firestore.collection("fees_entries").doc(`${admn}_${entryId}`), {
+                    ...entryData,
+                    admn: String(admn),
+                    entryId: String(entryId),
+                    id: String(entryData.id || entryId)
+                  });
+                }
+              }
+            }
+            await writer.commit();
+            setProg(85);
+            log(`✔ Successfully migrated ${totalReceipts} payment receipts/entries!`);
+          }
+
+          // 3. LEGACY FEES NODE (Agar alag se 'fees' naam ka node tha)
+          if (fullData.fees && typeof fullData.fees === 'object') {
+            log(`\n[3/3] Migrating extra 'fees' node data...`);
+            for (let k of Object.keys(fullData.fees)) {
+              await writer.set(firestore.collection("fees_matrix").doc(String(k)), {
+                admn: String(k),
+                legacyData: fullData.fees[k]
+              });
+            }
+            await writer.commit();
+          }
+
+          setProg(100);
+          log("\n🎉 [MIGRATION 100% COMPLETE]");
+          log("Saara fees aur fees_matrix ka data Cloud Firestore ke andar save ho chuka hai.");
+          log("Firebase Console mein ja kar 'fees_matrix' collection check kar lo, har bache ka month-wise status dikh jayega!");
+
+        } catch (err) {
+          log("Migration Error: " + err.message, true);
+        } finally {
+          btn.disabled = false;
+        }
+      };
+
+      reader.readAsText(fileInput.files[0]);
     }
-
-    async function purgeAllNodes() {
-      if (!confirm("Are you sure? RTDB se yeh 13 purani nodes delete ho jayengi.")) return;
-
-      const btnAll = document.getElementById("btnCleanAll");
-      btnAll.disabled = true;
-      log("\n==============================================");
-      log("Cloud REST Purge shuru ho raha hai...");
-
-      for (const node of TARGET_NODES) {
-        await deleteNodeFromCloud(node);
-      }
-
-      log("\n🎉 Purge Process Complete! RTDB ab bilkul light ho chuka hai.");
-      btnAll.disabled = false;
-    }
-
-    renderRows();
   </script>
 </body>
 </html>
