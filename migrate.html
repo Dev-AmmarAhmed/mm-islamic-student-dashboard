@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AccuEngine - Master All-In-One Migration</title>
+  <title>AccuEngine - Bulletproof Master Migration</title>
   <!-- Firebase SDKs -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
@@ -26,11 +26,11 @@
 <body>
   <div class="container">
     <div style="display:flex; justify-content:space-between; align-items:center;">
-      <h1>🚀 Master All-In-One Migration to Firestore</h1>
-      <span class="badge">AccuEngine Master v4.0</span>
+      <h1>🚀 Master Migration to Firestore (Null-Safe)</h1>
+      <span class="badge">AccuEngine Master v4.2</span>
     </div>
     <p>
-      Yeh script aapke backup JSON se <b>Users, Students, Teachers, Fees Matrix, Fees Receipts, Attendance, Tests, Test Attempts, Expenses, aur Claims</b> ka poora data Cloud Firestore mein save karegi.
+      Users, Students, Teachers, Fees Matrix, Fees Receipts, Attendance, Tests, Attempts, aur Claims ka data Cloud Firestore mein safely sync karein.
     </p>
 
     <div class="card">
@@ -39,7 +39,7 @@
       </label>
       <input type="file" id="jsonFileInput" accept=".json">
       <button id="btnStart" style="margin-top:14px;" onclick="runMasterMigration()" disabled>
-        ⚡ Start Complete Master Migration
+        ⚡ Finish Migration to Firestore
       </button>
     </div>
 
@@ -127,84 +127,94 @@
       reader.onload = async function(e) {
         try {
           const fullData = JSON.parse(e.target.result);
-          log(`JSON Parsed Successfully! Total Size: ${(e.target.result.length / (1024*1024)).toFixed(2)} MB`);
+          log(`JSON Parsed! Size: ${(e.target.result.length / (1024*1024)).toFixed(2)} MB`);
 
           const writer = new FirestoreBatchWriter();
 
-          // 1. USERS COLLECTION (Logins & Passwords)
+          // 1. USERS
           if (fullData.users && typeof fullData.users === "object") {
             const uKeys = Object.keys(fullData.users);
-            log(`\n[1/10] Migrating ${uKeys.length} Users Credentials...`);
+            log(`\n[1/10] Migrating ${uKeys.length} Users...`);
             for (let u of uKeys) {
-              await writer.set(firestore.collection("users").doc(String(u)), fullData.users[u]);
+              if (fullData.users[u]) {
+                await writer.set(firestore.collection("users").doc(String(u)), fullData.users[u]);
+              }
             }
             await writer.commit();
             setProg(10);
             log(`✔ Users credentials migrated.`);
           }
 
-          // 2. STUDENTS (Stripping 12MB Base64 Image Strings)
+          // 2. STUDENTS (Strip Base64 Images)
           if (fullData.students && typeof fullData.students === "object") {
             const sKeys = Object.keys(fullData.students);
-            log(`\n[2/10] Migrating ${sKeys.length} Students (Stripping Base64 Images)...`);
+            log(`\n[2/10] Migrating ${sKeys.length} Students...`);
             for (let admn of sKeys) {
-              const sObj = { ...fullData.students[admn] };
-              sObj.photo = ""; // Strip bloat
-              sObj.admn = String(admn);
-              await writer.set(firestore.collection("students").doc(String(admn)), sObj);
+              if (fullData.students[admn]) {
+                const sObj = { ...fullData.students[admn] };
+                sObj.photo = "";
+                sObj.admn = String(admn);
+                await writer.set(firestore.collection("students").doc(String(admn)), sObj);
+              }
             }
             await writer.commit();
             setProg(20);
-            log(`✔ Students directory migrated without photo bloat.`);
+            log(`✔ Students directory migrated.`);
           }
 
-          // 3. TEACHERS (Stripping Base64 Image Strings)
+          // 3. TEACHERS
           if (fullData.teachers && typeof fullData.teachers === "object") {
             const tKeys = Object.keys(fullData.teachers);
             log(`\n[3/10] Migrating ${tKeys.length} Teachers...`);
             for (let user of tKeys) {
-              const tObj = { ...fullData.teachers[user] };
-              tObj.photo = ""; // Strip bloat
-              tObj.username = String(user);
-              await writer.set(firestore.collection("teachers").doc(String(user)), tObj);
+              if (fullData.teachers[user]) {
+                const tObj = { ...fullData.teachers[user] };
+                tObj.photo = "";
+                tObj.username = String(user);
+                await writer.set(firestore.collection("teachers").doc(String(user)), tObj);
+              }
             }
             await writer.commit();
             setProg(30);
             log(`✔ Teachers profiles migrated.`);
           }
 
-          // 4. FEES MATRIX (Month-wise Paid/Unpaid Status)
+          // 4. FEES MATRIX
           const matrixNode = fullData.fees_matrix || fullData.fees_records || {};
           const mKeys = Object.keys(matrixNode);
           log(`\n[4/10] Migrating ${mKeys.length} Students in fees_matrix...`);
-          if (mKeys.length > 0) {
-            for (let admn of mKeys) {
+          for (let admn of mKeys) {
+            if (matrixNode[admn]) {
               await writer.set(firestore.collection("fees_matrix").doc(String(admn)), {
                 admn: String(admn),
-                matrix: matrixNode[admn] || {},
+                matrix: matrixNode[admn],
                 updatedAt: new Date().toISOString()
               });
             }
-            await writer.commit();
-            setProg(45);
-            log(`✔ All student fees_matrix records migrated.`);
           }
+          await writer.commit();
+          setProg(45);
+          log(`✔ All student fees_matrix records migrated.`);
 
-          // 5. FEES ENTRIES (Receipts, Payment Modes & Amounts)
+          // 5. FEES ENTRIES
           if (fullData.fees_entries && typeof fullData.fees_entries === "object") {
-            const entryKeys = Object.keys(fullData.fees_entries);
             log(`\n[5/10] Migrating Fees Entries / Receipts...`);
             let receiptCount = 0;
-            for (let admn of entryKeys) {
-              const stEntries = fullData.fees_entries[admn] || {};
-              for (let entryId of Object.keys(stEntries)) {
-                receiptCount++;
-                await writer.set(firestore.collection("fees_entries").doc(`${admn}_${entryId}`), {
-                  ...stEntries[entryId],
-                  admn: String(admn),
-                  entryId: String(entryId),
-                  id: String(stEntries[entryId].id || entryId)
-                });
+            for (let admn of Object.keys(fullData.fees_entries)) {
+              const stEntries = fullData.fees_entries[admn];
+              if (stEntries && typeof stEntries === "object") {
+                for (let entryId of Object.keys(stEntries)) {
+                  const entryData = stEntries[entryId];
+                  if (entryData && typeof entryData === "object") {
+                    receiptCount++;
+                    await writer.set(firestore.collection("fees_entries").doc(`${admn}_${entryId}`), {
+                      ...entryData,
+                      admn: String(admn),
+                      entryId: String(entryId),
+                      id: String(entryData.id || entryId)
+                    });
+                  }
+                }
               }
             }
             await writer.commit();
@@ -212,21 +222,24 @@
             log(`✔ ${receiptCount} Fees Receipts migrated.`);
           }
 
-          // 6. ATTENDANCE (All Monthly Present / Absent Sheets)
+          // 6. ATTENDANCE
           if (fullData.attendance && typeof fullData.attendance === "object") {
-            const attKeys = Object.keys(fullData.attendance);
-            log(`\n[6/10] Migrating Attendance Sheets for ${attKeys.length} Students...`);
+            log(`\n[6/10] Migrating Attendance Sheets...`);
             let sheetCount = 0;
-            for (let admn of attKeys) {
-              const months = fullData.attendance[admn] || {};
-              for (let m of Object.keys(months)) {
-                sheetCount++;
-                await writer.set(firestore.collection("attendance").doc(`${admn}_${m}`), {
-                  admn: String(admn),
-                  month: String(m),
-                  days: months[m],
-                  updatedAt: new Date().toISOString()
-                });
+            for (let admn of Object.keys(fullData.attendance)) {
+              const months = fullData.attendance[admn];
+              if (months && typeof months === "object") {
+                for (let m of Object.keys(months)) {
+                  if (months[m]) {
+                    sheetCount++;
+                    await writer.set(firestore.collection("attendance").doc(`${admn}_${m}`), {
+                      admn: String(admn),
+                      month: String(m),
+                      days: months[m],
+                      updatedAt: new Date().toISOString()
+                    });
+                  }
+                }
               }
             }
             await writer.commit();
@@ -234,82 +247,112 @@
             log(`✔ ${sheetCount} Monthly Attendance sheets migrated.`);
           }
 
-          // 7. OFFLINE TESTS (Marks, Percentages & Points)
+          // 7. OFFLINE TESTS
           if (fullData.tests && typeof fullData.tests === "object") {
             log(`\n[7/10] Migrating Offline Tests...`);
+            let testCount = 0;
             for (let admn of Object.keys(fullData.tests)) {
-              for (let tid of Object.keys(fullData.tests[admn])) {
-                await writer.set(firestore.collection("tests").doc(`${admn}_${tid}`), {
-                  ...fullData.tests[admn][tid],
-                  admn: String(admn),
-                  testId: String(tid)
-                });
+              const stTests = fullData.tests[admn];
+              if (stTests && typeof stTests === "object") {
+                for (let tid of Object.keys(stTests)) {
+                  if (stTests[tid]) {
+                    testCount++;
+                    await writer.set(firestore.collection("tests").doc(`${admn}_${tid}`), {
+                      ...stTests[tid],
+                      admn: String(admn),
+                      testId: String(tid)
+                    });
+                  }
+                }
               }
             }
             await writer.commit();
             setProg(85);
-            log(`✔ Offline Tests migrated.`);
+            log(`✔ ${testCount} Offline Tests migrated.`);
           }
 
-          // 8. ONLINE TESTS
+          // 8. ONLINE TESTS (Fixed Null Guard)
           if (fullData.online_tests && typeof fullData.online_tests === "object") {
             log(`\n[8/10] Migrating Online Tests...`);
+            let otCount = 0;
             for (let cls of Object.keys(fullData.online_tests)) {
-              for (let tid of Object.keys(fullData.online_tests[cls])) {
-                await writer.set(firestore.collection("online_tests").doc(String(tid)), {
-                  ...fullData.online_tests[cls][tid],
-                  id: String(tid),
-                  class: String(cls)
-                });
+              const classTests = fullData.online_tests[cls];
+              if (classTests && typeof classTests === "object") {
+                for (let tid of Object.keys(classTests)) {
+                  const tObj = classTests[tid];
+                  if (tObj && typeof tObj === "object") {
+                    otCount++;
+                    await writer.set(firestore.collection("online_tests").doc(String(tid)), {
+                      ...tObj,
+                      id: String(tid),
+                      class: String(cls)
+                    });
+                  }
+                }
               }
             }
             await writer.commit();
             setProg(90);
-            log(`✔ Online Tests migrated.`);
+            log(`✔ ${otCount} Online Tests migrated.`);
           }
 
-          // 9. TEST ATTEMPTS
+          // 9. TEST ATTEMPTS (Fixed Null Guard)
           const attemptsNode = fullData.test_attempts || fullData.student_test_attempts || {};
-          if (Object.keys(attemptsNode).length > 0) {
+          if (attemptsNode && typeof attemptsNode === "object") {
             log(`\n[9/10] Migrating Test Attempts...`);
+            let attCount = 0;
             for (let tid of Object.keys(attemptsNode)) {
-              for (let admn of Object.keys(attemptsNode[tid])) {
-                await writer.set(firestore.collection("test_attempts").doc(`${tid}_${admn}`), {
-                  ...attemptsNode[tid][admn],
-                  testId: String(tid),
-                  admn: String(admn)
-                });
+              const attemptsObj = attemptsNode[tid];
+              if (attemptsObj && typeof attemptsObj === "object") {
+                for (let admn of Object.keys(attemptsObj)) {
+                  const attData = attemptsObj[admn];
+                  if (attData && typeof attData === "object") {
+                    attCount++;
+                    await writer.set(firestore.collection("test_attempts").doc(`${tid}_${admn}`), {
+                      ...attData,
+                      testId: String(tid),
+                      admn: String(admn)
+                    });
+                  }
+                }
               }
             }
             await writer.commit();
             setProg(95);
-            log(`✔ Test Attempts migrated.`);
+            log(`✔ ${attCount} Test Attempts migrated.`);
           }
 
-          // 10. EXPENSES & DAILY CLAIMS
+          // 10. EXPENSES & DAILY CLAIMS (Fixed Null Guard)
           if (fullData.expenses && typeof fullData.expenses === "object") {
             log(`\n[10/10] Migrating Expenses & Claims...`);
             for (let m of Object.keys(fullData.expenses)) {
-              for (let eid of Object.keys(fullData.expenses[m])) {
-                await writer.set(firestore.collection("expenses").doc(`${m}_${eid}`), fullData.expenses[m][eid]);
+              const monthExp = fullData.expenses[m];
+              if (monthExp && typeof monthExp === "object") {
+                for (let eid of Object.keys(monthExp)) {
+                  if (monthExp[eid]) {
+                    await writer.set(firestore.collection("expenses").doc(`${m}_${eid}`), monthExp[eid]);
+                  }
+                }
               }
             }
           }
+
           if (fullData.daily_claims && typeof fullData.daily_claims === "object") {
             for (let admn of Object.keys(fullData.daily_claims)) {
-              await writer.set(firestore.collection("daily_claims").doc(String(admn)), {
-                claims: fullData.daily_claims[admn]
-              });
+              if (fullData.daily_claims[admn]) {
+                await writer.set(firestore.collection("daily_claims").doc(String(admn)), {
+                  claims: fullData.daily_claims[admn]
+                });
+              }
             }
           }
           await writer.commit();
           setProg(100);
 
           log("\n🎉 [MASTER MIGRATION 100% COMPLETE]");
-          log("Saara core data (Fees, Attendance, Students, Teachers, Tests) bina kisi loss ke Cloud Firestore mein save ho chuka hai!");
-
+          log("Saara core data (Users, Students, Teachers, Fees Matrix, Receipts, Attendance, Tests, Attempts, Expenses) bina kisi error ke Cloud Firestore mein transfer ho chuka hai!");
         } catch (err) {
-          log("Master Migration Error: " + err.message, true);
+          log("Migration Error: " + err.message, true);
         } finally {
           btn.disabled = false;
         }
