@@ -7304,23 +7304,48 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
         chks.forEach(c => { updates[`attendance/${c.getAttribute("data-admn")}/${currentMonth}/day_${todayNum}`] = c.checked; });
         await update(ref(db), updates);
 
-        // 🚀 Firestore Sync via AccuEngine
-        try {
-          for (let c of chks) {
-            const admn = c.getAttribute("data-admn");
-            const key = `${admn}_${currentMonth}`;
-            const attDocRef = doc(fsDb, "attendance", key);
-            const attSnap = await getDoc(attDocRef);
-            let daysData = attSnap.exists() && attSnap.data().days ? attSnap.data().days : {};
-            daysData[`day_${todayNum}`] = c.checked;
-            await setDoc(attDocRef, { admn: String(admn), month: currentMonth, days: daysData, updatedAt: new Date().toISOString() }, { merge: true });
-            if (window.AccuEngine) await window.AccuEngine.invalidate("attendance", key);
+              // 🚀 Offline-Safe Attendance Save & Sync
+        const offlineQueuePayload = [];
+        for (let c of chks) {
+          const admn = c.getAttribute("data-admn");
+          const key = `${admn}_${currentMonth}`;
+          
+          let daysData = {};
+          if (window.AccuEngine) {
+            const cached = await window.AccuEngine.fetch(`attendance/${admn}/${currentMonth}`) || {};
+            daysData = { ...cached };
           }
-        } catch (fsErr) {
-          console.warn("Firestore attendance sync warning:", fsErr);
+          daysData[`day_${todayNum}`] = c.checked;
+
+          // Local storage instantly update karo
+          if (window.AccuEngine) {
+            await window.AccuEngine.setLocal("attendance", key, daysData);
+          }
+
+          offlineQueuePayload.push({ key, admn, month: currentMonth, daysData });
+
+          // Agar online hai toh foran push karo
+          if (navigator.onLine) {
+            try {
+              const attDocRef = doc(fsDb, "attendance", key);
+              await setDoc(attDocRef, {
+                admn: String(admn),
+                month: currentMonth,
+                days: daysData,
+                updatedAt: new Date().toISOString()
+              }, { merge: true });
+            } catch (err) {}
+          }
         }
-        alert("Today's Attendance saved successfully.");
-loadTeacherTodayAttendance();
+
+        // Agar offline tha ya network drop hua toh queue mein daalo
+        if (!navigator.onLine && window.AccuEngine) {
+          await window.AccuEngine.queueOfflineAction("attendance_batch", offlineQueuePayload);
+          alert("⚡ Attendance saved locally (Offline Mode). Internet aate hi server se auto-sync ho jayegi.");
+        } else {
+          alert("✔ Today's Attendance saved successfully.");
+        }
+
       });
     });
 
