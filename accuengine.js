@@ -1,13 +1,14 @@
 /**
- * AccuEngine v1.0 - Production Safe Cache & Firestore Engine (Offline Outbox Enabled)
+ * AccuEngine v2.0 - Heavy Offline Persistent Engine
  * MM Islamic English School ERP
+ * IndexedDB Cache-First with Firestore Auto-Sync
  */
 
 (function (window) {
   "use strict";
 
   const DB_NAME = "AccuEngine_Storage";
-  const DB_VERSION = 2; // Incremented for sync_queue store
+  const DB_VERSION = 3;
   const STORES = [
     "users",
     "students",
@@ -69,174 +70,251 @@
     } catch (e) { return false; }
   }
 
+  async function idbGetAllMap(storeName) {
+    try {
+      const db = await openIDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction(storeName, "readonly");
+        const store = tx.objectStore(storeName);
+        const map = {};
+        const req = store.openCursor();
+        req.onsuccess = (e) => {
+          const cursor = e.target.result;
+          if (cursor) {
+            map[cursor.key] = cursor.value;
+            cursor.continue();
+          } else {
+            resolve(map);
+          }
+        };
+        req.onerror = () => resolve({});
+      });
+    } catch (e) { return {}; }
+  }
+
   const AccuEngine = {
     init: function (config) {
       modules = config;
-      console.log("[AccuEngine] Engine Online (Offline Outbox Ready).");
+      console.log("[AccuEngine] Persistent Offline Engine Active.");
       window.addEventListener("online", () => this.processSyncQueue());
       if (navigator.onLine) {
-        setTimeout(() => this.processSyncQueue(), 2000);
+        setTimeout(() => this.processSyncQueue(), 2500);
       }
     },
 
-    // 1. Data Fetcher (IndexedDB First -> Firestore -> RTDB Fallback)
+    // 🚀 CACHE-FIRST FETCH: Pehle hamesha IndexedDB check karega, offline me 0ms response
     fetch: async function (path) {
       if (!path || !modules) return null;
       const parts = path.split("/");
       const root = parts[0];
       const { fsDb, db, doc, getDoc, collection, getDocs, ref, get, child } = modules;
 
+      // 1. STUDENTS (Attendance, Directory, Leaderboard)
       if (root === "students") {
         if (parts[1]) {
           const admn = parts[1];
           const cached = await idbGet("students", admn);
           if (cached) return cached;
-          if (fsDb && getDoc && doc) {
-            const snap = await getDoc(doc(fsDb, "students", String(admn))).catch(() => null);
-            if (snap && snap.exists()) {
-              const data = snap.data();
-              await idbSet("students", admn, data);
-              return data;
-            }
+          if (navigator.onLine && fsDb && getDoc && doc) {
+            try {
+              const snap = await getDoc(doc(fsDb, "students", String(admn)));
+              if (snap && snap.exists()) {
+                const data = snap.data();
+                await idbSet("students", admn, data);
+                return data;
+              }
+            } catch (e) {}
           }
-        } else if (fsDb && getDocs && collection) {
-          const snap = await getDocs(collection(fsDb, "students")).catch(() => null);
-          if (snap && !snap.empty) {
-            const allS = {};
-            snap.forEach((d) => {
-              allS[d.id] = d.data();
-              idbSet("students", d.id, d.data());
-            });
-            return allS;
+          return null;
+        } else {
+          // All Students
+          const localMap = await idbGetAllMap("students");
+          const hasLocal = Object.keys(localMap).length > 0;
+
+          // Agar online hai, background me Firestore se sync karke local update karein
+          if (navigator.onLine && fsDb && getDocs && collection) {
+            getDocs(collection(fsDb, "students")).then((snap) => {
+              if (snap && !snap.empty) {
+                snap.forEach((d) => {
+                  idbSet("students", d.id, d.data());
+                });
+              }
+            }).catch(() => {});
           }
+
+          // Offline ya fast response ke liye local map dein
+          if (hasLocal) return localMap;
+
+          // Agar first time hai aur online hai
+          if (navigator.onLine && fsDb && getDocs && collection) {
+            try {
+              const snap = await getDocs(collection(fsDb, "students"));
+              if (snap && !snap.empty) {
+                const allS = {};
+                snap.forEach((d) => {
+                  allS[d.id] = d.data();
+                  idbSet("students", d.id, d.data());
+                });
+                return allS;
+              }
+            } catch (e) {}
+          }
+          return {};
         }
       }
 
+      // 2. TEACHERS
       if (root === "teachers") {
         if (parts[1]) {
           const user = parts[1];
           const cached = await idbGet("teachers", user);
           if (cached) return cached;
-          if (fsDb && getDoc && doc) {
-            const snap = await getDoc(doc(fsDb, "teachers", String(user))).catch(() => null);
-            if (snap && snap.exists()) {
-              const data = snap.data();
-              await idbSet("teachers", user, data);
-              return data;
-            }
+          if (navigator.onLine && fsDb && getDoc && doc) {
+            try {
+              const snap = await getDoc(doc(fsDb, "teachers", String(user)));
+              if (snap && snap.exists()) {
+                const data = snap.data();
+                await idbSet("teachers", user, data);
+                return data;
+              }
+            } catch (e) {}
           }
-        } else if (fsDb && getDocs && collection) {
-          const snap = await getDocs(collection(fsDb, "teachers")).catch(() => null);
-          if (snap && !snap.empty) {
-            const allT = {};
-            snap.forEach((d) => {
-              allT[d.id] = d.data();
-              idbSet("teachers", d.id, d.data());
-            });
-            return allT;
+          return null;
+        } else {
+          const localMap = await idbGetAllMap("teachers");
+          if (Object.keys(localMap).length > 0) return localMap;
+          if (navigator.onLine && fsDb && getDocs && collection) {
+            try {
+              const snap = await getDocs(collection(fsDb, "teachers"));
+              if (snap && !snap.empty) {
+                const allT = {};
+                snap.forEach((d) => {
+                  allT[d.id] = d.data();
+                  idbSet("teachers", d.id, d.data());
+                });
+                return allT;
+              }
+            } catch (e) {}
           }
+          return {};
         }
       }
 
+      // 3. ATTENDANCE
+      if (root === "attendance") {
+        if (parts[1] && parts[2]) {
+          const key = `${parts[1]}_${parts[2]}`;
+          const cached = await idbGet("attendance", key);
+          if (cached) return cached;
+          if (navigator.onLine && fsDb && getDoc && doc) {
+            try {
+              const snap = await getDoc(doc(fsDb, "attendance", key));
+              if (snap && snap.exists()) {
+                const res = snap.data().days || snap.data();
+                await idbSet("attendance", key, res);
+                return res;
+              }
+            } catch (e) {}
+          }
+          return {};
+        } else {
+          const localMap = await idbGetAllMap("attendance");
+          if (Object.keys(localMap).length > 0) {
+            const fullAtt = {};
+            Object.entries(localMap).forEach(([k, val]) => {
+              const p = k.split("_");
+              if (!fullAtt[p[0]]) fullAtt[p[0]] = {};
+              fullAtt[p[0]][p[1]] = val;
+            });
+            return fullAtt;
+          }
+          if (navigator.onLine && fsDb && getDocs && collection) {
+            try {
+              const snap = await getDocs(collection(fsDb, "attendance"));
+              const fullAtt = {};
+              snap.forEach((d) => {
+                const docData = d.data();
+                const admn = docData.admn || d.id.split("_")[0];
+                const month = docData.month || d.id.split("_")[1];
+                if (!fullAtt[admn]) fullAtt[admn] = {};
+                fullAtt[admn][month] = docData.days || docData;
+                idbSet("attendance", `${admn}_${month}`, docData.days || docData);
+              });
+              return fullAtt;
+            } catch (e) {}
+          }
+          return {};
+        }
+      }
+
+      // 4. DAILY CLAIMS
       if (root === "daily_claims" && parts[1]) {
         const admn = parts[1];
-        if (fsDb && getDoc && doc) {
-          const snap = await getDoc(doc(fsDb, "daily_claims", String(admn))).catch(() => null);
-          if (snap && snap.exists()) return snap.data().claims || snap.data();
-        }
-        if (db && ref && get && child) {
-          const snap = await get(child(ref(db), path)).catch(() => null);
-          if (snap && snap.exists()) return snap.val();
-        }
-        return {};
-      }
-
-      if (root === "teacher_daily_claims" && parts[1]) {
-        if (db && ref && get && child) {
-          const snap = await get(child(ref(db), path)).catch(() => null);
-          if (snap && snap.exists()) return snap.val();
-        }
-        return {};
-      }
-
-      if (root === "users" && parts[1]) {
-        const uid = parts[1];
-        const cached = await idbGet("users", uid);
+        const cached = await idbGet("daily_claims", admn);
         if (cached) return cached;
-        if (fsDb && getDoc && doc) {
-          const snap = await getDoc(doc(fsDb, "users", String(uid))).catch(() => null);
-          if (snap && snap.exists()) {
-            const data = snap.data();
-            await idbSet("users", uid, data);
-            return data;
-          }
+        if (navigator.onLine && fsDb && getDoc && doc) {
+          try {
+            const snap = await getDoc(doc(fsDb, "daily_claims", String(admn)));
+            if (snap && snap.exists()) {
+              const res = snap.data().claims || snap.data();
+              await idbSet("daily_claims", admn, res);
+              return res;
+            }
+          } catch (e) {}
         }
+        if (db && ref && get && child) {
+          try {
+            const snap = await get(child(ref(db), path));
+            if (snap && snap.exists()) return snap.val();
+          } catch (e) {}
+        }
+        return {};
       }
 
+      // 5. FEES MATRIX
       if (root === "fees_matrix") {
         if (parts[1]) {
           const admn = parts[1];
           const cached = await idbGet("fees_matrix", admn);
           if (cached) return cached;
-          if (fsDb && getDoc && doc) {
-            const snap = await getDoc(doc(fsDb, "fees_matrix", String(admn))).catch(() => null);
-            if (snap && snap.exists()) {
-              const res = snap.data().matrix || snap.data();
-              await idbSet("fees_matrix", admn, res);
-              return res;
-            }
+          if (navigator.onLine && fsDb && getDoc && doc) {
+            try {
+              const snap = await getDoc(doc(fsDb, "fees_matrix", String(admn)));
+              if (snap && snap.exists()) {
+                const res = snap.data().matrix || snap.data();
+                await idbSet("fees_matrix", admn, res);
+                return res;
+              }
+            } catch (e) {}
           }
-        } else if (fsDb && getDocs && collection) {
-          const snap = await getDocs(collection(fsDb, "fees_matrix")).catch(() => null);
-          if (snap && !snap.empty) {
-            const allMatrix = {};
-            snap.forEach((d) => {
-              allMatrix[d.id] = d.data().matrix || d.data();
-              idbSet("fees_matrix", d.id, allMatrix[d.id]);
-            });
-            return allMatrix;
+          return {};
+        } else {
+          const localMap = await idbGetAllMap("fees_matrix");
+          if (Object.keys(localMap).length > 0) return localMap;
+          if (navigator.onLine && fsDb && getDocs && collection) {
+            try {
+              const snap = await getDocs(collection(fsDb, "fees_matrix"));
+              const allMatrix = {};
+              snap.forEach((d) => {
+                const data = d.data();
+                allMatrix[d.id] = data.matrix || data;
+                idbSet("fees_matrix", d.id, allMatrix[d.id]);
+              });
+              return allMatrix;
+            } catch (e) {}
           }
+          return {};
         }
       }
 
-      if (root === "attendance") {
-        if (parts[1] && parts[2]) {
-          const admn = parts[1];
-          const month = parts[2];
-          const key = `${admn}_${month}`;
-          const cached = await idbGet("attendance", key);
-          if (cached) return cached;
-          if (fsDb && getDoc && doc) {
-            const snap = await getDoc(doc(fsDb, "attendance", key)).catch(() => null);
-            if (snap && snap.exists()) {
-              const res = snap.data().days || snap.data();
-              await idbSet("attendance", key, res);
-              return res;
-            }
-          }
-        } else if (!parts[1] && fsDb && getDocs && collection) {
-          const snap = await getDocs(collection(fsDb, "attendance")).catch(() => null);
-          if (snap && !snap.empty) {
-            const fullAtt = {};
-            snap.forEach((d) => {
-              const docData = d.data();
-              const admn = docData.admn || d.id.split("_")[0];
-              const month = docData.month || d.id.split("_")[1];
-              if (!fullAtt[admn]) fullAtt[admn] = {};
-              fullAtt[admn][month] = docData.days || docData;
-            });
-            return fullAtt;
-          }
-        }
-      }
-
+      // 6. TESTS (Offline Marks)
       if (root === "tests" && parts[1]) {
         const admn = parts[1];
         const cached = await idbGet("tests", admn);
         if (cached) return cached;
-        if (fsDb && getDocs && collection) {
-          const snap = await getDocs(collection(fsDb, "tests")).catch(() => null);
-          if (!snap.empty) {
+        if (navigator.onLine && fsDb && getDocs && collection) {
+          try {
+            const snap = await getDocs(collection(fsDb, "tests"));
             const testsObj = {};
             snap.forEach((d) => {
               const data = d.data();
@@ -248,35 +326,38 @@
               await idbSet("tests", admn, testsObj);
               return testsObj;
             }
-          }
+          } catch (e) {}
         }
+        return {};
       }
 
-      if (root === "fees_entries") {
-        if (parts[1]) {
-          const admn = parts[1];
-          const cached = await idbGet("fees_entries", admn);
-          if (cached) return cached;
-          if (fsDb && getDocs && collection) {
-            const snap = await getDocs(collection(fsDb, "fees_entries")).catch(() => null);
-            if (!snap.empty) {
-              const entriesObj = {};
-              snap.forEach((d) => {
-                const data = d.data();
-                if (String(data.admn) === String(admn)) {
-                  entriesObj[data.entryId || d.id] = data;
-                }
-              });
-              if (Object.keys(entriesObj).length > 0) {
-                await idbSet("fees_entries", admn, entriesObj);
-                return entriesObj;
-              }
-            }
+      // 7. ONLINE TESTS
+      if (root === "online_tests") {
+        const classKey = parts[1];
+        const localMap = await idbGetAllMap("online_tests");
+        const classTests = {};
+        Object.entries(localMap).forEach(([id, t]) => {
+          if (!classKey || String(t.class) === String(classKey)) {
+            classTests[id] = t;
           }
+        });
+        if (Object.keys(classTests).length > 0) return classTests;
+
+        if (navigator.onLine && fsDb && getDocs && collection) {
+          try {
+            const snap = await getDocs(collection(fsDb, "online_tests"));
+            const tests = {};
+            snap.forEach((d) => {
+              tests[d.id] = d.data();
+              idbSet("online_tests", d.id, d.data());
+            });
+            return tests;
+          } catch (e) {}
         }
+        return {};
       }
 
-      // RTDB Fallback for small configs (Timetable, Subjects)
+      // Small fallback for settings, timetables
       if (db && ref && get && child) {
         try {
           const snap = await get(child(ref(db), path));
@@ -287,7 +368,6 @@
       return null;
     },
 
-    // 2. Local Storage Direct Set/Invalidate Helpers
     setLocal: async function (storeName, key, value) {
       await idbSet(storeName, key, value);
     },
@@ -296,7 +376,6 @@
       await idbSet(storeName, key, null);
     },
 
-    // 3. Offline Action Queue (Agar net na ho toh yahan save hoga)
     queueOfflineAction: async function (actionType, payload) {
       const db = await openIDB();
       const item = {
@@ -308,15 +387,11 @@
       return new Promise((resolve) => {
         const tx = db.transaction("sync_queue", "readwrite");
         tx.objectStore("sync_queue").put(item, item.id);
-        tx.oncomplete = () => {
-          console.log("[AccuEngine] Queued offline action:", actionType);
-          resolve(true);
-        };
+        tx.oncomplete = () => resolve(true);
         tx.onerror = () => resolve(false);
       });
     },
 
-    // 4. Background Sync Processor (Internet aate hi Firestore push karega)
     processSyncQueue: async function () {
       if (!navigator.onLine || !modules) return;
       const db = await openIDB();
@@ -328,9 +403,8 @@
       });
 
       if (items.length === 0) return;
-      console.log(`[AccuEngine] Processing ${items.length} queued offline actions...`);
-
       const { fsDb, doc, setDoc } = modules;
+
       for (const item of items) {
         try {
           if (item.actionType === "attendance_batch") {
@@ -347,16 +421,12 @@
             await setDoc(doc(fsDb, "fees_entries", entryDocId), entryData, { merge: true });
             await setDoc(doc(fsDb, "fees_matrix", matrixDocId), matrixData, { merge: true });
           }
-
-          // Successfully pushed, remove from sync queue
           const delTx = db.transaction("sync_queue", "readwrite");
           delTx.objectStore("sync_queue").delete(item.id);
         } catch (err) {
-          console.warn("[AccuEngine] Sync failed for item:", item.id, err);
-          break; // Net unstable ho toh wait karega
+          break;
         }
       }
-      console.log("[AccuEngine] Offline queue sync completed.");
     }
   };
 
