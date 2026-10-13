@@ -5351,7 +5351,7 @@ Exact Output JSON Format Required:
     }
 
 
-    // Firestore se single user fetch karne ka helper
+        // Firestore se single user fetch karne ka helper
     async function getFirestoreUser(userId) {
       try {
         const userSnap = await getDoc(doc(fsDb, "users", String(userId)));
@@ -5361,6 +5361,63 @@ Exact Output JSON Format Required:
         return null;
       }
     }
+
+    // 🚀 MASTER FIRESTORE LOADER FOR ADMIN DASHBOARD (AVAILABLE GLOBALLY)
+    window.loadAdminDashboardData = async function() {
+      console.log("⚡ [AccuEngine] Fetching complete school data from Cloud Firestore...");
+
+      try {
+        // 1. Fetch Students & Passwords
+        const [studentsData, usersData] = await Promise.all([
+          safeDataFetch("students"),
+          safeDataFetch("users")
+        ]);
+
+        if (studentsData && Object.keys(studentsData).length > 0) {
+          inMemoryStudentsData = studentsData;
+          window.inMemoryStudentsData = studentsData;
+          console.log(`✔ [Firestore] Loaded ${Object.keys(studentsData).length} students.`);
+        }
+
+        if (usersData && Object.keys(usersData).length > 0) {
+          cachedUsersMap = usersData;
+        }
+
+        // 2. Render Admin Students Directory
+        if (typeof renderAdminStudentsDirectory === "function") {
+          renderAdminStudentsDirectory(true);
+        }
+
+        // 3. Background mein Teachers aur Fees load karke cards update karo
+        const [teachersData, feesMatrixData] = await Promise.all([
+          safeDataFetch("teachers"),
+          safeDataFetch("fees_matrix")
+        ]);
+
+        if (teachersData) {
+          window.inMemoryTeachersData = teachersData;
+          if (typeof window.renderAdminHomeTeacherboardCards === "function") {
+            window.renderAdminHomeTeacherboardCards();
+          }
+          if (typeof window.loadManageTeacherList === "function") {
+            window.loadManageTeacherList();
+          }
+        }
+
+        if (feesMatrixData) {
+          window.inMemoryFeesMatrix = feesMatrixData;
+        }
+
+        if (typeof window.calculateAdminEntryTabAnalytics === "function") {
+          window.calculateAdminEntryTabAnalytics();
+        }
+
+        console.log("🎉 [Firestore] Admin Dashboard Fully Populated!");
+      } catch (err) {
+        console.error("❌ Failed to load admin data from Firestore:", err);
+      }
+    };
+
 
 
         // Smart Image Compressor ( Keeps under ~120KB for fast Firestore storage )
@@ -5950,13 +6007,16 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       });
     });
 
-    function getLiveStudents() {
+          function getLiveStudents() {
       try { 
-        if (!inMemoryStudentsData) return [];
-        if (Array.isArray(inMemoryStudentsData)) return inMemoryStudentsData.filter(Boolean);
-        return Object.values(inMemoryStudentsData).filter(item => item && typeof item === 'object'); 
+        const data = (inMemoryStudentsData && Object.keys(inMemoryStudentsData).length > 0)
+          ? inMemoryStudentsData
+          : (window.inMemoryStudentsData || {});
+        if (Array.isArray(data)) return data.filter(Boolean);
+        return Object.values(data).filter(item => item && typeof item === 'object'); 
       } catch(e) { return []; }
     }
+
 
     async function getStudentRecord(admnId) {
       if (!admnId) return null;
@@ -6385,7 +6445,7 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
         document.querySelectorAll(".student-only").forEach(e => e.style.display = "none");
         document.querySelectorAll(".admin-only").forEach(e => e.style.display = "block");
 
-        bottomNav.innerHTML = `
+                bottomNav.innerHTML = `
           <div class="nav-item active" onclick="switchTab('adminTabHome', this, event)"><div class="nav-icon">🏠</div>Home</div>
           <div class="nav-item" onclick="switchTab('adminTabStudents', this, event)"><div class="nav-icon">👤</div>Students</div>
           <div class="nav-item" onclick="switchTab('adminTabEntry', this, event)"><div class="nav-icon">📝</div>Entry</div>
@@ -6396,7 +6456,12 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
         `;
         renderAdminStudentsDirectory();
         window.switchTab('adminTabHome', bottomNav.children[0]);
+        // 🚀 Firestore se Admin Dashboard ka live data load karo
+        if (typeof window.loadAdminDashboardData === "function") {
+          window.loadAdminDashboardData();
+        }
       }
+
     }
 
 
@@ -10409,14 +10474,25 @@ isAdminLbEditMode = false;
 
    
       window.initNativePushAndSW();
-      setTimeout(() => {
+         setTimeout(() => {
         const loggedUser = localStorage.getItem("loggedUser"), loggedRole = localStorage.getItem("loggedRole");
         if(loggedUser && loggedRole) {
-        if(typeof window.listenToNotifications === 'function') window.listenToNotifications();
-          if(loggedRole === "teacher") { window.loadTeacherBoardNotifications(); window.checkTeacherDailyClaimStatus(); }
-          if(loggedRole === "admin") { window.calculateAdminEntryTabAnalytics(); window.renderAdminHomeTeacherboardCards(); }
+          if(typeof window.listenToNotifications === 'function') window.listenToNotifications();
+          if(loggedRole === "teacher") { 
+            window.loadTeacherBoardNotifications(); 
+            window.checkTeacherDailyClaimStatus(); 
+          }
+          if(loggedRole === "admin") { 
+            if(typeof window.loadAdminDashboardData === "function") {
+              window.loadAdminDashboardData();
+            } else {
+              window.calculateAdminEntryTabAnalytics(); 
+              window.renderAdminHomeTeacherboardCards(); 
+            }
+          }
         }
-      }, 500);
+      }, 300);
+
     });
 
           // ==========================================
@@ -13363,6 +13439,7 @@ if (perms.photo && window.croppedPhotosMap["sUpdatePhotoInput"]) {
         if(role === 'admin') mentorsProgChartAdmin = newChart;
         else mentorsProgChartTeacher = newChart;
       };
+   
 
 
     </script>
