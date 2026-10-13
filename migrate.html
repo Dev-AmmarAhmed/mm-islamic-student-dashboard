@@ -3,37 +3,27 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RTDB Bloat Cleaner</title>
+  <title>RTDB One-Click Purge</title>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0b1329; color: #f8fafc; padding: 24px; margin: 0; }
-    .container { max-width: 740px; margin: auto; background: #131d36; border-radius: 16px; padding: 24px; border: 1px solid #1e293b; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+    .container { max-width: 700px; margin: auto; background: #131d36; border-radius: 16px; padding: 24px; border: 1px solid #1e293b; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
     h1 { color: #ef4444; font-size: 20px; margin-top: 0; }
     p { color: #94a3b8; font-size: 13px; line-height: 1.5; }
-    .auth-box { display: flex; gap: 8px; margin: 16px 0; background: #1e293b; padding: 12px; border-radius: 10px; }
-    input { background: #0f172a; border: 1px solid #475569; color: #fff; padding: 8px 12px; border-radius: 8px; font-size: 13px; outline: none; }
-    button { background: #dc2626; color: white; border: none; padding: 10px 18px; border-radius: 8px; font-weight: 800; cursor: pointer; }
+    button { background: #dc2626; color: white; border: none; padding: 14px 20px; border-radius: 10px; font-weight: 800; font-size: 14px; cursor: pointer; width: 100%; margin-top: 10px; }
     button:disabled { background: #475569; cursor: not-allowed; }
-    .btn-blue { background: #0288d1; }
     #logBox { background: #000; color: #4ade80; padding: 14px; border-radius: 10px; font-family: monospace; font-size: 12px; height: 320px; overflow-y: auto; white-space: pre-wrap; margin-top: 16px; border: 1px solid #1e293b; }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>🗑️ RTDB Deprecated Data Cleaner</h1>
-    <p>Yeh tool Realtime Database ke un saare heavy nodes ko delete karega jo Firestore mein migrate ho chuke hain (students, teachers, fees, attendance, tests, aur base64 photos).</p>
+    <h1>🗑️ RTDB One-Click Bloat Purge</h1>
+    <p>Isme kisi login ki zaroorat nahi hai. Seedha button dabayein aur 12MB ka purana data RTDB se saaf ho jayega.</p>
 
-    <div class="auth-box">
-      <input type="text" id="adminEmail" placeholder="Admin Email / ID">
-      <input type="password" id="adminPass" placeholder="Password">
-      <button type="button" class="btn-blue" onclick="loginAdmin()">🔑 Connect Admin</button>
-    </div>
+    <button id="btnClean" onclick="startDirectPurge()">🚀 Purge All Unused RTDB Nodes Now</button>
 
-    <button id="btnClean" onclick="startPurge()" disabled>🚀 Purge All Unused RTDB Nodes</button>
-
-    <div id="logBox">Admin Login karke 'Purge' button dabayein...</div>
+    <div id="logBox">Ready. 'Purge All Unused RTDB Nodes Now' dabayein...</div>
   </div>
 
   <script>
@@ -48,7 +38,6 @@
     };
 
     firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
     const rtdb = firebase.database();
 
     function log(msg, err = false) {
@@ -57,23 +46,8 @@
       box.scrollTop = box.scrollHeight;
     }
 
-    async function loginAdmin() {
-      const email = document.getElementById("adminEmail").value.trim();
-      const pass = document.getElementById("adminPass").value.trim();
-      if (!email || !pass) return alert("Email aur Password dalein.");
-
-      try {
-        log(`Connecting as ${email}...`);
-        await auth.signInWithEmailAndPassword(email, pass);
-        log("Admin verified! Ab aap Purge button daba sakte hain.");
-        document.getElementById("btnClean").disabled = false;
-      } catch (e) {
-        log("Login failed: " + e.message, true);
-      }
-    }
-
-    async function startPurge() {
-      if (!confirm("Confirm: Yeh un sabhi nodes ko RTDB se permanent delete karega jo Firestore mein ja chuke hain?")) return;
+    async function startDirectPurge() {
+      if (!confirm("Are you sure? RTDB se purane heavy collections delete ho jayenge.")) return;
 
       const btn = document.getElementById("btnClean");
       btn.disabled = true;
@@ -92,19 +66,19 @@
       ];
 
       log("\n==================================================");
-      log("Starting Deletion of Unused Nodes...");
+      log("Purging Unused RTDB Nodes (No Login Mode)...");
 
       for (const node of nodesToDelete) {
         try {
           log(`Deleting /${node}...`);
           await rtdb.ref(node).remove();
-          log(`✔ /${node} successfully deleted.`);
+          log(`✔ /${node} deleted successfully.`);
         } catch (e) {
-          log(`Failed to delete /${node}: ${e.message}`, true);
+          log(`Error on /${node}: ${e.message}`, true);
         }
       }
 
-      log("\n🎉 Cleanup finished! Realtime Database ka size minimize ho chuka hai.");
+      log("\n🎉 Done! Realtime Database ka saara heavy data purge ho chuka hai.");
     }
   </script>
 </body>
