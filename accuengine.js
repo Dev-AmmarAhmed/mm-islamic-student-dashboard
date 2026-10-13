@@ -1,14 +1,13 @@
 /**
- * AccuEngine v4.0 - Smart Sentinel Cache & Sync Engine
- * MM Islamic English School ERP
- * 0-Network Reads when data is unchanged | Auto-sync on updates
+ * AccuEngine v4.2 - Unified Sentinel Engine
+ * Full Auto-Sync: Students, Teachers, Users, Fees Matrix, Fees Entries & Attendance
  */
 
 (function (window) {
   "use strict";
 
   const DB_NAME = "AccuEngine_Storage";
-  const DB_VERSION = 7;
+  const DB_VERSION = 8;
   const STORES = [
     "users",
     "students",
@@ -98,10 +97,9 @@
   const AccuEngine = {
     init: function (config) {
       modules = config;
-      console.log("⚡ [AccuEngine v4.0] Sentinel Active.");
+      console.log("⚡ [AccuEngine v4.2] Active with Attendance Pipeline.");
     },
 
-    // 🚀 BUMP VERSION (Jab bhi app mein koi data create/edit hoga yeh chalega)
     bumpSyncVersion: async function () {
       if (!navigator.onLine || !modules) return;
       try {
@@ -109,13 +107,10 @@
         const newVer = Date.now().toString();
         await set(ref(rtdb, "sync_triggers/version"), newVer);
         localStorage.setItem("accu_local_version", newVer);
-        console.log("🚀 [AccuEngine] Data updated. New version published:", newVer);
-      } catch (e) {
-        console.warn("Version bump skipped:", e);
-      }
+      } catch (e) {}
     },
 
-    // 🚀 MASTER SYNC & CHECK (Login aur App open par chalega)
+    // 🚀 MASTER CLOUD DOWNLOAD (Attendance + Fees + Students + Teachers)
     checkAndSyncData: async function (force = false) {
       if (!modules) return false;
       const { fsDb, db: rtdb, ref, get, child, getDocs, collection } = modules;
@@ -123,53 +118,50 @@
       let remoteVersion = null;
       const localVersion = localStorage.getItem("accu_local_version");
 
-      // 1. RTDB se 10-byte ka version check karo
       if (navigator.onLine && rtdb) {
         try {
           const snap = await get(child(ref(rtdb), "sync_triggers/version"));
-          if (snap.exists()) {
-            remoteVersion = String(snap.val());
-          }
-        } catch (e) {
-          console.warn("Could not check remote version:", e);
-        }
+          if (snap.exists()) remoteVersion = String(snap.val());
+        } catch (e) {}
       }
 
-      const hasLocalData = Object.keys(await idbGetAllMap("students")).length > 0;
+      const hasLocalStudents = Object.keys(await idbGetAllMap("students")).length > 0;
+      const hasLocalAttendance = Object.keys(await idbGetAllMap("attendance")).length > 0;
 
-      // Agar data local memory mein hai aur version match hai -> NO DOWNLOAD!
-      if (!force && hasLocalData && remoteVersion && remoteVersion === localVersion) {
-        console.log("🎯 [AccuEngine] Zero Network Sync: Database has no changes. Loading from local memory!");
-        return false; // No download needed
+      // Agar data pehle se hai aur version match hai -> zero network calls
+      if (!force && hasLocalStudents && hasLocalAttendance && remoteVersion && remoteVersion === localVersion) {
+        console.log("🎯 [AccuEngine] Cache Valid: Loading from memory (0 network read).");
+        return false;
       }
 
-      // 2. Naya data aaya hai ya first time login -> DOWNLOAD ALL ONCE
-      console.log("📥 [AccuEngine] New updates detected or first load. Downloading fresh database from Firestore...");
+      console.log("📥 [AccuEngine] Downloading complete school dataset including Attendance from Firestore...");
 
       try {
-        const [studentsSnap, teachersSnap, usersSnap, feesMatrixSnap] = await Promise.all([
+        const [studentsSnap, teachersSnap, usersSnap, feesMatrixSnap, feesEntriesSnap, attendanceSnap] = await Promise.all([
           getDocs(collection(fsDb, "students")),
           getDocs(collection(fsDb, "teachers")),
           getDocs(collection(fsDb, "users")),
-          getDocs(collection(fsDb, "fees_matrix"))
+          getDocs(collection(fsDb, "fees_matrix")),
+          getDocs(collection(fsDb, "fees_entries")),
+          getDocs(collection(fsDb, "attendance"))
         ]);
 
-        // Process Students
+        // 1. Students
         const studentsMap = {};
         studentsSnap.forEach((d) => { studentsMap[d.id] = d.data(); });
         await idbSetBatch("students", studentsMap);
 
-        // Process Teachers
+        // 2. Teachers
         const teachersMap = {};
         teachersSnap.forEach((d) => { teachersMap[d.id] = d.data(); });
         await idbSetBatch("teachers", teachersMap);
 
-        // Process Users
+        // 3. Users
         const usersMap = {};
         usersSnap.forEach((d) => { usersMap[d.id] = d.data(); });
         await idbSetBatch("users", usersMap);
 
-        // Process Fees Matrix
+        // 4. Fees Matrix
         const feesMap = {};
         feesMatrixSnap.forEach((d) => {
           const dt = d.data();
@@ -177,23 +169,94 @@
         });
         await idbSetBatch("fees_matrix", feesMap);
 
-        // Save new version
+        // 5. Fees Entries
+        const entriesMap = {};
+        feesEntriesSnap.forEach((d) => { entriesMap[d.id] = d.data(); });
+        await idbSetBatch("fees_entries", entriesMap);
+
+        // 6. 📅 ATTENDANCE (310 Monthly Sheets Sync)
+        const attMap = {};
+        attendanceSnap.forEach((d) => {
+          const dt = d.data();
+          attMap[d.id] = dt.days || dt;
+        });
+        await idbSetBatch("attendance", attMap);
+
         const finalVer = remoteVersion || Date.now().toString();
         localStorage.setItem("accu_local_version", finalVer);
 
-        console.log(`🎉 [AccuEngine] Successfully downloaded: ${Object.keys(studentsMap).length} Students, ${Object.keys(teachersMap).length} Teachers.`);
-        return true; // Fresh download completed
+        console.log(`🎉 [AccuEngine] Synced ${Object.keys(studentsMap).length} Students & ${Object.keys(attMap).length} Attendance sheets!`);
+        return true;
       } catch (err) {
         console.error("❌ [AccuEngine Sync Failed]:", err);
         return false;
       }
     },
 
-    // 🚀 LOCAL FAST GETTER
+    // 🚀 UNIFIED FETCH (Auto Nested Hierarchy Resolver)
     fetch: async function (path) {
+      if (!path) return null;
       const parts = path.split("/");
       const root = parts[0];
 
+      // 1. ATTENDANCE QUERY HANDLER
+      if (root === "attendance") {
+        if (parts[1] && parts[2]) {
+          // Path: attendance/101/August
+          const key = `${parts[1]}_${parts[2]}`;
+          const val = await idbGet("attendance", key);
+          return val || {};
+        } else if (parts[1]) {
+          // Path: attendance/101
+          const all = await idbGetAllMap("attendance");
+          const res = {};
+          const prefix = `${parts[1]}_`;
+          Object.entries(all).forEach(([k, v]) => {
+            if (k.startsWith(prefix)) {
+              const month = k.substring(prefix.length);
+              res[month] = v;
+            }
+          });
+          return res;
+        } else {
+          // Path: attendance (All students all months)
+          const all = await idbGetAllMap("attendance");
+          const nested = {};
+          Object.entries(all).forEach(([k, v]) => {
+            const splitIdx = k.indexOf("_");
+            if (splitIdx !== -1) {
+              const admn = k.substring(0, splitIdx);
+              const month = k.substring(splitIdx + 1);
+              if (!nested[admn]) nested[admn] = {};
+              nested[admn][month] = v;
+            }
+          });
+          return nested;
+        }
+      }
+
+      // 2. FEES ENTRIES QUERY HANDLER
+      if (root === "fees_entries") {
+        const all = await idbGetAllMap("fees_entries");
+        if (parts[1]) {
+          const res = {};
+          Object.entries(all).forEach(([k, v]) => {
+            if (v && String(v.admn) === String(parts[1])) res[k] = v;
+          });
+          return res;
+        } else {
+          const nested = {};
+          Object.values(all).forEach((item) => {
+            if (item && item.admn) {
+              if (!nested[item.admn]) nested[item.admn] = {};
+              nested[item.admn][item.id || item.entryId || Math.random()] = item;
+            }
+          });
+          return nested;
+        }
+      }
+
+      // 3. STANDARD PATHS (students, teachers, users, fees_matrix)
       if (parts[1]) {
         return await idbGet(root, parts[1]);
       } else {
