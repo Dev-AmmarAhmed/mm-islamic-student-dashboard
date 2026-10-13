@@ -8378,12 +8378,13 @@ isAdminLbEditMode = false;
         }
         inMemoryStudentsData[newAdmn] = updatedStudentObj;
 
-        const syncPayload = {
+                const syncPayload = {
           admn: newAdmn,
           studentData: updatedStudentObj,
-          userData: { password: pass || "MM", role: "student", admn: newAdmn, assignedClass: cls },
+          userData: { password: pass || "MM", role: "student", admn: newAdmn, assignedClass: cls, email: email || "" },
           rtdbPayload: updates
         };
+
 
         // 🚀 2. Online vs Offline Sync Handling
         if (navigator.onLine) {
@@ -8450,15 +8451,16 @@ isAdminLbEditMode = false;
           points: 0 
         };
 
-        // 🚀 1. Write to Firestore 'students' & 'users'
-        await setDoc(doc(fsDb, "students", String(finalAdmn)), studentRecord, { merge: true });
+              // Firestore mein User credentials save karna (Email included)
         await setDoc(doc(fsDb, "users", String(finalAdmn)), {
           password: "MM",
           role: "student",
           admn: finalAdmn,
           assignedClass: std,
+          email: "",
           createdAt: new Date().toISOString()
         }, { merge: true });
+
 
         // 🚀 2. Local AccuEngine Cache Instant Update
         if (window.AccuEngine) {
@@ -8520,12 +8522,15 @@ isAdminLbEditMode = false;
 
         // 🚀 1. Write to Firestore 'teachers' & 'users'
         await setDoc(doc(fsDb, "teachers", String(user)), teacherRecord, { merge: true });
+               // Firestore mein Teacher credentials save karna (Email included)
         await setDoc(doc(fsDb, "users", String(user)), {
           password: pass,
           role: "teacher",
           assignedClass: cls,
+          email: email || "",
           createdAt: new Date().toISOString()
         }, { merge: true });
+
 
         // 🚀 2. Local AccuEngine Cache Instant Update
         if (window.AccuEngine) {
@@ -9870,7 +9875,8 @@ isAdminLbEditMode = false;
           points: pts,
           photo: photoUrl
         };
-        updates[`users/${newUser}`] = { password: pass, role: "teacher", assignedClass: assignedCls };
+                updates[`users/${newUser}`] = { password: pass, role: "teacher", assignedClass: assignedCls, email: email || "" };
+        await setDoc(doc(fsDb, "users", String(newUser)), { password: pass, role: "teacher", assignedClass: assignedCls, email: email || "" }, { merge: true });
 
         if (typeof window.encodeEmailKey === "function") {
           if (currentTeacher.email && currentTeacher.email !== email) {
@@ -12559,7 +12565,7 @@ window.syncProfileModalHeight = function() {
           if (perms.dob) {
             updates[`students/${student.admn}/dob`] = document.getElementById("sGrayedDob").value.trim() || "-";
           }
-                    if (perms.email) {
+                            if (perms.email) {
             const newEmail = document.getElementById("sGrayedEmail").value.trim();
             if (student.email && student.email !== newEmail) {
               updates[`email_lookup/${window.encodeEmailKey(student.email)}`] = null;
@@ -12568,7 +12574,10 @@ window.syncProfileModalHeight = function() {
             if (newEmail) {
               updates[`email_lookup/${window.encodeEmailKey(newEmail)}`] = String(student.admn);
             }
+            // Firestore users doc me bhi email save karein
+            await setDoc(doc(fsDb, "users", String(student.admn)), { email: newEmail }, { merge: true });
           }
+
 if (perms.photo && window.croppedPhotosMap["sUpdatePhotoInput"]) {
             const croppedData = window.croppedPhotosMap["sUpdatePhotoInput"];
             const photoPointer = await window.saveMediaToFirestore("student_photos", student.admn, croppedData, {
@@ -12892,8 +12901,10 @@ if (perms.photo && window.croppedPhotosMap["sUpdatePhotoInput"]) {
             updates[`users/${oldUser}`] = null;
             localStorage.setItem("loggedUser", targetUser);
           }
+                   updatedUser.email = updatedTeacher.email || "";
           updates[`teachers/${targetUser}`] = updatedTeacher;
           updates[`users/${targetUser}`] = updatedUser;
+          await setDoc(doc(fsDb, "users", String(targetUser)), { email: updatedTeacher.email || "" }, { merge: true });
 
           if (typeof window.encodeEmailKey === "function") {
             if (tObj.email && tObj.email !== updatedTeacher.email) {
