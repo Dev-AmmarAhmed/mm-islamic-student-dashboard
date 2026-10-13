@@ -25,9 +25,12 @@
     }
   </script>
 
-   <!-- PDF EXPORT ENGINE LIBRARIES -->
+   <!-- ACCUENGINE SECURITY & CACHE ENGINE -->
+  <script src="./accuengine.js"></script>
+
+  <!-- PDF EXPORT ENGINE LIBRARIES -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+ <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   
   <!-- INTERACTIVE GRAPH ENGINE (CHART.JS) -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -1622,7 +1625,19 @@ canvas { touch-action: pan-y !important; }
         <span style="font-size: 14px; font-weight: 800; letter-spacing: 0.3px;">Sign in with Google</span>
       </button>
     </div>
+
+      <!-- SECURED BY ACCUENGINE PROFESSIONAL BADGE -->
+    <div style="position: absolute; bottom: 38px; left: 0; right: 0; display: flex; align-items: center; justify-content: center; gap: 7px; opacity: 0.85; font-size: 11px; font-weight: 700; letter-spacing: 0.6px; color: var(--text-muted); user-select: none; pointer-events: none;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0288d1" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+        <path d="m9 12 2 2 4-4"></path>
+      </svg>
+      <span>Secured by <b style="color: #0288d1; font-weight: 900; letter-spacing: 0.8px;">AccuEngine</b></span>
+    </div>
+
   </section>
+
+  
 
 
 
@@ -4980,12 +4995,19 @@ Exact Output JSON Format Required:
       }
     } catch (err) { console.warn("App Check bypass:", err); }
 
-       const db = getDatabase(app);
+      
+          const db = getDatabase(app);
     const auth = getAuth(app);
     const fsDb = getFirestore(app);
 
+    // 🚀 Phase 2: AccuEngine Bridge Connect & Sync Sentinel Setup
+    if (window.AccuEngine) {
+      window.AccuEngine.init(fsDb, db);
+    }
+
     // Ensure background Firebase Auth token is always active for Security Rules
     window.ensureFirebaseAuth = async function() {
+
       if (auth.currentUser) return auth.currentUser;
       try {
         const cred = await signInAnonymously(auth);
@@ -5256,12 +5278,17 @@ Exact Output JSON Format Required:
     
     
 
-        async function safeDataFetch(refPath) {
+           async function safeDataFetch(refPath) {
+      // 🚀 AccuEngine Interceptor: Firestore + Permanent IndexedDB Cache
+      if (window.AccuEngine && typeof window.AccuEngine.fetch === "function") {
+        return await window.AccuEngine.fetch(refPath);
+      }
       try {
         const snap = await get(child(ref(db), refPath));
         return snap.exists() ? snap.val() : null;
       } catch(err) { return null; }
     }
+
 
     // Firestore se single user fetch karne ka helper
     async function getFirestoreUser(userId) {
@@ -6098,16 +6125,8 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
     });
 
 
-          addSafeListener("logoutBtn", "click", async () => { 
-      // 1. In-Memory Variables & Firestore Media Cache Clear
-      inMemoryStudentsData = {};
-      fullDbCache = {};
-      if (typeof cachedUsersMap !== "undefined") cachedUsersMap = {};
-      if (typeof firestoreMediaCache !== "undefined") {
-        Object.keys(firestoreMediaCache).forEach(k => delete firestoreMediaCache[k]);
-      }
-
-      // 2. Firebase Auth Session & Sign-Out Clear
+            addSafeListener("logoutBtn", "click", async () => { 
+      // 1. Firebase Auth Session Clear
       try {
         if (typeof auth !== "undefined" && auth.currentUser) {
           await remove(ref(db, `auth_sessions/${auth.currentUser.uid}`)).catch(() => {});
@@ -6115,21 +6134,18 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
         }
       } catch (e) {}
 
-      // 3. Complete LocalStorage & SessionStorage Wipe (Offline DB cache, Test cache, Login data sab saaf)
-      localStorage.clear();
+      // 2. Sirf User Session Credentials clear karo (Permanent Cache intact rahega!)
+      localStorage.removeItem("loggedUser");
+      localStorage.removeItem("loggedRole");
+      localStorage.removeItem("sessionToken");
+      localStorage.removeItem("assignedClass");
+      localStorage.removeItem("studentAdmn");
       sessionStorage.clear();
 
-      // 4. Browser Cache Storage & Service Worker Cache Clear (Await ke saath taaki delete hone se pehle reload na ho)
-      if ('caches' in window) {
-        try {
-          const names = await caches.keys();
-          await Promise.all(names.map(name => caches.delete(name)));
-        } catch (e) {}
-      }
-
-      // 5. Fresh Reload from Server
+      // 3. Instant clean UI reload bina cache purge kiye
       window.location.replace(window.location.pathname);
     });
+
 
 
 
@@ -6451,15 +6467,32 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
             if(name && phone) {
               count++;
               const admnKey = "S" + (baseTimestamp + i).toString().slice(-5);
-              const studentObj = { admn: admnKey, name: name, class: cls, phone: phone, photo: "", points: 0, regDate: getTodayFormattedDate() };
+                          const studentObj = { admn: admnKey, name: name, class: cls, phone: phone, photo: "", points: 0, regDate: getTodayFormattedDate() };
               updates[`students/${admnKey}`] = studentObj;
-              updates[`users/${admnKey}`] = { password: "MM", role: "student", admn: admnKey, assignedClass: cls };
+              updates[`user_status/${admnKey}`] = "active";
             }
           }
         }
         if(count === 0) { alert("Please fill Name and WhatsApp number for at least 1 student."); return; }
         await update(ref(db), updates);
-        alert(`✔ Successfully registered ${count} students!`);
+
+        // Batch save in Firestore
+        for(let i = 1; i <= 50; i++) {
+          const nameEl = document.getElementById(`bulk_name_${i}`);
+          const clsEl = document.getElementById(`bulk_cls_${i}`);
+          const phoneEl = document.getElementById(`bulk_phone_${i}`);
+          if(nameEl && phoneEl && nameEl.value.trim() && phoneEl.value.trim()) {
+            const admnKey = "S" + (baseTimestamp + i).toString().slice(-5);
+            await setDoc(doc(fsDb, "users", String(admnKey)), {
+              password: "MM",
+              role: "student",
+              admn: admnKey,
+              assignedClass: clsEl.value.trim(),
+              createdAt: new Date().toISOString()
+            }, { merge: true });
+          }
+        }
+    alert(`✔ Successfully registered ${count} students!`);
         window.closeModal("bulkStudentModal");
         renderAdminStudentsDirectory();
       });
@@ -7236,14 +7269,30 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
     addSafeListener("saveTodayAttendanceBtn", "click", () => {
       const btn = document.getElementById("saveTodayAttendanceBtn");
       runWithBtnSpinner(btn, "💾 Save Today's Attendance", async () => {
-        const currentMonth = getAutoMonthName();
+                const currentMonth = getAutoMonthName();
         const todayNum = new Date().getDate();
         const chks = document.querySelectorAll(".t-today-att-chk");
         const updates = {};
         chks.forEach(c => { updates[`attendance/${c.getAttribute("data-admn")}/${currentMonth}/day_${todayNum}`] = c.checked; });
         await update(ref(db), updates);
+
+        // 🚀 Firestore Sync via AccuEngine
+        try {
+          for (let c of chks) {
+            const admn = c.getAttribute("data-admn");
+            const key = `${admn}_${currentMonth}`;
+            const attDocRef = doc(fsDb, "attendance", key);
+            const attSnap = await getDoc(attDocRef);
+            let daysData = attSnap.exists() && attSnap.data().days ? attSnap.data().days : {};
+            daysData[`day_${todayNum}`] = c.checked;
+            await setDoc(attDocRef, { admn: String(admn), month: currentMonth, days: daysData, updatedAt: new Date().toISOString() }, { merge: true });
+            if (window.AccuEngine) await window.AccuEngine.invalidate("attendance", key);
+          }
+        } catch (fsErr) {
+          console.warn("Firestore attendance sync warning:", fsErr);
+        }
         alert("Today's Attendance saved successfully.");
-        loadTeacherTodayAttendance();
+loadTeacherTodayAttendance();
       });
     });
 
@@ -7605,7 +7654,7 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
 
         if(!admn || selectedChks.length === 0 || !total) { alert("Please select Student, Fee Types, and enter Amount."); return; }
 
-        const dateStr = getTodayFormattedDate();
+                const dateStr = getTodayFormattedDate();
         const entryId = Date.now().toString();
         const updates = {};
         updates[`fees_entries/${admn}/${entryId}`] = { id: entryId, admn: admn, types: selectedChks, amount: total, mode: mode, date: dateStr };
@@ -7614,6 +7663,31 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
           updates[`fees_matrix/${admn}/${feeType}`] = { paid: true, date: dateStr, amount: total };
         });
         await update(ref(db), updates);
+
+        // 🚀 Firestore Sync via AccuEngine
+        try {
+          // 1. Fee Entry Document
+          await setDoc(doc(fsDb, "fees_entries", `${admn}_${entryId}`), {
+            id: entryId, admn: String(admn), types: selectedChks, amount: total, mode: mode, date: dateStr, entryId: entryId
+          }, { merge: true });
+
+          // 2. Fees Matrix Document
+          const matrixDocRef = doc(fsDb, "fees_matrix", String(admn));
+          const matrixSnap = await getDoc(matrixDocRef);
+          let currentMatrix = matrixSnap.exists() && matrixSnap.data().matrix ? matrixSnap.data().matrix : {};
+          selectedChks.forEach(feeType => {
+            currentMatrix[feeType] = { paid: true, date: dateStr, amount: total };
+          });
+          await setDoc(matrixDocRef, { admn: String(admn), matrix: currentMatrix, updatedAt: new Date().toISOString() }, { merge: true });
+
+          // Invalidate Local Cache
+          if (window.AccuEngine) {
+            await window.AccuEngine.invalidate("fees_matrix", admn);
+            await window.AccuEngine.invalidate("fees_entries", admn);
+          }
+        } catch (fsErr) {
+          console.warn("Firestore fee sync warning:", fsErr);
+        }
 
         const student = await getStudentRecord(admn);
                lastGeneratedReceipt = { studentName: student ? student.name : "Student", phone: student ? student.phone : "", amount: total, types: selectedChks.join(", "), date: dateStr };
@@ -8018,11 +8092,22 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
           }
         }
 
-        const updates = {};
+              const updates = {};
         updates[`students/${finalAdmn}`] = { srNo: finalAdmn, admn: finalAdmn, name: name, class: std, phone: rawPhone.replace(/[^0-9]/g, ''), dob: dob || "-", photo: photoUrl, regDate: getTodayFormattedDate(), points: 0 };
-        updates[`users/${finalAdmn}`] = { password: "MM", role: "student", admn: finalAdmn, assignedClass: std };
+        // RTDB lightweight flag for instant kill-switch
+        updates[`user_status/${finalAdmn}`] = "active";
 
         await update(ref(db), updates);
+
+        // Firestore mein User credentials save karna
+        await setDoc(doc(fsDb, "users", String(finalAdmn)), {
+          password: "MM",
+          role: "student",
+          admn: finalAdmn,
+          assignedClass: std,
+          createdAt: new Date().toISOString()
+        }, { merge: true });
+
         if(currentRole === "teacher") await refreshAllTeacherData(); else renderAdminStudentsDirectory();
         
         alert(`✔ Student registered successfully with Admission No: ${finalAdmn}`);
@@ -8060,7 +8145,7 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
           }
         }
 
-        const updates = {};
+             const updates = {};
         updates[`teachers/${user}`] = {
           name: name,
           username: user,
@@ -8071,7 +8156,17 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
           points: 0,
           regDate: getTodayFormattedDate()
         };
-        updates[`users/${user}`] = { password: pass, role: "teacher", assignedClass: cls };
+        // RTDB lightweight flag for instant kill-switch
+        updates[`user_status/${user}`] = "active";
+
+        // Firestore mein Teacher credentials save karna
+        await setDoc(doc(fsDb, "users", String(user)), {
+          password: pass,
+          role: "teacher",
+          assignedClass: cls,
+          createdAt: new Date().toISOString()
+        }, { merge: true });
+
         if (email && typeof window.encodeEmailKey === "function") {
           updates[`email_lookup/${window.encodeEmailKey(email)}`] = String(user);
         }
@@ -8166,11 +8261,12 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       document.getElementById("rmStudentArea").style.display = "block";
     });
 
-     window.deleteStudent = async function(admn) {
+      window.deleteStudent = async function(admn) {
       if(confirm(`Are you sure you want to completely remove ALL data for student ID: ${admn}?`)) {
         const updates = {};
         updates[`students/${admn}`] = null;
         updates[`users/${admn}`] = null;
+        updates[`user_status/${admn}`] = "deleted"; // Kill-switch trigger for live logout
         updates[`fees_entries/${admn}`] = null;
         updates[`fees_matrix/${admn}`] = null;
         updates[`attendance/${admn}`] = null;
@@ -8179,6 +8275,8 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
         updates[`student_test_attempts/${admn}`] = null;
         
         await update(ref(db), updates);
+        await deleteDoc(doc(fsDb, "users", String(admn))).catch(() => {});
+
         
         alert("Student record and all related data removed successfully.");
         window.closeModal("removeStudentModal");
