@@ -5179,32 +5179,13 @@ Exact Output JSON Format Required:
 
             let dbSaveTimeout = null;
 
-            let studentsListenerAttached = false;
+                 let studentsListenerAttached = false;
       window.attachSmartStudentsListener = function(role, sAdmn) {
         if (studentsListenerAttached) return;
         studentsListenerAttached = true;
-
-        // Agar Student login hai, toh poore school ko real-time listen mat karo! Sirf us student ka profile listen karo
-        if (role === "student" && sAdmn) {
-          onValue(ref(db, `students/${sAdmn}`), (snap) => {
-            if (snap.exists()) {
-              inMemoryStudentsData[sAdmn] = snap.val();
-            }
-          });
-          return;
-        }
-
-              // Sirf Admin ya Teacher ke liye students list load karo
-        onValue(ref(db, 'students'), (snap) => {
-          if (snap.exists()) {
-            inMemoryStudentsData = snap.val();
-            if(currentRole === "admin") renderAdminStudentsDirectory(true);
-            if(currentRole === "teacher") { refreshAllTeacherData(); window.loadTeacherLeaderboard(); }
-          }
-          // 🚀 FIX: snap na milne par cache wipe nahi karenge!
-        });
-
+        // Data ab Firestore + AccuEngine ke zariye managed hai, RTDB listener ki zaroorat nahi
       };
+
 
 
       window.cleanExpiredTestCaches = function() {
@@ -6451,19 +6432,26 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       window.renderAdminClassLeaderboard(currentCls);
     };
 
-    window.saveAdminLeaderboardPoints = function() {
+        window.saveAdminLeaderboardPoints = function() {
       const btn = document.getElementById("saveAdminLbPointsBtn");
       runWithBtnSpinner(btn, "💾 Save Updated Points", async () => {
         const inputs = document.querySelectorAll(".admin-lb-pts-input");
-        const updates = {};
-        inputs.forEach(inp => {
+        for (let inp of inputs) {
           const admn = inp.getAttribute("data-admn");
           const ptsVal = parseInt(inp.value);
-          if(!isNaN(ptsVal)) updates[`students/${admn}/points`] = ptsVal;
-        });
-        await update(ref(db), updates);
-        alert("✔ Class Leaderboard Points Updated Successfully!");
-        isAdminLbEditMode = false;
+          if (!isNaN(ptsVal)) {
+            // Update Firestore
+            await setDoc(doc(fsDb, "students", String(admn)), { points: ptsVal }, { merge: true });
+            if (inMemoryStudentsData[admn]) {
+              inMemoryStudentsData[admn].points = ptsVal;
+              if (window.AccuEngine) {
+                await window.AccuEngine.setLocal("students", admn, inMemoryStudentsData[admn]);
+              }
+            }
+          }
+        }
+        alert("✔ Class Leaderboard Points Updated in Firestore!");
+isAdminLbEditMode = false;
         document.getElementById("toggleAdminLbEditBtn").innerText = "✏️ Edit / Update Points";
         document.getElementById("toggleAdminLbEditBtn").style.background = "";
         btn.style.display = "none";
@@ -7701,7 +7689,7 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       if(document.getElementById("trackTestStudentSelect")) document.getElementById("trackTestStudentSelect").innerHTML = options;
     }
 
-    addSafeListener("submitPerformPointsBtn", "click", () => {
+          addSafeListener("submitPerformPointsBtn", "click", () => {
       const btn = document.getElementById("submitPerformPointsBtn");
       runWithBtnSpinner(btn, "Submit Points", async () => {
         const admn = document.getElementById("performStudentSelect").value;
@@ -7710,12 +7698,27 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
         const st = await getStudentRecord(admn);
         if(st) {
           const newPts = (st.points || 0) + pts;
-          await update(ref(db, `students/${admn}`), { points: newPts });
+          st.points = newPts;
+          inMemoryStudentsData[admn] = st;
+
+          // 🚀 1. Update Firestore
+          await setDoc(doc(fsDb, "students", String(admn)), { points: newPts }, { merge: true });
+
+          // 🚀 2. Update AccuEngine Local Cache
+          if (window.AccuEngine) {
+            await window.AccuEngine.setLocal("students", admn, st);
+          }
+
+          // Push points notification
+          const reasonTxt = document.getElementById("performReasonInput") ? document.getElementById("performReasonInput").value.trim() : 'Performance Points';
+          await window.pushAppNotification(admn, "Points Updated ⭐", `You received ${pts > 0 ? '+'+pts : pts} points. Reason: ${reasonTxt}`, "points_update", { points: pts });
+
           await refreshAllTeacherData();
           alert(`Updated Points for ${st.name}: ${pts >= 0 ? '+' : ''}${pts} Points.`);
         }
       });
     });
+
 
     addSafeListener("saveTestDetailsBtn", "click", () => {
       const btn = document.getElementById("saveTestDetailsBtn");
@@ -8435,14 +8438,20 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
           }
         }
 
-              const updates = {};
-        updates[`students/${finalAdmn}`] = { srNo: finalAdmn, admn: finalAdmn, name: name, class: std, phone: rawPhone.replace(/[^0-9]/g, ''), dob: dob || "-", photo: photoUrl, regDate: getTodayFormattedDate(), points: 0 };
-        // RTDB lightweight flag for instant kill-switch
-        updates[`user_status/${finalAdmn}`] = "active";
+                    const studentRecord = { 
+          srNo: finalAdmn, 
+          admn: finalAdmn, 
+          name: name, 
+          class: std, 
+          phone: rawPhone.replace(/[^0-9]/g, ''), 
+          dob: dob || "-", 
+          photo: photoUrl, 
+          regDate: getTodayFormattedDate(), 
+          points: 0 
+        };
 
-        await update(ref(db), updates);
-
-        // Firestore mein User credentials save karna
+        // 🚀 1. Write to Firestore 'students' & 'users'
+        await setDoc(doc(fsDb, "students", String(finalAdmn)), studentRecord, { merge: true });
         await setDoc(doc(fsDb, "users", String(finalAdmn)), {
           password: "MM",
           role: "student",
@@ -8450,6 +8459,16 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
           assignedClass: std,
           createdAt: new Date().toISOString()
         }, { merge: true });
+
+        // 🚀 2. Local AccuEngine Cache Instant Update
+        if (window.AccuEngine) {
+          await window.AccuEngine.setLocal("students", finalAdmn, studentRecord);
+        }
+        inMemoryStudentsData[finalAdmn] = studentRecord;
+
+        // 🚀 3. RTDB Lightweight Sentinel (Kill-switch flag only)
+        await set(ref(db, `user_status/${finalAdmn}`), "active").catch(() => {});
+
 
         if(currentRole === "teacher") await refreshAllTeacherData(); else renderAdminStudentsDirectory();
         
@@ -8488,8 +8507,7 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
           }
         }
 
-             const updates = {};
-        updates[`teachers/${user}`] = {
+                     const teacherRecord = {
           name: name,
           username: user,
           assignedClass: cls,
@@ -8499,10 +8517,9 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
           points: 0,
           regDate: getTodayFormattedDate()
         };
-        // RTDB lightweight flag for instant kill-switch
-        updates[`user_status/${user}`] = "active";
 
-        // Firestore mein Teacher credentials save karna
+        // 🚀 1. Write to Firestore 'teachers' & 'users'
+        await setDoc(doc(fsDb, "teachers", String(user)), teacherRecord, { merge: true });
         await setDoc(doc(fsDb, "users", String(user)), {
           password: pass,
           role: "teacher",
@@ -8510,11 +8527,18 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
           createdAt: new Date().toISOString()
         }, { merge: true });
 
-        if (email && typeof window.encodeEmailKey === "function") {
-          updates[`email_lookup/${window.encodeEmailKey(email)}`] = String(user);
+        // 🚀 2. Local AccuEngine Cache Instant Update
+        if (window.AccuEngine) {
+          await window.AccuEngine.setLocal("teachers", user, teacherRecord);
         }
 
-        await update(ref(db), updates);
+        // 🚀 3. RTDB Lightweight Sentinel & Email Lookup
+        const rtdbPayload = { [`user_status/${user}`]: "active" };
+        if (email && typeof window.encodeEmailKey === "function") {
+          rtdbPayload[`email_lookup/${window.encodeEmailKey(email)}`] = String(user);
+        }
+        await update(ref(db), rtdbPayload).catch(() => {});
+
         alert("✔ Teacher account created successfully!");
 
         document.getElementById("tRegName").value = "";
@@ -8579,18 +8603,26 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       }
     }
 
-        window.deleteTeacherAccount = async function(username) {
+              window.deleteTeacherAccount = async function(username) {
       if(confirm(`Are you sure you want to completely delete teacher account: ${username}?`)) {
-        const updates = {};
-        updates[`teachers/${username}`] = null;
-        updates[`users/${username}`] = null;
-        updates[`teacher_daily_claims/${username}`] = null;
-        
-        await update(ref(db), updates);
+        // 🚀 1. Delete from Firestore
+        await deleteDoc(doc(fsDb, "teachers", String(username))).catch(() => {});
+        await deleteDoc(doc(fsDb, "users", String(username))).catch(() => {});
+
+        // 🚀 2. Invalidate Local Cache
+        if (window.AccuEngine) {
+          await window.AccuEngine.invalidate("teachers", username);
+        }
+
+        // 🚀 3. Kill-switch in RTDB
+        await set(ref(db, `user_status/${username}`), "deleted").catch(() => {});
+        await remove(ref(db, `teacher_daily_claims/${username}`)).catch(() => {});
+
         alert("Teacher account and related data deleted successfully."); 
         window.loadManageTeacherList();
       }
     };
+
 
 
     addSafeListener("rmStdClassSelect", "change", (e) => {
@@ -8604,24 +8636,26 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       document.getElementById("rmStudentArea").style.display = "block";
     });
 
-      window.deleteStudent = async function(admn) {
+           window.deleteStudent = async function(admn) {
       if(confirm(`Are you sure you want to completely remove ALL data for student ID: ${admn}?`)) {
-        const updates = {};
-        updates[`students/${admn}`] = null;
-        updates[`users/${admn}`] = null;
-        updates[`user_status/${admn}`] = "deleted"; // Kill-switch trigger for live logout
-        updates[`fees_entries/${admn}`] = null;
-        updates[`fees_matrix/${admn}`] = null;
-        updates[`attendance/${admn}`] = null;
-        updates[`daily_claims/${admn}`] = null;
-        updates[`tests/${admn}`] = null;
-        updates[`student_test_attempts/${admn}`] = null;
-        
-        await update(ref(db), updates);
+        // 🚀 1. Delete from Firestore Collections
+        await deleteDoc(doc(fsDb, "students", String(admn))).catch(() => {});
         await deleteDoc(doc(fsDb, "users", String(admn))).catch(() => {});
+        await deleteDoc(doc(fsDb, "fees_matrix", String(admn))).catch(() => {});
+        await deleteDoc(doc(fsDb, "daily_claims", String(admn))).catch(() => {});
 
+        // 🚀 2. Invalidate Local AccuEngine Cache
+        if (window.AccuEngine) {
+          await window.AccuEngine.invalidate("students", admn);
+          await window.AccuEngine.invalidate("fees_matrix", admn);
+        }
+        delete inMemoryStudentsData[admn];
+
+        // 🚀 3. Trigger RTDB Kill-Switch
+        await set(ref(db, `user_status/${admn}`), "deleted").catch(() => {});
         
         alert("Student record and all related data removed successfully.");
+
         window.closeModal("removeStudentModal");
         window.closeModal("studentProfileModal");
         if(currentRole === "admin") renderAdminStudentsDirectory();
@@ -9734,15 +9768,6 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
         const tObj = await safeDataFetch(`teachers/${username}`);
         if(!tObj) { alert("Teacher details not found."); return; }
 
-        const newPts = (tObj.points || 0) + ptsVal, timestamp = Date.now(), updates = {};
-        updates[`teachers/${username}/points`] = newPts;
-        updates[`teacher_points_logs/${timestamp}`] = { id: timestamp, username: username, teacherName: tObj.name, assignedClass: tObj.assignedClass, points: ptsVal, totalPoints: newPts, reason: reason, date: getTodayFormattedDate() };
-
-        const logKeys = Object.keys(await safeDataFetch("teacher_points_logs") || {});
-        if (logKeys.length >= 10) { logKeys.sort((a, b) => Number(a) - Number(b)); for (let i = 0; i < logKeys.length - 9; i++) updates[`teacher_points_logs/${logKeys[i]}`] = null; }
-        
-        await update(ref(db), updates);
-        alert(`✔ Updated Points for ${tObj.name}: ${ptsVal >= 0 ? '+' : ''}${ptsVal} Points!`);
         document.getElementById("adminTeacherPointsInput").value = ""; document.getElementById("adminTeacherReasonInput").value = "";
         window.closeModal("addTeacherPointsModal"); window.loadAdminTeacherLeaderboard();
       });
