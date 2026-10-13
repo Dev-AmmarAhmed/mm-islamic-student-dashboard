@@ -1,6 +1,6 @@
 /**
  * AccuEngine v1.0 - High Performance Cache & Security Engine
- * MM Islamic English School ERP
+ * MM Islamic English School ERP (v10 Modular Compatible)
  */
 
 (function (window) {
@@ -8,11 +8,10 @@
 
   const DB_NAME = "AccuEngine_Storage";
   const DB_VERSION = 1;
-  const STORES = ["users", "fees_matrix", "fees_entries", "attendance", "tests", "online_tests", "test_attempts"];
+  const STORES = ["users", "students", "fees_matrix", "fees_entries", "attendance", "tests", "online_tests", "test_attempts"];
 
   let idbInstance = null;
-  let fsDb = null;
-  let rtdb = null;
+  let modules = null;
 
   // 1. Permanent IndexedDB
   function openIDB() {
@@ -60,65 +59,88 @@
   }
 
   const AccuEngine = {
-    init: function (firebaseFirestore, firebaseRtdb) {
-      fsDb = firebaseFirestore;
-      rtdb = firebaseRtdb;
-      console.log("[AccuEngine] Data Adapter & Cache Engine Online.");
+    init: function (config) {
+      modules = config;
+      console.log("[AccuEngine] Data Adapter & Cache Engine Online (v10 Modular Active).");
     },
 
-    // Smart Multi-Path Router (Firestore + IndexedDB Cache + RTDB Fallback)
+    // Smart Multi-Path Router
     fetch: async function (path) {
-      if (!path) return null;
+      if (!path || !modules) return null;
       const parts = path.split("/");
       const root = parts[0];
+      const { fsDb, db, doc, getDoc, collection, getDocs, ref, get, child } = modules;
 
       // A. USERS
       if (root === "users" && parts[1]) {
         const uid = parts[1];
         const cached = await idbGet("users", uid);
         if (cached) return cached;
-        if (fsDb) {
-          const docSnap = await fsDb.collection("users").doc(uid).get().catch(() => null);
-          if (docSnap && docSnap.exists) {
-            const data = docSnap.data();
-            await idbSet("users", uid, data);
-            return data;
-          }
+        if (fsDb && getDoc && doc) {
+          try {
+            const snap = await getDoc(doc(fsDb, "users", String(uid)));
+            if (snap.exists()) {
+              const data = snap.data();
+              await idbSet("users", uid, data);
+              return data;
+            }
+          } catch (e) {}
         }
       }
 
-      // B. FEES MATRIX (Single Student ya All)
+      // B. STUDENTS (Single Student Profile / Name / Class)
+      if (root === "students" && parts[1]) {
+        const admn = parts[1];
+        const cached = await idbGet("students", admn);
+        if (cached) return cached;
+        // Fallback to RTDB where students profiles live
+        if (db && ref && get && child) {
+          try {
+            const snap = await get(child(ref(db), path));
+            if (snap.exists()) {
+              const data = snap.val();
+              await idbSet("students", admn, data);
+              return data;
+            }
+          } catch (e) {}
+        }
+      }
+
+      // C. FEES MATRIX (Single Student ya All)
       if (root === "fees_matrix") {
         if (parts[1]) {
           const admn = parts[1];
           const cached = await idbGet("fees_matrix", admn);
           if (cached) return cached;
-          if (fsDb) {
-            const docSnap = await fsDb.collection("fees_matrix").doc(admn).get().catch(() => null);
-            if (docSnap && docSnap.exists) {
-              const res = docSnap.data().matrix || docSnap.data();
-              await idbSet("fees_matrix", admn, res);
-              return res;
-            }
+          if (fsDb && getDoc && doc) {
+            try {
+              const snap = await getDoc(doc(fsDb, "fees_matrix", String(admn)));
+              if (snap.exists()) {
+                const res = snap.data().matrix || snap.data();
+                await idbSet("fees_matrix", admn, res);
+                return res;
+              }
+            } catch (e) {}
           }
         } else {
-          // All students fees matrix
-          if (fsDb) {
-            const snap = await fsDb.collection("fees_matrix").get().catch(() => null);
-            if (snap && !snap.empty) {
-              const allMatrix = {};
-              snap.forEach((d) => {
-                const data = d.data();
-                allMatrix[d.id] = data.matrix || data;
-                idbSet("fees_matrix", d.id, allMatrix[d.id]);
-              });
-              return allMatrix;
-            }
+          if (fsDb && getDocs && collection) {
+            try {
+              const snap = await getDocs(collection(fsDb, "fees_matrix"));
+              if (!snap.empty) {
+                const allMatrix = {};
+                snap.forEach((d) => {
+                  const data = d.data();
+                  allMatrix[d.id] = data.matrix || data;
+                  idbSet("fees_matrix", d.id, allMatrix[d.id]);
+                });
+                return allMatrix;
+              }
+            } catch (e) {}
           }
         }
       }
 
-      // C. ATTENDANCE (Student + Month, ya All)
+      // D. ATTENDANCE (Student + Month, ya All)
       if (root === "attendance") {
         if (parts[1] && parts[2]) {
           const admn = parts[1];
@@ -126,70 +148,82 @@
           const key = `${admn}_${month}`;
           const cached = await idbGet("attendance", key);
           if (cached) return cached;
-          if (fsDb) {
-            const docSnap = await fsDb.collection("attendance").doc(key).get().catch(() => null);
-            if (docSnap && docSnap.exists) {
-              const res = docSnap.data().days || docSnap.data();
-              await idbSet("attendance", key, res);
-              return res;
+          if (fsDb && getDoc && doc) {
+            try {
+              const snap = await getDoc(doc(fsDb, "attendance", key));
+              if (snap.exists()) {
+                const res = snap.data().days || snap.data();
+                await idbSet("attendance", key, res);
+                return res;
+              }
+            } catch (e) {}
+          }
+        } else if (!parts[1] && fsDb && getDocs && collection) {
+          try {
+            const snap = await getDocs(collection(fsDb, "attendance"));
+            if (!snap.empty) {
+              const fullAtt = {};
+              snap.forEach((d) => {
+                const docData = d.data();
+                const admn = docData.admn || d.id.split("_")[0];
+                const month = docData.month || d.id.split("_")[1];
+                if (!fullAtt[admn]) fullAtt[admn] = {};
+                fullAtt[admn][month] = docData.days || docData;
+              });
+              return fullAtt;
             }
-          }
-        } else if (!parts[1] && fsDb) {
-          // All Attendance
-          const snap = await fsDb.collection("attendance").get().catch(() => null);
-          if (snap && !snap.empty) {
-            const fullAtt = {};
-            snap.forEach((d) => {
-              const docData = d.data();
-              const admn = docData.admn || d.id.split("_")[0];
-              const month = docData.month || d.id.split("_")[1];
-              if (!fullAtt[admn]) fullAtt[admn] = {};
-              fullAtt[admn][month] = docData.days || docData;
-            });
-            return fullAtt;
-          }
+          } catch (e) {}
         }
       }
 
-      // D. TESTS (Offline Marks)
+      // E. TESTS (Offline Marks)
       if (root === "tests" && parts[1]) {
         const admn = parts[1];
         const cached = await idbGet("tests", admn);
         if (cached) return cached;
-        if (fsDb) {
-          const snap = await fsDb.collection("tests").where("admn", "==", String(admn)).get().catch(() => null);
-          if (snap && !snap.empty) {
+        if (fsDb && getDocs && collection) {
+          try {
+            const snap = await getDocs(collection(fsDb, "tests"));
             const testsObj = {};
             snap.forEach((d) => {
-              testsObj[d.data().testId || d.id] = d.data();
+              const data = d.data();
+              if (String(data.admn) === String(admn)) {
+                testsObj[data.testId || d.id] = data;
+              }
             });
-            await idbSet("tests", admn, testsObj);
-            return testsObj;
-          }
+            if (Object.keys(testsObj).length > 0) {
+              await idbSet("tests", admn, testsObj);
+              return testsObj;
+            }
+          } catch (e) {}
         }
       }
 
-      // E. FEES ENTRIES (Receipts)
+      // F. FEES ENTRIES (Receipts)
       if (root === "fees_entries") {
         if (parts[1]) {
           const admn = parts[1];
           const cached = await idbGet("fees_entries", admn);
           if (cached) return cached;
-          if (fsDb) {
-            const snap = await fsDb.collection("fees_entries").where("admn", "==", String(admn)).get().catch(() => null);
-            if (snap && !snap.empty) {
+          if (fsDb && getDocs && collection) {
+            try {
+              const snap = await getDocs(collection(fsDb, "fees_entries"));
               const entriesObj = {};
               snap.forEach((d) => {
-                entriesObj[d.data().entryId || d.id] = d.data();
+                const data = d.data();
+                if (String(data.admn) === String(admn)) {
+                  entriesObj[data.entryId || d.id] = data;
+                }
               });
-              await idbSet("fees_entries", admn, entriesObj);
-              return entriesObj;
-            }
+              if (Object.keys(entriesObj).length > 0) {
+                await idbSet("fees_entries", admn, entriesObj);
+                return entriesObj;
+              }
+            } catch (e) {}
           }
-        } else if (fsDb) {
-          // All fees entries
-          const snap = await fsDb.collection("fees_entries").get().catch(() => null);
-          if (snap && !snap.empty) {
+        } else if (fsDb && getDocs && collection) {
+          try {
+            const snap = await getDocs(collection(fsDb, "fees_entries"));
             const allEntries = {};
             snap.forEach((d) => {
               const entry = d.data();
@@ -198,51 +232,20 @@
               allEntries[a][entry.entryId || d.id] = entry;
             });
             return allEntries;
-          }
+          } catch (e) {}
         }
       }
 
-      // F. ONLINE TESTS & ATTEMPTS
-      if (root === "online_tests") {
-        const classKey = parts[1];
-        const testId = parts[2];
-        if (testId && fsDb) {
-          const docSnap = await fsDb.collection("online_tests").doc(testId).get().catch(() => null);
-          return docSnap && docSnap.exists ? docSnap.data() : null;
-        } else if (classKey && fsDb) {
-          const snap = await fsDb.collection("online_tests").where("class", "==", String(classKey)).get().catch(() => null);
-          if (snap && !snap.empty) {
-            const tests = {};
-            snap.forEach((d) => { tests[d.id] = d.data(); });
-            return tests;
-          }
-        }
-      }
-
-      if (root === "test_attempts" && parts[1] && fsDb) {
-        const testId = parts[1];
-        const snap = await fsDb.collection("test_attempts").where("testId", "==", String(testId)).get().catch(() => null);
-        if (snap && !snap.empty) {
-          const attempts = {};
-          snap.forEach((d) => {
-            const data = d.data();
-            attempts[data.admn || d.id] = data;
-          });
-          return attempts;
-        }
-      }
-
-      // Fallback to RTDB for other configurations (Subjects, Timetables, Settings)
-      if (rtdb) {
+      // G. RTDB Fallback (students, teachers, subjects, timetable, settings)
+      if (db && ref && get && child) {
         try {
-          const snap = await rtdb.ref(path).once("value");
+          const snap = await get(child(ref(db), path));
           return snap.exists() ? snap.val() : null;
         } catch (e) { return null; }
       }
       return null;
     },
 
-    // Cache Write Invalidation Helper
     invalidate: async function (storeName, key) {
       await idbSet(storeName, key, null);
     }
