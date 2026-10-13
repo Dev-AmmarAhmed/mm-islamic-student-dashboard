@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AccuEngine - Users Migration</title>
+    <!-- Firebase v10 Compat SDKs (App Check + Enterprise reCAPTCHA Support) -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <style>
+        body { font-family: sans-serif; background: #0f172a; color: #f8fafc; padding: 25px; }
+        .card { max-width: 680px; margin: auto; background: #1e293b; border-radius: 12px; padding: 25px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+        h2 { color: #38bdf8; margin-top: 0; }
+        .status-badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: bold; margin-bottom: 12px; }
+        .status-badge.active { background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid #16a34a; }
+        .status-badge.error { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid #dc2626; }
+        button { background: #0288d1; color: white; border: none; padding: 12px 24px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.2s; }
+        button:hover { background: #0369a1; }
+        button:disabled { background: #475569; cursor: not-allowed; }
+        #logs { margin-top: 20px; background: #000; color: #4ade80; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 13px; height: 300px; overflow-y: auto; white-space: pre-wrap; line-height: 1.5; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>AccuEngine Migration Console</h2>
+        <div id="appCheckBadge" class="status-badge">App Check Status: Initializing...</div>
+        <p>Yeh tool <b>users</b> ko Realtime Database se Firestore mein copy karega aur RTDB mein 10-byte ka <b>user_status</b> flag banayega.</p>
+        <button id="startBtn" onclick="runMigration()">Start Users Migration</button>
+        <div id="logs">Console ready...</div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyBHpbgoGs7HFQ3-1tBn9BpGT4YYDaKkZB8",
+            authDomain: "mm-islamic-erp.firebaseapp.com",
+            databaseURL: "https://mm-islamic-erp-default-rtdb.firebaseio.com",
+            projectId: "mm-islamic-erp",
+            storageBucket: "mm-islamic-erp.firebasestorage.app",
+            messagingSenderId: "547338314533",
+            appId: "1:547338314533:web:3973c2b36ef8b3b01170cc"
+        };
+
+        const app = firebase.initializeApp(firebaseConfig);
+        const rtdb = firebase.database();
+        const firestore = firebase.firestore();
+        const auth = firebase.auth();
+
+        function log(msg, isError = false) {
+            const box = document.getElementById("logs");
+            const prefix = isError ? "❌ " : "👉 ";
+            box.textContent += "\n" + prefix + msg;
+            box.scrollTop = box.scrollHeight;
+        }
+
+        // --- App Check Initialization ---
+        let isAppCheckReady = false;
+        try {
+            const appCheck = firebase.appCheck();
+            appCheck.activate(
+                new firebase.appCheck.ReCaptchaEnterpriseProvider('6LefZbUtAAAAADOa8KBfn1qywMly7Ky2-UlX6zxW'),
+                true
+            );
+            isAppCheckReady = true;
+            document.getElementById("appCheckBadge").className = "status-badge active";
+            document.getElementById("appCheckBadge").innerText = "✔ App Check Active (reCAPTCHA Enterprise)";
+            log("[App Check] reCAPTCHA Enterprise provider successfully configured.");
+        } catch (err) {
+            document.getElementById("appCheckBadge").className = "status-badge error";
+            document.getElementById("appCheckBadge").innerText = "⚠ App Check Initialization Warning";
+            log("[App Check Warning] " + err.message, true);
+        }
+
+        async function runMigration() {
+            const btn = document.getElementById("startBtn");
+            btn.disabled = true;
+            log("[AccuEngine] Migration shuru ki ja rahi hai...");
+
+            try {
+                // Step 0: Ensure Firebase Auth token active (Security Rules block na karein)
+                log("[0/3] Checking Firebase Security Token...");
+                try {
+                    if (!auth.currentUser) {
+                        await auth.signInAnonymously();
+                        log("[Auth] Anonymous Auth session established.");
+                    }
+                } catch (authErr) {
+                    log("[Auth Warning] Anonymous auth bypass: " + authErr.message);
+                }
+
+                // Step 1: Realtime Database se users fetch karna
+                log("[1/3] Reading /users from Realtime Database...");
+                const snapshot = await rtdb.ref("users").once("value");
+                const users = snapshot.val();
+
+                if (!users) {
+                    log("Realtime Database mein /users par koi data nahi mila!", true);
+                    btn.disabled = false;
+                    return;
+                }
+
+                const keys = Object.keys(users);
+                log(`[2/3] ${keys.length} users mile. Firestore batch migration start ho rahi hai...`);
+
+                // Step 2: Firestore Batch Transfer
+                let batch = firestore.batch();
+                let count = 0;
+                let totalSaved = 0;
+                const statusFlags = {};
+
+                for (const key of keys) {
+                    const userData = users[key];
+                    const docRef = firestore.collection("users").doc(String(key));
+
+                    batch.set(docRef, {
+                        ...userData,
+                        migratedAt: new Date().toISOString()
+                    }, { merge: true });
+
+                    // Har user ke liye RTDB mein status flag
+                    statusFlags[`user_status/${key}`] = "active";
+
+                    count++;
+                    totalSaved++;
+
+                    if (count === 400) {
+                        await batch.commit();
+                        log(`--> Batch write complete: ${totalSaved} users save ho gaye.`);
+                        batch = firestore.batch();
+                        count = 0;
+                    }
+                }
+
+                if (count > 0) {
+                    await batch.commit();
+                    log(`--> Final batch write complete: ${totalSaved} users transfer ho gaye.`);
+                }
+
+                // Step 3: RTDB user_status update (Kill-switch flags)
+                log("[3/3] RTDB lightweight status flags set kiye ja rahe hain...");
+                await rtdb.ref().update(statusFlags);
+
+                log("\n🎉 [SUCCESS] Mubarak ho! Saare users safely Firestore mein shift ho chuke hain aur RTDB flags tayar hain!");
+            } catch (err) {
+                log("\n[MIGRATION FAILED] Error details:", true);
+                log(err.message, true);
+                if (err.code === "permission-denied") {
+                    log("Tip: Agar Permission Denied aaya hai, toh Firebase Console mein App Check ya Security Rules verify karein ke localhost/github.io allowed hai.", true);
+                }
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
