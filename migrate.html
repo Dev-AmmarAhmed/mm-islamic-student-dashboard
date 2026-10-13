@@ -1,314 +1,650 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AccuEngine - Rule-Compliant Migration Console</title>
-    <!-- Firebase Compat SDKs (v10.8.0) -->
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0b1329; color: #f8fafc; padding: 20px; margin: 0; }
-        .container { max-width: 840px; margin: auto; background: #131d36; border-radius: 16px; padding: 24px; box-shadow: 0 10px 35px rgba(0,0,0,0.5); border: 1px solid #1e293b; }
-        h1 { color: #38bdf8; font-size: 20px; margin-top: 0; }
-        p { color: #94a3b8; font-size: 13px; line-height: 1.5; margin-bottom: 14px; }
-        .card { background: #1e293b; padding: 16px; border-radius: 12px; margin: 14px 0; border: 1px solid #334155; }
-        input[type="file"] { background: #0f172a; border: 1px dashed #38bdf8; padding: 14px; border-radius: 8px; width: 100%; box-sizing: border-box; color: #cbd5e1; cursor: pointer; }
-        button { background: #0288d1; color: #fff; border: none; padding: 12px 18px; border-radius: 8px; font-weight: 800; font-size: 13px; cursor: pointer; transition: 0.2s; }
-        button:hover { opacity: 0.9; }
-        button:disabled { background: #475569 !important; cursor: not-allowed; opacity: 0.6; }
-        .btn-green { background: #16a34a !important; }
-        .btn-purple { background: #7c3aed !important; }
-        .progress-bar-bg { width: 100%; height: 8px; background: #1e293b; border-radius: 6px; overflow: hidden; margin: 14px 0; }
-        .progress-bar-fill { height: 100%; width: 0%; background: #38bdf8; transition: width 0.3s; }
-        #logBox { background: #000000; color: #4ade80; padding: 14px; border-radius: 10px; font-family: monospace; font-size: 12px; height: 360px; overflow-y: auto; white-space: pre-wrap; line-height: 1.6; border: 1px solid #1e293b; }
-        .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 800; }
-        .help-box { display: none; background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; border-radius: 10px; padding: 14px; margin-top: 14px; font-size: 12px; line-height: 1.6; color: #fca5a5; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-            <h1>AccuEngine Non-Freezing Migration Console</h1>
-            <span id="authBadge" class="badge" style="background: rgba(239,68,68,0.2); color:#f87171;">Auth: Disconnected</span>
-        </div>
-        <p>
-            12.58 MB ki JSON file se base64 images strip karke poora data Cloud Firestore mein safely transfer karega.
-        </p>
+/**
+ * AccuEngine v3.5 - Complete Unified Offline & Firestore Cache Engine
+ * MM Islamic English School ERP
+ * Fully Integrated with Cloud Firestore Collections & IndexedDB Persistent Outbox
+ */
 
-        <div class="card">
-            <span style="font-size: 12px; font-weight: 800; color: #38bdf8; display: block; margin-bottom: 8px;">Step 1: Firebase Auth Connect Karein</span>
-            <button class="btn-purple" id="btnConnect" onclick="handleAnonAuth()">⚡ Auto Connect Session</button>
-        </div>
+(function (window) {
+  "use strict";
 
-        <div class="card">
-            <span style="font-size: 12px; font-weight: 800; color: #38bdf8; display: block; margin-bottom: 8px;">Step 2: RTDB Backup JSON File Choose Karein</span>
-            <input type="file" id="jsonFileInput" accept=".json">
-            <button id="btnStartJson" class="btn-green" style="margin-top: 14px; width: 100%;" onclick="startJsonMigration()" disabled>
-                🚀 Start Migration to Firestore (Strip Base64 Images)
-            </button>
-        </div>
+  const DB_NAME = "AccuEngine_Storage";
+  const DB_VERSION = 6;
+  const STORES = [
+    "users",
+    "students",
+    "teachers",
+    "fees_matrix",
+    "fees_entries",
+    "attendance",
+    "tests",
+    "online_tests",
+    "test_attempts",
+    "student_test_attempts",
+    "daily_claims",
+    "sync_queue",
+    "subjects",
+    "timetable",
+    "study_material",
+    "homework",
+    "syllabus"
+  ];
 
-        <div class="progress-bar-bg">
-            <div id="progBar" class="progress-bar-fill"></div>
-        </div>
+  let idbInstance = null;
+  let modules = null;
 
-        <div id="helpBox" class="help-box">
-            <b>⚠️ Firestore "Chicken & Egg" Lock Detect Hua:</b><br>
-            Aapke Firestore rules check kar rahe hain: <code>getUserData().role == 'admin'</code>.<br>
-            Kyunki Firestore abhi poori tarah <b>khali</b> hai, Firestore ko <code>/users</code> mein koi record nahi milta aur rule evaluate hone se pehle hi error throw kar deta hai.<br><br>
-            <b>10-Second Fix (Bina data loss ke):</b><br>
-            1. Firebase Console &rarr; Firestore &rarr; <b>Rules</b> tab kholein.<br>
-            2. Rules ko 2 minute ke liye temporary aise save karein:<br>
-            <code style="color:#fff; background:#000; padding:2px 6px; border-radius:4px;">match /{document=**} { allow read, write: if true; }</code><br>
-            3. Yahan wapas aakar <b>Start Migration</b> dabayein (30 seconds mein sab transfer ho jayega).<br>
-            4. Migration complete hone ke baad apne production rules wapas paste kar dein!
-        </div>
-
-        <div id="logBox">Console Ready. Pehle 'Auto Connect Session' dabayein...</div>
-    </div>
-
-    <script>
-        const firebaseConfig = {
-            apiKey: "AIzaSyBHpbgoGs7HFQ3-1tBn9BpGT4YYDaKkZB8",
-            authDomain: "mm-islamic-erp.firebaseapp.com",
-            databaseURL: "https://mm-islamic-erp-default-rtdb.firebaseio.com",
-            projectId: "mm-islamic-erp",
-            storageBucket: "mm-islamic-erp.firebasestorage.app",
-            messagingSenderId: "547338314533",
-            appId: "1:547338314533:web:3973c2b36ef8b3b01170cc"
-        };
-
-        const app = firebase.initializeApp(firebaseConfig);
-        const firestore = firebase.firestore();
-        const auth = firebase.auth();
-
-        function log(msg, isErr = false) {
-            const b = document.getElementById("logBox");
-            b.textContent += "\n" + (isErr ? "❌ " : "👉 ") + msg;
-            b.scrollTop = b.scrollHeight;
-        }
-
-        function setProg(pct) {
-            document.getElementById("progBar").style.width = pct + "%";
-        }
-
-        auth.onAuthStateChanged(user => {
-            const badge = document.getElementById("authBadge");
-            if (user) {
-                badge.innerText = `Connected (${user.uid.slice(0, 8)}...)`;
-                badge.style.background = "rgba(34, 197, 94, 0.2)";
-                badge.style.color = "#4ade80";
-                log(`[Auth Verified] Active UID: ${user.uid}`);
-                checkReady();
-            } else {
-                badge.innerText = "Auth: Disconnected";
-                badge.style.background = "rgba(239, 68, 68, 0.2)";
-                badge.style.color = "#f87171";
-            }
+  function openIDB() {
+    if (idbInstance) return Promise.resolve(idbInstance);
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(DB_NAME, DB_VERSION);
+      request.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        STORES.forEach((store) => {
+          if (!db.objectStoreNames.contains(store)) {
+            db.createObjectStore(store);
+          }
         });
+      };
+      request.onsuccess = (e) => {
+        idbInstance = e.target.result;
+        idbInstance.onversionchange = () => {
+          idbInstance.close();
+          idbInstance = null;
+        };
+        resolve(idbInstance);
+      };
+      request.onerror = (e) => reject(e.target.error);
+    });
+  }
 
-        async function handleAnonAuth() {
+  async function idbGet(storeName, key) {
+    try {
+      const db = await openIDB();
+      if (!db.objectStoreNames.contains(storeName)) return null;
+      return new Promise((resolve) => {
+        const tx = db.transaction(storeName, "readonly");
+        const req = tx.objectStore(storeName).get(String(key));
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => resolve(null);
+      });
+    } catch (e) { return null; }
+  }
+
+  async function idbSet(storeName, key, value) {
+    try {
+      const db = await openIDB();
+      if (!db.objectStoreNames.contains(storeName)) return false;
+      return new Promise((resolve) => {
+        const tx = db.transaction(storeName, "readwrite");
+        if (value === null) {
+          tx.objectStore(storeName).delete(String(key));
+        } else {
+          tx.objectStore(storeName).put(value, String(key));
+        }
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      });
+    } catch (e) { return false; }
+  }
+
+  async function idbSetBatch(storeName, entriesMap) {
+    try {
+      const db = await openIDB();
+      if (!db.objectStoreNames.contains(storeName)) return false;
+      return new Promise((resolve) => {
+        const tx = db.transaction(storeName, "readwrite");
+        const store = tx.objectStore(storeName);
+        Object.entries(entriesMap).forEach(([k, v]) => {
+          if (v === null) {
+            store.delete(String(k));
+          } else {
+            store.put(v, String(k));
+          }
+        });
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      });
+    } catch (e) { return false; }
+  }
+
+  async function idbGetAllMap(storeName) {
+    try {
+      const db = await openIDB();
+      if (!db.objectStoreNames.contains(storeName)) return {};
+      return new Promise((resolve) => {
+        const tx = db.transaction(storeName, "readonly");
+        const store = tx.objectStore(storeName);
+        const map = {};
+        const req = store.openCursor();
+        req.onsuccess = (e) => {
+          const cursor = e.target.result;
+          if (cursor) {
+            map[cursor.key] = cursor.value;
+            cursor.continue();
+          } else {
+            resolve(map);
+          }
+        };
+        req.onerror = () => resolve({});
+      });
+    } catch (e) { return {}; }
+  }
+
+  const AccuEngine = {
+    init: function (config) {
+      modules = config;
+      console.log("[AccuEngine v3.5] Active. Dual Firestore + IndexedDB Router.");
+      window.addEventListener("online", () => this.processSyncQueue());
+      if (navigator.onLine) {
+        setTimeout(() => this.processSyncQueue(), 2500);
+      }
+    },
+
+    // 🚀 CACHE-FIRST & FIRESTORE ROUTER
+    fetch: async function (path) {
+      if (!path) return null;
+      const parts = path.split("/");
+      const root = parts[0];
+      const { fsDb, db: rtdb, doc, getDoc, collection, getDocs, ref, get, child } = (modules || {});
+
+      // 1. STUDENTS (Firestore Primary)
+      if (root === "students") {
+        if (parts[1]) {
+          const admn = String(parts[1]);
+          const cached = await idbGet("students", admn);
+          if (cached) return cached;
+          if (navigator.onLine && fsDb && getDoc && doc) {
             try {
-                await auth.signInAnonymously();
-            } catch(e) {
-                log("Auth error: " + e.message, true);
-            }
+              const snap = await getDoc(doc(fsDb, "students", admn));
+              if (snap && snap.exists()) {
+                const data = snap.data();
+                await idbSet("students", admn, data);
+                return data;
+              }
+            } catch (e) {}
+          }
+          return null;
+        } else {
+          const localMap = await idbGetAllMap("students");
+          const hasLocal = Object.keys(localMap).length > 0;
+
+          if (navigator.onLine && fsDb && getDocs && collection) {
+            getDocs(collection(fsDb, "students")).then((snap) => {
+              if (snap && !snap.empty) {
+                const batchMap = {};
+                snap.forEach((d) => { batchMap[d.id] = d.data(); });
+                idbSetBatch("students", batchMap);
+              }
+            }).catch(() => {});
+          }
+
+          if (hasLocal) return localMap;
+
+          if (navigator.onLine && fsDb && getDocs && collection) {
+            try {
+              const snap = await getDocs(collection(fsDb, "students"));
+              if (!snap.empty) {
+                const allS = {};
+                snap.forEach((d) => { allS[d.id] = d.data(); });
+                await idbSetBatch("students", allS);
+                return allS;
+              }
+            } catch (e) {}
+          }
+          return {};
         }
+      }
 
-        document.getElementById("jsonFileInput").addEventListener("change", checkReady);
+      // 2. USERS (Credentials Vault - Firestore Primary)
+      if (root === "users") {
+        if (parts[1]) {
+          const uid = String(parts[1]);
+          const cached = await idbGet("users", uid);
+          if (cached) return cached;
+          if (navigator.onLine && fsDb && getDoc && doc) {
+            try {
+              const snap = await getDoc(doc(fsDb, "users", uid));
+              if (snap && snap.exists()) {
+                const data = snap.data();
+                await idbSet("users", uid, data);
+                return data;
+              }
+            } catch (e) {}
+          }
+          return null;
+        } else {
+          const localMap = await idbGetAllMap("users");
+          if (Object.keys(localMap).length > 0) return localMap;
 
-        function checkReady() {
-            const hasFile = document.getElementById("jsonFileInput").files.length > 0;
-            const hasAuth = !!auth.currentUser;
-            document.getElementById("btnStartJson").disabled = !(hasFile && hasAuth);
+          if (navigator.onLine && fsDb && getDocs && collection) {
+            try {
+              const snap = await getDocs(collection(fsDb, "users"));
+              if (!snap.empty) {
+                const allUsers = {};
+                snap.forEach((d) => { allUsers[d.id] = d.data(); });
+                await idbSetBatch("users", allUsers);
+                return allUsers;
+              }
+            } catch (e) {}
+          }
+          return {};
         }
+      }
 
-        class FirestoreBatch {
-            constructor() {
-                this.batch = firestore.batch();
-                this.count = 0;
-                this.total = 0;
-            }
-            async set(docRef, data) {
-                this.batch.set(docRef, data, { merge: true });
-                this.count++;
-                this.total++;
-                if (this.count >= 250) {
-                    await this.batch.commit();
-                    log(`   [Firestore] ${this.total} documents successfully written...`);
-                    this.batch = firestore.batch();
-                    this.count = 0;
+      // 3. TEACHERS (Firestore Primary)
+      if (root === "teachers") {
+        if (parts[1]) {
+          const user = String(parts[1]);
+          const cached = await idbGet("teachers", user);
+          if (cached) return cached;
+          if (navigator.onLine && fsDb && getDoc && doc) {
+            try {
+              const snap = await getDoc(doc(fsDb, "teachers", user));
+              if (snap && snap.exists()) {
+                const data = snap.data();
+                await idbSet("teachers", user, data);
+                return data;
+              }
+            } catch (e) {}
+          }
+          return null;
+        } else {
+          const localMap = await idbGetAllMap("teachers");
+          if (Object.keys(localMap).length > 0) return localMap;
+
+          if (navigator.onLine && fsDb && getDocs && collection) {
+            try {
+              const snap = await getDocs(collection(fsDb, "teachers"));
+              if (!snap.empty) {
+                const allT = {};
+                snap.forEach((d) => { allT[d.id] = d.data(); });
+                await idbSetBatch("teachers", allT);
+                return allT;
+              }
+            } catch (e) {}
+          }
+          return {};
+        }
+      }
+
+      // 4. FEES MATRIX (Firestore Primary)
+      if (root === "fees_matrix") {
+        if (parts[1]) {
+          const admn = String(parts[1]);
+          const cached = await idbGet("fees_matrix", admn);
+          if (cached) return cached;
+          if (navigator.onLine && fsDb && getDoc && doc) {
+            try {
+              const snap = await getDoc(doc(fsDb, "fees_matrix", admn));
+              if (snap && snap.exists()) {
+                const res = snap.data().matrix || snap.data();
+                await idbSet("fees_matrix", admn, res);
+                return res;
+              }
+            } catch (e) {}
+          }
+          return {};
+        } else {
+          const localMap = await idbGetAllMap("fees_matrix");
+          if (Object.keys(localMap).length > 0) return localMap;
+
+          if (navigator.onLine && fsDb && getDocs && collection) {
+            try {
+              const snap = await getDocs(collection(fsDb, "fees_matrix"));
+              const allMatrix = {};
+              snap.forEach((d) => {
+                const data = d.data();
+                allMatrix[d.id] = data.matrix || data;
+              });
+              await idbSetBatch("fees_matrix", allMatrix);
+              return allMatrix;
+            } catch (e) {}
+          }
+          return {};
+        }
+      }
+
+      // 5. FEES ENTRIES (Receipts - Firestore Primary)
+      if (root === "fees_entries") {
+        if (parts[1]) {
+          const admn = String(parts[1]);
+          const localMap = await idbGetAllMap("fees_entries");
+          const filtered = {};
+          Object.entries(localMap).forEach(([k, v]) => {
+            if (v && String(v.admn) === admn) filtered[k] = v;
+          });
+          if (Object.keys(filtered).length > 0) return filtered;
+
+          if (navigator.onLine && fsDb && getDocs && collection) {
+            try {
+              const snap = await getDocs(collection(fsDb, "fees_entries"));
+              const studentEntries = {};
+              snap.forEach((d) => {
+                const data = d.data();
+                idbSet("fees_entries", d.id, data);
+                if (data && String(data.admn) === admn) {
+                  studentEntries[data.id || d.id] = data;
                 }
-            }
-            async commit() {
-                if (this.count > 0) {
-                    await this.batch.commit();
-                    log(`   [Batch Completed] Total ${this.total} items written.`);
-                    this.count = 0;
-                    this.batch = firestore.batch();
+              });
+              return studentEntries;
+            } catch (e) {}
+          }
+          return {};
+        } else {
+          const localMap = await idbGetAllMap("fees_entries");
+          if (Object.keys(localMap).length > 0) {
+            const nested = {};
+            Object.values(localMap).forEach((item) => {
+              if (item && item.admn) {
+                if (!nested[item.admn]) nested[item.admn] = {};
+                nested[item.admn][item.id || item.entryId || Math.random()] = item;
+              }
+            });
+            return nested;
+          }
+
+          if (navigator.onLine && fsDb && getDocs && collection) {
+            try {
+              const snap = await getDocs(collection(fsDb, "fees_entries"));
+              const nested = {};
+              const batchMap = {};
+              snap.forEach((d) => {
+                const data = d.data();
+                batchMap[d.id] = data;
+                if (data && data.admn) {
+                  if (!nested[data.admn]) nested[data.admn] = {};
+                  nested[data.admn][data.id || d.id] = data;
                 }
-            }
+              });
+              idbSetBatch("fees_entries", batchMap);
+              return nested;
+            } catch (e) {}
+          }
+          return {};
         }
+      }
 
-        async function startJsonMigration() {
-            const fileInput = document.getElementById("jsonFileInput");
-            if (!fileInput.files[0]) return;
+      // 6. ATTENDANCE (Firestore Primary)
+      if (root === "attendance") {
+        if (parts[1] && parts[2]) {
+          const key = `${parts[1]}_${parts[2]}`;
+          const cached = await idbGet("attendance", key);
+          if (cached) return cached;
+          if (navigator.onLine && fsDb && getDoc && doc) {
+            try {
+              const snap = await getDoc(doc(fsDb, "attendance", key));
+              if (snap && snap.exists()) {
+                const res = snap.data().days || snap.data();
+                await idbSet("attendance", key, res);
+                return res;
+              }
+            } catch (e) {}
+          }
+          return {};
+        } else {
+          const localMap = await idbGetAllMap("attendance");
+          if (Object.keys(localMap).length > 0) {
+            const fullAtt = {};
+            Object.entries(localMap).forEach(([k, val]) => {
+              const p = k.split("_");
+              if (!fullAtt[p[0]]) fullAtt[p[0]] = {};
+              fullAtt[p[0]][p[1]] = val;
+            });
+            return fullAtt;
+          }
+          if (navigator.onLine && fsDb && getDocs && collection) {
+            try {
+              const snap = await getDocs(collection(fsDb, "attendance"));
+              const fullAtt = {};
+              const batchMap = {};
+              snap.forEach((d) => {
+                const docData = d.data();
+                const admn = docData.admn || d.id.split("_")[0];
+                const month = docData.month || d.id.split("_")[1];
+                if (!fullAtt[admn]) fullAtt[admn] = {};
+                fullAtt[admn][month] = docData.days || docData;
+                batchMap[`${admn}_${month}`] = docData.days || docData;
+              });
+              idbSetBatch("attendance", batchMap);
+              return fullAtt;
+            } catch (e) {}
+          }
+          return {};
+        }
+      }
 
-            const btn = document.getElementById("btnStartJson");
-            btn.disabled = true;
-            document.getElementById("helpBox").style.display = "none";
-            log("\n========================================================");
-            log("Reading JSON file into memory...");
-
-            const reader = new FileReader();
-            reader.onload = async (e) => {
-                try {
-                    const fullData = JSON.parse(e.target.result);
-                    log(`JSON file parsed! Total size: ${(e.target.result.length / (1024*1024)).toFixed(2)} MB`);
-                    
-                    // STEP 0: Elevate Active Session to Admin in Firestore
-                    const currentUid = auth.currentUser.uid;
-                    log(`\n[Step 0] Authorizing active session in Firestore (/users/${currentUid})...`);
-                    try {
-                        await firestore.collection("users").doc(currentUid).set({
-                            role: "admin",
-                            name: "Migration Master Admin",
-                            createdAt: new Date().toISOString()
-                        }, { merge: true });
-                        log("✔ Active session registered with role: 'admin'!");
-                    } catch (permErr) {
-                        log("Bootstrap permission blocked by Firestore rules: " + permErr.message, true);
-                        document.getElementById("helpBox").style.display = "block";
-                        throw permErr;
-                    }
-
-                    const writer = new FirestoreBatch();
-
-                    // STEP 1: USERS (Credentials Vault)
-                    if (fullData.users) {
-                        log(`\n[1/7] Migrating Users Credentials...`);
-                        for (let u of Object.keys(fullData.users)) {
-                            await writer.set(firestore.collection("users").doc(String(u)), fullData.users[u]);
-                        }
-                        await writer.commit();
-                        setProg(15);
-                        log("✔ Users credentials transferred.");
-                    }
-
-                    // STEP 2: STUDENTS (Strip Base64 Images)
-                    if (fullData.students) {
-                        const sKeys = Object.keys(fullData.students);
-                        log(`\n[2/7] Migrating ${sKeys.length} Students (Stripping 12MB Base64 Bloat)...`);
-                        for (let k of sKeys) {
-                            const sObj = { ...fullData.students[k] };
-                            sObj.photo = ""; // Strip image string completely
-                            sObj.admn = String(k);
-                            await writer.set(firestore.collection("students").doc(String(k)), sObj);
-                        }
-                        await writer.commit();
-                        setProg(40);
-                        log("✔ Students migrated cleanly without image bloat.");
-                    }
-
-                    // STEP 3: TEACHERS
-                    if (fullData.teachers) {
-                        const tKeys = Object.keys(fullData.teachers);
-                        log(`\n[3/7] Migrating ${tKeys.length} Teachers...`);
-                        for (let u of tKeys) {
-                            const tObj = { ...fullData.teachers[u] };
-                            tObj.photo = "";
-                            tObj.username = String(u);
-                            await writer.set(firestore.collection("teachers").doc(String(u)), tObj);
-                        }
-                        await writer.commit();
-                        setProg(55);
-                        log("✔ Teachers migrated.");
-                    }
-
-                    // STEP 4: FEES MATRIX
-                    if (fullData.fees_matrix) {
-                        log(`\n[4/7] Migrating Fees Matrix...`);
-                        for (let admn of Object.keys(fullData.fees_matrix)) {
-                            await writer.set(firestore.collection("fees_matrix").doc(String(admn)), {
-                                admn: String(admn),
-                                matrix: fullData.fees_matrix[admn],
-                                updatedAt: new Date().toISOString()
-                            });
-                        }
-                        await writer.commit();
-                        setProg(70);
-                        log("✔ Fees Matrix migrated.");
-                    }
-
-                    // STEP 5: FEES ENTRIES
-                    if (fullData.fees_entries) {
-                        log(`\n[5/7] Migrating Fees Receipts...`);
-                        for (let admn of Object.keys(fullData.fees_entries)) {
-                            for (let eid of Object.keys(fullData.fees_entries[admn])) {
-                                await writer.set(firestore.collection("fees_entries").doc(`${admn}_${eid}`), {
-                                    ...fullData.fees_entries[admn][eid],
-                                    admn: String(admn),
-                                    entryId: String(eid)
-                                });
-                            }
-                        }
-                        await writer.commit();
-                        setProg(85);
-                        log("✔ Fees Entries receipts migrated.");
-                    }
-
-                    // STEP 6: ATTENDANCE
-                    if (fullData.attendance) {
-                        log(`\n[6/7] Migrating Attendance...`);
-                        for (let admn of Object.keys(fullData.attendance)) {
-                            for (let m of Object.keys(fullData.attendance[admn])) {
-                                await writer.set(firestore.collection("attendance").doc(`${admn}_${m}`), {
-                                    admn: String(admn),
-                                    month: String(m),
-                                    days: fullData.attendance[admn][m],
-                                    updatedAt: new Date().toISOString()
-                                });
-                            }
-                        }
-                        await writer.commit();
-                        setProg(95);
-                        log("✔ Attendance records migrated.");
-                    }
-
-                    // STEP 7: TESTS & DAILY CLAIMS
-                    log(`\n[7/7] Migrating Tests & Daily Claims...`);
-                    if (fullData.tests) {
-                        for (let admn of Object.keys(fullData.tests)) {
-                            for (let tid of Object.keys(fullData.tests[admn])) {
-                                await writer.set(firestore.collection("tests").doc(`${admn}_${tid}`), {
-                                    ...fullData.tests[admn][tid],
-                                    admn: String(admn),
-                                    testId: String(tid)
-                                });
-                            }
-                        }
-                    }
-                    if (fullData.daily_claims) {
-                        for (let admn of Object.keys(fullData.daily_claims)) {
-                            await writer.set(firestore.collection("daily_claims").doc(String(admn)), {
-                                claims: fullData.daily_claims[admn]
-                            });
-                        }
-                    }
-                    await writer.commit();
-                    setProg(100);
-
-                    log("\n🎉 [SUCCESS] 100% Data Cloud Firestore mein transfer ho chuka hai! Base64 bloat khatam ho gaya.");
-                } catch(err) {
-                    log("Migration Terminated: " + err.message, true);
-                } finally {
-                    btn.disabled = false;
+      // 7. TESTS (Offline Test Marks - Firestore Primary)
+      if (root === "tests") {
+        const admn = parts[1];
+        if (admn) {
+          const cached = await idbGet("tests", admn);
+          if (cached) return cached;
+          if (navigator.onLine && fsDb && getDocs && collection) {
+            try {
+              const snap = await getDocs(collection(fsDb, "tests"));
+              const testsObj = {};
+              snap.forEach((d) => {
+                const data = d.data();
+                if (String(data.admn) === String(admn)) {
+                  testsObj[data.testId || d.id] = data;
                 }
-            };
-            reader.readAsText(fileInput.files[0]);
+              });
+              if (Object.keys(testsObj).length > 0) {
+                await idbSet("tests", admn, testsObj);
+                return testsObj;
+              }
+            } catch (e) {}
+          }
+          return {};
         }
-    </script>
-</body>
-</html>
+      }
+
+      // 8. ONLINE TESTS (Firestore Primary)
+      if (root === "online_tests") {
+        const classKey = parts[1];
+        const testId = parts[2];
+
+        if (testId) {
+          const cached = await idbGet("online_tests", testId);
+          if (cached) return cached;
+          if (navigator.onLine && fsDb && getDoc && doc) {
+            try {
+              const snap = await getDoc(doc(fsDb, "online_tests", testId));
+              if (snap && snap.exists()) {
+                const data = snap.data();
+                await idbSet("online_tests", testId, data);
+                return data;
+              }
+            } catch (e) {}
+          }
+          return null;
+        } else {
+          const localMap = await idbGetAllMap("online_tests");
+          const classTests = {};
+          Object.entries(localMap).forEach(([id, t]) => {
+            if (!classKey || String(t.class) === String(classKey)) {
+              classTests[id] = t;
+            }
+          });
+          if (Object.keys(classTests).length > 0) return classTests;
+
+          if (navigator.onLine && fsDb && getDocs && collection) {
+            try {
+              const snap = await getDocs(collection(fsDb, "online_tests"));
+              const tests = {};
+              const batchMap = {};
+              snap.forEach((d) => {
+                const data = d.data();
+                batchMap[d.id] = data;
+                if (!classKey || String(data.class) === String(classKey)) {
+                  tests[d.id] = data;
+                }
+              });
+              idbSetBatch("online_tests", batchMap);
+              return tests;
+            } catch (e) {}
+          }
+          return {};
+        }
+      }
+
+      // 9. DAILY CLAIMS (Firestore Primary)
+      if (root === "daily_claims" && parts[1]) {
+        const admn = String(parts[1]);
+        const cached = await idbGet("daily_claims", admn);
+        if (cached) return cached;
+        if (navigator.onLine && fsDb && getDoc && doc) {
+          try {
+            const snap = await getDoc(doc(fsDb, "daily_claims", admn));
+            if (snap && snap.exists()) {
+              const res = snap.data().claims || snap.data();
+              await idbSet("daily_claims", admn, res);
+              return res;
+            }
+          } catch (e) {}
+        }
+        return {};
+      }
+
+      // 10. LIGHTWEIGHT RTDB CONFIGS (Timetable, Subjects, Syllabus)
+      if (root === "timetable") {
+        const cls = parts[1] || "1";
+        const cached = await idbGet("timetable", cls);
+        if (cached) return cached;
+        if (navigator.onLine && rtdb && ref && get && child) {
+          try {
+            const snap = await get(child(ref(rtdb), `timetable/${cls}`));
+            if (snap && snap.exists()) {
+              const val = snap.val();
+              await idbSet("timetable", cls, val);
+              return val;
+            }
+          } catch (e) {}
+        }
+        return [];
+      }
+
+      if (root === "subjects") {
+        const localSubs = await idbGet("subjects", "all_subjects");
+        if (localSubs) return localSubs;
+        if (navigator.onLine && rtdb && ref && get && child) {
+          try {
+            const snap = await get(child(ref(rtdb), "subjects"));
+            if (snap && snap.exists()) {
+              const val = snap.val();
+              await idbSet("subjects", "all_subjects", val);
+              return val;
+            }
+          } catch (e) {}
+        }
+        return ["English", "Mathematics", "Science", "Social Studies", "Urdu", "Hindi", "Deeniyat"];
+      }
+
+      // RTDB Fallback for other paths
+      if (navigator.onLine && rtdb && ref && get && child) {
+        try {
+          const snap = await get(child(ref(rtdb), path));
+          return snap.exists() ? snap.val() : null;
+        } catch (e) { return null; }
+      }
+
+      return null;
+    },
+
+    setLocal: async function (storeName, key, value) {
+      await idbSet(storeName, key, value);
+    },
+
+    invalidate: async function (storeName, key) {
+      await idbSet(storeName, key, null);
+    },
+
+    triggerBackgroundSync: function () {
+      if ('serviceWorker' in navigator && 'SyncManager' in window) {
+        navigator.serviceWorker.ready.then((reg) => {
+          return reg.sync.register('accuengine-sync-queue');
+        }).catch(() => {});
+      }
+    },
+
+    queueOfflineAction: async function (actionType, payload) {
+      const db = await openIDB();
+      const item = {
+        id: Date.now() + "_" + Math.random().toString(36).substr(2, 5),
+        actionType: actionType,
+        payload: payload,
+        timestamp: Date.now()
+      };
+      return new Promise((resolve) => {
+        const tx = db.transaction("sync_queue", "readwrite");
+        tx.objectStore("sync_queue").put(item, item.id);
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      });
+    },
+
+    processSyncQueue: async function () {
+      if (!navigator.onLine || !modules) return;
+      const db = await openIDB();
+      const items = await new Promise((resolve) => {
+        const tx = db.transaction("sync_queue", "readonly");
+        const req = tx.objectStore("sync_queue").getAll();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => resolve([]);
+      });
+
+      if (items.length === 0) return;
+      const { fsDb, doc, setDoc, deleteDoc, db: rtdb, ref, update: rtdbUpdate } = modules;
+
+      for (const item of items) {
+        try {
+          if (item.actionType === "attendance_batch") {
+            for (const attItem of item.payload) {
+              await setDoc(doc(fsDb, "attendance", attItem.key), {
+                admn: String(attItem.admn),
+                month: attItem.month,
+                days: attItem.daysData,
+                updatedAt: new Date().toISOString()
+              }, { merge: true });
+            }
+          } else if (item.actionType === "fee_entry") {
+            const { entryDocId, entryData, matrixDocId, matrixData } = item.payload;
+            await setDoc(doc(fsDb, "fees_entries", entryDocId), entryData, { merge: true });
+            await setDoc(doc(fsDb, "fees_matrix", matrixDocId), matrixData, { merge: true });
+          } else if (item.actionType === "student_update") {
+            const { admn, studentData, userData, rtdbPayload } = item.payload;
+            await setDoc(doc(fsDb, "students", String(admn)), studentData, { merge: true });
+            if (userData) await setDoc(doc(fsDb, "users", String(admn)), userData, { merge: true });
+            if (rtdb && rtdbPayload && rtdbUpdate && ref) await rtdbUpdate(ref(rtdb), rtdbPayload).catch(() => {});
+          } else if (item.actionType === "student_delete") {
+            const { admn } = item.payload;
+            await deleteDoc(doc(fsDb, "students", String(admn))).catch(() => {});
+            await deleteDoc(doc(fsDb, "users", String(admn))).catch(() => {});
+            await deleteDoc(doc(fsDb, "fees_matrix", String(admn))).catch(() => {});
+          } else if (item.actionType === "teacher_update") {
+            const { username, teacherData, userData } = item.payload;
+            await setDoc(doc(fsDb, "teachers", String(username)), teacherData, { merge: true });
+            if (userData) await setDoc(doc(fsDb, "users", String(username)), userData, { merge: true });
+          } else if (item.actionType === "teacher_delete") {
+            const { username } = item.payload;
+            await deleteDoc(doc(fsDb, "teachers", String(username))).catch(() => {});
+            await deleteDoc(doc(fsDb, "users", String(username))).catch(() => {});
+          } else if (item.actionType === "offline_test") {
+            const { testDocId, testData, admn, newPoints } = item.payload;
+            await setDoc(doc(fsDb, "tests", testDocId), testData, { merge: true });
+            await setDoc(doc(fsDb, "students", String(admn)), { points: newPoints }, { merge: true });
+          } else if (item.actionType === "points_update") {
+            const { admn, newPoints } = item.payload;
+            await setDoc(doc(fsDb, "students", String(admn)), { points: newPoints }, { merge: true });
+          }
+
+          const delTx = db.transaction("sync_queue", "readwrite");
+          delTx.objectStore("sync_queue").delete(item.id);
+        } catch (err) {
+          break;
+        }
+      }
+    }
+  };
+
+  window.AccuEngine = AccuEngine;
+})(window);
