@@ -5157,17 +5157,18 @@ Exact Output JSON Format Required:
         } catch(e) { console.error("Cache cleanup error:", e); }
     };
 
-    // 🚀 Load Offline Data if No Internet on Startup
-    window.addEventListener('load', () => {
+       // 🚀 Load Offline Persistent Data on Startup
+    window.addEventListener('load', async () => {
       window.cleanExpiredTestCaches();
+      const localStudents = await safeDataFetch("students");
+      if (localStudents && Object.keys(localStudents).length > 0) {
+        inMemoryStudentsData = localStudents;
+      }
       if (!navigator.onLine) {
-        const cachedStudents = localStorage.getItem("offlineDbCache_students");
-        if (cachedStudents) {
-          inMemoryStudentsData = JSON.parse(cachedStudents);
-          window.showCustomAlert("⚡ You are currently offline. Working from local backup. Attendance will auto-sync when online.");
-        }
+        window.showCustomAlert("⚡ Working in Offline Mode. Attendance & entries will auto-sync when online.");
       }
     });
+
 
       
     window.openInteractiveTestTab = function(e) {
@@ -6249,11 +6250,17 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
         refreshStudentDashboard();
         window.switchTab('studentTabHome', bottomNav.children[0]);
 
-      } else if(role === "teacher") {
+            } else if(role === "teacher") {
         document.body.classList.remove("student-mode");
         document.body.classList.add("teacher-mode");
         document.getElementById("portalRoleSubHeader").innerText = "TEACHERS DASHBOARD PRO";
-        document.getElementById("classBadgeContainer").style.display = "inline-block";
+
+        // 🚀 Teacher login par turant local student list populate karna
+        safeDataFetch("students").then(stData => {
+          if(stData) inMemoryStudentsData = stData;
+          refreshAllTeacherData();
+        });
+  document.getElementById("classBadgeContainer").style.display = "inline-block";
         document.getElementById("classBadgeContainer").innerText = `Class: ${assignedClass}`;
         document.getElementById("studentStarsContainer").style.display = "none";
 
@@ -6545,16 +6552,18 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       });
     };
 
-    async function refreshAllTeacherData() {
-      await safeDataFetch("students");
-      loadTeacherTodayAttendance();
+     async function refreshAllTeacherData() {
+      const stData = await safeDataFetch("students") || {};
+      inMemoryStudentsData = stData; // 🚀 Student data memory mein assign hua
+      await loadTeacherTodayAttendance();
       loadTeacherStudentsDirectory();
-      window.loadTeacherLeaderboard(); // Call fixed function
-      populateTeacherStudentDropdowns(); // Ab ye properly execute hoga!
+      window.loadTeacherLeaderboard();
+      populateTeacherStudentDropdowns();
       if (typeof window.loadTeacherActiveOnlineTests === 'function') {
          window.loadTeacherActiveOnlineTests();
       }
     }
+
 
 
 
@@ -7341,7 +7350,7 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
         // Agar offline tha ya network drop hua toh queue mein daalo
         if (!navigator.onLine && window.AccuEngine) {
           await window.AccuEngine.queueOfflineAction("attendance_batch", offlineQueuePayload);
-          alert("⚡ Attendance saved locally (Offline Mode). Internet aate hi server se auto-sync ho jayegi.");
+          alert("⚡ Attendance saved locally (Offline Mode).");
         } else {
           alert("✔ Today's Attendance saved successfully.");
         }
