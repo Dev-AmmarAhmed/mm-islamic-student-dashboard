@@ -392,6 +392,15 @@
       });
     },
 
+       // Background Sync Registration (App band hone par bhi execute hone ke liye)
+    triggerBackgroundSync: function () {
+      if ('serviceWorker' in navigator && 'SyncManager' in window) {
+        navigator.serviceWorker.ready.then((reg) => {
+          return reg.sync.register('accuengine-sync-queue');
+        }).catch(() => {});
+      }
+    },
+
     processSyncQueue: async function () {
       if (!navigator.onLine || !modules) return;
       const db = await openIDB();
@@ -403,10 +412,12 @@
       });
 
       if (items.length === 0) return;
-      const { fsDb, doc, setDoc } = modules;
+      console.log(`[AccuEngine] Processing ${items.length} pending offline actions...`);
+      const { fsDb, doc, setDoc, db: rtdb, ref, update: rtdbUpdate } = modules;
 
       for (const item of items) {
         try {
+          // 1. Attendance Sync
           if (item.actionType === "attendance_batch") {
             for (const attItem of item.payload) {
               await setDoc(doc(fsDb, "attendance", attItem.key), {
@@ -416,18 +427,53 @@
                 updatedAt: new Date().toISOString()
               }, { merge: true });
             }
-          } else if (item.actionType === "fee_entry") {
+          } 
+          // 2. Fee Entry Sync
+          else if (item.actionType === "fee_entry") {
             const { entryDocId, entryData, matrixDocId, matrixData } = item.payload;
             await setDoc(doc(fsDb, "fees_entries", entryDocId), entryData, { merge: true });
             await setDoc(doc(fsDb, "fees_matrix", matrixDocId), matrixData, { merge: true });
           }
+          // 3. Student Edit & Profile Update Sync
+          else if (item.actionType === "student_update") {
+            const { admn, studentData, userData, rtdbPayload } = item.payload;
+            await setDoc(doc(fsDb, "students", String(admn)), studentData, { merge: true });
+            if (userData) {
+              await setDoc(doc(fsDb, "users", String(admn)), userData, { merge: true });
+            }
+            if (rtdb && rtdbPayload && rtdbUpdate && ref) {
+              await rtdbUpdate(ref(rtdb), rtdbPayload).catch(() => {});
+            }
+          }
+          // 4. Offline Test Details & Points Sync
+          else if (item.actionType === "offline_test") {
+            const { testDocId, testData, admn, newPoints } = item.payload;
+            await setDoc(doc(fsDb, "tests", testDocId), testData, { merge: true });
+            await setDoc(doc(fsDb, "students", String(admn)), { points: newPoints }, { merge: true });
+            if (rtdb && rtdbUpdate && ref) {
+              await rtdbUpdate(ref(rtdb), {
+                [`students/${admn}/points`]: newPoints,
+                [`tests/${admn}/${testDocId}`]: testData
+              }).catch(() => {});
+            }
+          }
+          // 5. Interactive Online Test Sync
+          else if (item.actionType === "online_test") {
+            const { testId, testData } = item.payload;
+            await setDoc(doc(fsDb, "online_tests", String(testId)), testData, { merge: true });
+          }
+
+          // Successfully pushed, queue se remove karein
           const delTx = db.transaction("sync_queue", "readwrite");
           delTx.objectStore("sync_queue").delete(item.id);
         } catch (err) {
-          break;
+          console.warn("[AccuEngine] Sync paused for item:", item.id, err);
+          break; // Net fluctuate ho toh agle reconnect par retry karein
         }
       }
+      console.log("[AccuEngine] Offline queue sync finished.");
     }
+
   };
 
   window.AccuEngine = AccuEngine;
