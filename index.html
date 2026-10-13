@@ -7531,22 +7531,65 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
         let awardedPoints = 0;
         if(percentage >= 95) awardedPoints = 100; else if(percentage >= 90) awardedPoints = 80; else if(percentage >= 70) awardedPoints = 50; else if(percentage >= 50) awardedPoints = 30; else if(percentage >= 30) awardedPoints = 10; else awardedPoints = -50;
 
-        const testId = Date.now().toString();
-        const testObj = { name: testName, total: total, obtained: obtained, percentage: percentage.toFixed(1), awardedPoints: awardedPoints, date: getTodayFormattedDate() };
+               const testId = Date.now().toString();
+        const testObj = { 
+          name: testName, 
+          total: total, 
+          obtained: obtained, 
+          percentage: percentage.toFixed(1), 
+          awardedPoints: awardedPoints, 
+          date: getTodayFormattedDate(),
+          admn: String(admn),
+          testId: testId
+        };
 
-        await set(ref(db, `tests/${admn}/${testId}`), testObj);
-               const st = await getStudentRecord(admn);
-        if(st) {
-          const newPts = (st.points || 0) + awardedPoints;
-          await update(ref(db, `students/${admn}`), { points: newPts });
-          
-          // Push Points Notification to Student
-          const reasonTxt = document.getElementById("performReasonInput") ? document.getElementById("performReasonInput").value.trim() : 'Test Performance';
-          await window.pushAppNotification(admn, "Points Updated ⭐", `You received ${awardedPoints > 0 ? '+'+awardedPoints : awardedPoints} points. Reason: ${reasonTxt}`, "points_update", { points: awardedPoints });
-          
-          await refreshAllTeacherData();
-          alert(`Updated Points for ${st.name}: ${awardedPoints >= 0 ? '+' : ''}${awardedPoints} Points.`);
+        const st = await getStudentRecord(admn);
+        const newPts = (st ? (st.points || 0) : 0) + awardedPoints;
+
+        // 🚀 1. Immediate Local Cache Update
+        if (st) {
+          st.points = newPts;
+          inMemoryStudentsData[admn] = st;
+          if (window.AccuEngine) {
+            await window.AccuEngine.setLocal("students", admn, st);
+            const cachedTests = (await window.AccuEngine.fetch(`tests/${admn}`)) || {};
+            cachedTests[testId] = testObj;
+            await window.AccuEngine.setLocal("tests", admn, cachedTests);
+          }
         }
+
+        const offlineTestPayload = {
+          testDocId: `${admn}_${testId}`,
+          testData: testObj,
+          admn: admn,
+          newPoints: newPts
+        };
+
+        // 🚀 2. Online vs Offline Sync Handling
+        if (navigator.onLine) {
+          try {
+            await set(ref(db, `tests/${admn}/${testId}`), testObj);
+            await update(ref(db, `students/${admn}`), { points: newPts });
+            await setDoc(doc(fsDb, "tests", `${admn}_${testId}`), testObj, { merge: true });
+            await setDoc(doc(fsDb, "students", String(admn)), { points: newPts }, { merge: true });
+            alert(`✔ Test Marks & Points saved successfully!`);
+          } catch (e) {
+            if (window.AccuEngine) {
+              await window.AccuEngine.queueOfflineAction("offline_test", offlineTestPayload);
+              window.AccuEngine.triggerBackgroundSync();
+            }
+            alert(`⚡ Marks saved offline. Server par auto-sync ho jayega.`);
+          }
+        } else {
+          if (window.AccuEngine) {
+            await window.AccuEngine.queueOfflineAction("offline_test", offlineTestPayload);
+            window.AccuEngine.triggerBackgroundSync();
+          }
+          alert(`⚡ Offline Mode: Test marks aur points locally save ho gaye!`);
+        }
+
+        await refreshAllTeacherData();
+
  });
     });
 
@@ -8109,7 +8152,7 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
           regDate: currentStudent ? (currentStudent.regDate || getTodayFormattedDate()) : getTodayFormattedDate()
         };
 
-        const updates = {};
+               const updates = {};
         if(String(oldAdmn) !== String(newAdmn)) {
           updates[`students/${oldAdmn}`] = null;
           updates[`users/${oldAdmn}`] = null;
@@ -8123,10 +8166,47 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
           updates[`email_lookup/${window.encodeEmailKey(email)}`] = String(newAdmn);
         }
 
-        await update(ref(db), updates);
+        // 🚀 1. Immediate Local Cache Update (UI instantly update hogi offline me)
+        if (window.AccuEngine) {
+          await window.AccuEngine.setLocal("students", newAdmn, updatedStudentObj);
+          if (String(oldAdmn) !== String(newAdmn)) {
+            await window.AccuEngine.invalidate("students", oldAdmn);
+          }
+        }
+        inMemoryStudentsData[newAdmn] = updatedStudentObj;
+
+        const syncPayload = {
+          admn: newAdmn,
+          studentData: updatedStudentObj,
+          userData: { password: pass || "MM", role: "student", admn: newAdmn, assignedClass: cls },
+          rtdbPayload: updates
+        };
+
+        // 🚀 2. Online vs Offline Sync Handling
+        if (navigator.onLine) {
+          try {
+            await update(ref(db), updates);
+            await setDoc(doc(fsDb, "students", String(newAdmn)), updatedStudentObj, { merge: true });
+            await setDoc(doc(fsDb, "users", String(newAdmn)), syncPayload.userData, { merge: true });
+            alert("✔ Student Profile updated successfully!");
+          } catch (e) {
+            if (window.AccuEngine) {
+              await window.AccuEngine.queueOfflineAction("student_update", syncPayload);
+              window.AccuEngine.triggerBackgroundSync();
+            }
+            alert("⚡ Student details saved locally (Offline). Server sync queued!");
+          }
+        } else {
+          if (window.AccuEngine) {
+            await window.AccuEngine.queueOfflineAction("student_update", syncPayload);
+            window.AccuEngine.triggerBackgroundSync();
+          }
+          alert("⚡ Saved in Offline Mode. Jaise hi internet aayega, server par auto-sync ho jayega.");
+        }
+
         if(currentRole === "teacher") await refreshAllTeacherData(); else renderAdminStudentsDirectory();
-        alert("✔ Student Profile & Photo updated in Cloud Firestore!");
         window.closeModal("studentProfileModal");
+
       });
     });
 
@@ -8726,19 +8806,60 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
             return; 
         }
 
-        const testId = Date.now().toString();
+                const testId = Date.now().toString();
         const cleanClass = cleanClassStr(assignedClass);
-        await set(ref(db, `online_tests/${cleanClass}/${testId}`), { id: testId, title: name, subject: subject, numQuestions: numQ, marksPerQ: marksPerQ, totalMarks: numQ * marksPerQ, timeMinutes: timeMins, expiry: expiry, questions: questionsList, class: cleanClass, createdDate: getTodayFormattedDate() });
-        
-        const targetStudents = getLiveStudents().filter(s => cleanClassStr(s.class) === cleanClass);
-        for(let s of targetStudents) {
-           await window.pushAppNotification(s.admn, "New Online Test 📝", `${name} (${subject}) has been added. Check your tests tab.`, "test_added", { testId: testId });
+        const testPayloadData = { 
+          id: testId, 
+          title: name, 
+          subject: subject, 
+          numQuestions: numQ, 
+          marksPerQ: marksPerQ, 
+          totalMarks: numQ * marksPerQ, 
+          timeMinutes: timeMins, 
+          expiry: expiry, 
+          questions: questionsList, 
+          class: cleanClass, 
+          createdDate: getTodayFormattedDate() 
+        };
+
+        // 🚀 1. Immediate Local Cache Update
+        if (window.AccuEngine) {
+          await window.AccuEngine.setLocal("online_tests", testId, testPayloadData);
         }
 
-        alert(`✔ Online Test "${name}" published successfully for Class ${assignedClass}!`);
+        const onlineTestSyncPayload = {
+          testId: testId,
+          testData: testPayloadData
+        };
+
+        // 🚀 2. Online vs Offline Sync Handling
+        if (navigator.onLine) {
+          try {
+            await set(ref(db, `online_tests/${cleanClass}/${testId}`), testPayloadData);
+            await setDoc(doc(fsDb, "online_tests", String(testId)), testPayloadData, { merge: true });
+            alert(`✔ Online Test "${name}" published successfully for Class ${assignedClass}!`);
+          } catch (e) {
+            if (window.AccuEngine) {
+              await window.AccuEngine.queueOfflineAction("online_test", onlineTestSyncPayload);
+              window.AccuEngine.triggerBackgroundSync();
+            }
+            alert(`⚡ Online Test saved locally. Internet aane par server par publish ho jayega.`);
+          }
+        } else {
+          if (window.AccuEngine) {
+            await window.AccuEngine.queueOfflineAction("online_test", onlineTestSyncPayload);
+            window.AccuEngine.triggerBackgroundSync();
+          }
+          alert(`⚡ Offline Mode: Test locally create ho gaya! Network aane par server par sync ho jayega.`);
+        }
+
+        if (typeof window.loadTeacherActiveOnlineTests === "function") {
+          window.loadTeacherActiveOnlineTests();
+        }
         autoFilledJsonQuestions = null; 
         if(document.getElementById("jsonCodeInput")) document.getElementById("jsonCodeInput").value = "";
         window.closeModal("createOnlineTestModal");
+
       });
     });
 
