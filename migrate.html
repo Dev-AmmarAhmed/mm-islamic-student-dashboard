@@ -3,70 +3,69 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AccuEngine - Bulletproof Migration Console</title>
+    <title>AccuEngine - Zero-Rule Migration Console</title>
     <!-- Firebase Compat SDKs (v10.8.0) -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0b1329; color: #f8fafc; padding: 20px; margin: 0; }
-        .container { max-width: 860px; margin: auto; background: #131d36; border-radius: 16px; padding: 24px; box-shadow: 0 10px 35px rgba(0,0,0,0.5); border: 1px solid #1e293b; }
+        .container { max-width: 820px; margin: auto; background: #131d36; border-radius: 16px; padding: 24px; box-shadow: 0 10px 35px rgba(0,0,0,0.5); border: 1px solid #1e293b; }
         h1 { color: #38bdf8; font-size: 20px; margin-top: 0; }
-        p { color: #94a3b8; font-size: 13px; line-height: 1.5; margin-bottom: 16px; }
-        .auth-card { background: #1e293b; padding: 14px; border-radius: 10px; margin-bottom: 20px; border: 1px solid #334155; }
-        .auth-card input { padding: 9px 12px; border-radius: 8px; border: 1px solid #475569; background: #0f172a; color: #fff; font-size: 13px; outline: none; margin-right: 8px; }
-        .btn-group { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
-        button { background: #0288d1; color: #fff; border: none; padding: 10px 16px; border-radius: 8px; font-weight: 800; font-size: 13px; cursor: pointer; transition: 0.2s; }
+        p { color: #94a3b8; font-size: 13px; line-height: 1.5; }
+        .card { background: #1e293b; padding: 16px; border-radius: 12px; margin: 16px 0; border: 1px solid #334155; }
+        input[type="file"] { background: #0f172a; border: 1px dashed #38bdf8; padding: 14px; border-radius: 8px; width: 100%; box-sizing: border-box; color: #cbd5e1; cursor: pointer; }
+        .auth-row { display: flex; gap: 8px; margin-bottom: 12px; }
+        .auth-row input { padding: 9px 12px; border-radius: 8px; border: 1px solid #475569; background: #0f172a; color: #fff; font-size: 13px; outline: none; }
+        button { background: #0288d1; color: #fff; border: none; padding: 11px 18px; border-radius: 8px; font-weight: 800; font-size: 13px; cursor: pointer; transition: 0.2s; }
         button:hover { opacity: 0.9; }
         button:disabled { background: #475569 !important; cursor: not-allowed; opacity: 0.6; }
         .btn-green { background: #16a34a !important; }
-        .btn-red { background: #dc2626 !important; }
         .btn-purple { background: #7c3aed !important; }
         .progress-bar-bg { width: 100%; height: 8px; background: #1e293b; border-radius: 6px; overflow: hidden; margin-bottom: 14px; }
         .progress-bar-fill { height: 100%; width: 0%; background: #38bdf8; transition: width 0.3s; }
-        #logBox { background: #000000; color: #4ade80; padding: 14px; border-radius: 10px; font-family: monospace; font-size: 12px; height: 350px; overflow-y: auto; white-space: pre-wrap; line-height: 1.6; border: 1px solid #1e293b; }
-        .status-pill { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 800; background: rgba(34, 197, 94, 0.2); color: #4ade80; }
+        #logBox { background: #000000; color: #4ade80; padding: 14px; border-radius: 10px; font-family: monospace; font-size: 12px; height: 340px; overflow-y: auto; white-space: pre-wrap; line-height: 1.6; border: 1px solid #1e293b; }
+        .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 800; background: rgba(56, 189, 248, 0.2); color: #38bdf8; }
     </style>
 </head>
 <body>
     <div class="container">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-            <h1>AccuEngine Non-Freezing Migration Console</h1>
-            <span id="authStatusPill" class="status-pill" style="background: rgba(239,68,68,0.2); color:#f87171;">Auth: Not Connected</span>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h1>AccuEngine Zero-Rule Migration</h1>
+            <span id="authBadge" class="badge" style="background: rgba(239,68,68,0.2); color:#f87171;">Auth: Disconnected</span>
         </div>
         <p>
-            12 MB base64 data ko browser bina hang kiye chote-chote 25-record batches mein transfer karega. Sabhi photo strings automatically strip kar di jayengi.
+            RTDB ke rules change kiye bina data migrate karne ke liye Firebase Console se JSON file download karein aur neeche upload karein.
         </p>
 
-        <!-- AUTH OVERRIDE PANEL (Rules bypass ke liye agar anonymously allow na ho) -->
-        <div class="auth-card">
-            <span style="font-size: 12px; font-weight: 800; color: #38bdf8; display: block; margin-bottom: 8px;">1. Connect Session (Pick any method):</span>
-            <button class="btn-purple" onclick="handleAnonAuth()">⚡ Auto Anonymous Connect</button>
-            <span style="font-size: 12px; color: #64748b; margin: 0 10px;">OR</span>
-            <input type="text" id="adminEmailInp" placeholder="Admin Email / ID">
-            <input type="password" id="adminPassInp" placeholder="Password">
-            <button onclick="handleAdminLogin()">🔑 Admin Login</button>
+        <!-- STEP 1: AUTH (Firestore write ke liye) -->
+        <div class="card">
+            <span style="font-size: 12px; font-weight: 800; color: #38bdf8; display: block; margin-bottom: 8px;">Step 1: Firestore Connect Karein</span>
+            <div class="auth-row">
+                <button class="btn-purple" onclick="handleAnonAuth()">⚡ Anonymous Connect</button>
+                <input type="text" id="adminEmail" placeholder="Admin Email / ID">
+                <input type="password" id="adminPass" placeholder="Password">
+                <button onclick="handleAdminLogin()">🔑 Admin Login</button>
+            </div>
+        </div>
+
+        <!-- STEP 2: JSON FILE UPLOAD -->
+        <div class="card">
+            <span style="font-size: 12px; font-weight: 800; color: #38bdf8; display: block; margin-bottom: 8px;">Step 2: RTDB Backup JSON File Select Karein</span>
+            <input type="file" id="jsonFileInput" accept=".json">
+            <button id="btnStartJson" class="btn-green" style="margin-top: 14px; width: 100%;" onclick="startJsonMigration()" disabled>
+                🚀 Migrate From JSON File (Purge Photos & Push To Firestore)
+            </button>
         </div>
 
         <div class="progress-bar-bg">
             <div id="progBar" class="progress-bar-fill"></div>
         </div>
 
-        <!-- MIGRATION CONTROLS -->
-        <div class="btn-group">
-            <button id="btnAll" class="btn-green" onclick="runAllSequential()">🚀 1. Run Complete Safe Migration</button>
-            <button id="btnCleanRTDB" class="btn-red" onclick="purgePhotosFromRTDB()">🗑️ 2. Purge Photos From RTDB (Free 12MB)</button>
-        </div>
-
-        <div id="logBox">Console initialized. Pehle "Auto Anonymous Connect" ya "Admin Login" dabayein...</div>
+        <div id="logBox">Console Ready. Step 1 se connect karein, fir JSON file select karein...</div>
     </div>
 
     <script>
-        // Disable App Check locally taaki migration script ko koi token error block na kare
-        self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
-
         const firebaseConfig = {
             apiKey: "AIzaSyBHpbgoGs7HFQ3-1tBn9BpGT4YYDaKkZB8",
             authDomain: "mm-islamic-erp.firebaseapp.com",
@@ -78,15 +77,8 @@
         };
 
         const app = firebase.initializeApp(firebaseConfig);
-        const rtdb = firebase.database();
         const firestore = firebase.firestore();
         const auth = firebase.auth();
-
-        // App Check safe initialization (never throws blocking error)
-        try {
-            const appCheck = firebase.appCheck();
-            appCheck.activate(new firebase.appCheck.ReCaptchaEnterpriseProvider('6LefZbUtAAAAADOa8KBfn1qywMly7Ky2-UlX6zxW'), true);
-        } catch(e) {}
 
         function log(msg, isErr = false) {
             const b = document.getElementById("logBox");
@@ -94,59 +86,54 @@
             b.scrollTop = b.scrollHeight;
         }
 
-        function setProgress(pct) {
+        function setProg(pct) {
             document.getElementById("progBar").style.width = pct + "%";
         }
 
-        function updateAuthBadge(txt, ok) {
-            const pill = document.getElementById("authStatusPill");
-            pill.innerText = txt;
-            pill.style.background = ok ? "rgba(34, 197, 94, 0.2)" : "rgba(239, 68, 68, 0.2)";
-            pill.style.color = ok ? "#4ade80" : "#f87171";
-        }
-
         auth.onAuthStateChanged(user => {
+            const badge = document.getElementById("authBadge");
             if (user) {
-                updateAuthBadge(`Connected (${user.email || 'Anonymous'})`, true);
-                log(`[Auth Verified] Active session: ${user.uid}`);
+                badge.innerText = `Connected (${user.email || 'Anon'})`;
+                badge.style.background = "rgba(34, 197, 94, 0.2)";
+                badge.style.color = "#4ade80";
+                log(`[Auth Active] User: ${user.uid}`);
+                checkReady();
             } else {
-                updateAuthBadge("Auth: Not Connected", false);
+                badge.innerText = "Auth: Disconnected";
+                badge.style.background = "rgba(239, 68, 68, 0.2)";
+                badge.style.color = "#f87171";
             }
         });
 
         async function handleAnonAuth() {
             try {
-                log("Connecting anonymously...");
                 await auth.signInAnonymously();
             } catch(e) {
-                log("Anonymous sign-in blocked by Firebase Auth console settings. Admin Login use karein: " + e.message, true);
+                log("Anonymous blocked: " + e.message, true);
             }
         }
 
         async function handleAdminLogin() {
-            const email = document.getElementById("adminEmailInp").value.trim();
-            const pass = document.getElementById("adminPassInp").value.trim();
-            if(!email || !pass) { alert("Please enter both ID/Email and Password."); return; }
+            const email = document.getElementById("adminEmail").value.trim();
+            const pass = document.getElementById("adminPass").value.trim();
+            if(!email || !pass) return alert("Email aur Password dalein");
             try {
-                log(`Signing in as ${email}...`);
                 await auth.signInWithEmailAndPassword(email, pass);
+                log("Admin Login Successful!");
             } catch(e) {
-                log("Admin Login Failed: " + e.message, true);
+                log("Login Error: " + e.message, true);
             }
         }
 
-        async function ensureSession() {
-            if (!auth.currentUser) {
-                try {
-                    await auth.signInAnonymously();
-                } catch(e) {}
-            }
+        document.getElementById("jsonFileInput").addEventListener("change", checkReady);
+
+        function checkReady() {
+            const hasFile = document.getElementById("jsonFileInput").files.length > 0;
+            const hasAuth = !!auth.currentUser;
+            document.getElementById("btnStartJson").disabled = !(hasFile && hasAuth);
         }
 
-        // ========================================================
-        // CHUNKED FIRESTORE BATCH WRITER
-        // ========================================================
-        class ChunkedWriter {
+        class FirestoreBatch {
             constructor() {
                 this.batch = firestore.batch();
                 this.count = 0;
@@ -156,9 +143,9 @@
                 this.batch.set(docRef, data, { merge: true });
                 this.count++;
                 this.total++;
-                if (this.count >= 250) {
+                if (this.count >= 300) {
                     await this.batch.commit();
-                    log(`   [Firestore] ${this.total} items saved...`);
+                    log(`   [Firestore] ${this.total} documents written...`);
                     this.batch = firestore.batch();
                     this.count = 0;
                 }
@@ -166,232 +153,151 @@
             async commit() {
                 if (this.count > 0) {
                     await this.batch.commit();
-                    log(`   [Firestore Finalized] Total ${this.total} items written.`);
+                    log(`   [Firestore Finalized] Total ${this.total} documents written.`);
                     this.count = 0;
                     this.batch = firestore.batch();
                 }
             }
         }
 
-        // ========================================================
-        // CHUNKED PAGINATION FETCH (Never Freezes the Browser)
-        // ========================================================
-        async function runAllSequential() {
-            const btn = document.getElementById("btnAll");
-            btn.disabled = true;
-            setProgress(5);
-            log("\n========================================================");
-            log("🚀 Starting Batched Migration (Zero Memory Overload)...");
+        async function startJsonMigration() {
+            const fileInput = document.getElementById("jsonFileInput");
+            if (!fileInput.files[0]) return;
 
-            try {
-                await ensureSession();
-                const writer = new ChunkedWriter();
-
-                // 1. STUDENTS (25-at-a-time pagination taake 12MB se hang na ho)
-                log("\n[1/8] Migrating /students in batches...");
-                let lastKey = null;
-                let sTotal = 0;
-                let hasMore = true;
-
-                while(hasMore) {
-                    let q = rtdb.ref("students").orderByKey().limitToFirst(25);
-                    if (lastKey) q = q.startAfter(lastKey);
-
-                    const snap = await q.once("value");
-                    const batch = snap.val() || {};
-                    const keys = Object.keys(batch);
-
-                    if(keys.length === 0) {
-                        hasMore = false;
-                        break;
-                    }
-
-                    for (const k of keys) {
-                        const sObj = { ...batch[k] };
-                        sObj.photo = ""; // Base64 completely stripped
-                        sObj.admn = String(k);
-                        await writer.set(firestore.collection("students").doc(String(k)), sObj);
-                        lastKey = k;
-                        sTotal++;
-                    }
-                    log(`   Read & processed ${sTotal} students...`);
-                    if(keys.length < 25) hasMore = false;
-                }
-                await writer.commit();
-                setProgress(25);
-                log(`✔ ${sTotal} Students transferred to Firestore without photos.`);
-
-                // 2. TEACHERS
-                log("\n[2/8] Migrating /teachers...");
-                const snapTeachers = await rtdb.ref("teachers").once("value");
-                const teachers = snapTeachers.val() || {};
-                for (const u of Object.keys(teachers)) {
-                    const tObj = { ...teachers[u] };
-                    tObj.photo = ""; // Strip photo
-                    tObj.username = String(u);
-                    await writer.set(firestore.collection("teachers").doc(String(u)), tObj);
-                }
-                await writer.commit();
-                setProgress(40);
-                log(`✔ Teachers transferred to Firestore.`);
-
-                // 3. USERS (Credentials Vault)
-                log("\n[3/8] Migrating /users...");
-                const snapUsers = await rtdb.ref("users").once("value");
-                const users = snapUsers.val() || {};
-                for (const u of Object.keys(users)) {
-                    await writer.set(firestore.collection("users").doc(String(u)), users[u]);
-                }
-                await writer.commit();
-                setProgress(55);
-                log(`✔ User credentials transferred.`);
-
-                // 4. FEES MATRIX
-                log("\n[4/8] Migrating /fees_matrix...");
-                const snapMatrix = await rtdb.ref("fees_matrix").once("value");
-                const matrix = snapMatrix.val() || {};
-                for (const admn of Object.keys(matrix)) {
-                    await writer.set(firestore.collection("fees_matrix").doc(String(admn)), {
-                        admn: String(admn),
-                        matrix: matrix[admn],
-                        updatedAt: new Date().toISOString()
-                    });
-                }
-                await writer.commit();
-                setProgress(70);
-                log(`✔ Fees Matrix transferred.`);
-
-                // 5. FEES ENTRIES
-                log("\n[5/8] Migrating /fees_entries...");
-                const snapEntries = await rtdb.ref("fees_entries").once("value");
-                const entries = snapEntries.val() || {};
-                for (const admn of Object.keys(entries)) {
-                    for (const eid of Object.keys(entries[admn])) {
-                        await writer.set(firestore.collection("fees_entries").doc(`${admn}_${eid}`), {
-                            ...entries[admn][eid],
-                            admn: String(admn),
-                            entryId: String(eid)
-                        });
-                    }
-                }
-                await writer.commit();
-                setProgress(80);
-                log(`✔ Fees entries receipts transferred.`);
-
-                // 6. ATTENDANCE
-                log("\n[6/8] Migrating /attendance...");
-                const snapAtt = await rtdb.ref("attendance").once("value");
-                const att = snapAtt.val() || {};
-                for (const admn of Object.keys(att)) {
-                    for (const m of Object.keys(att[admn])) {
-                        await writer.set(firestore.collection("attendance").doc(`${admn}_${m}`), {
-                            admn: String(admn),
-                            month: String(m),
-                            days: att[admn][m],
-                            updatedAt: new Date().toISOString()
-                        });
-                    }
-                }
-                await writer.commit();
-                setProgress(90);
-                log(`✔ Attendance records transferred.`);
-
-                // 7. TESTS & ATTEMPTS
-                log("\n[7/8] Migrating Tests & Attempts...");
-                const snapTests = await rtdb.ref("tests").once("value");
-                const tests = snapTests.val() || {};
-                for (const admn of Object.keys(tests)) {
-                    for (const tid of Object.keys(tests[admn])) {
-                        await writer.set(firestore.collection("tests").doc(`${admn}_${tid}`), {
-                            ...tests[admn][tid],
-                            admn: String(admn),
-                            testId: String(tid)
-                        });
-                    }
-                }
-
-                const snapOT = await rtdb.ref("online_tests").once("value");
-                const onlineTests = snapOT.val() || {};
-                for (const cls of Object.keys(onlineTests)) {
-                    for (const tid of Object.keys(onlineTests[cls])) {
-                        await writer.set(firestore.collection("online_tests").doc(String(tid)), {
-                            ...onlineTests[cls][tid],
-                            id: String(tid),
-                            class: String(cls)
-                        });
-                    }
-                }
-                await writer.commit();
-
-                // 8. DAILY CLAIMS
-                log("\n[8/8] Migrating /daily_claims...");
-                const snapClaims = await rtdb.ref("daily_claims").once("value");
-                const claims = snapClaims.val() || {};
-                for (const admn of Object.keys(claims)) {
-                    await writer.set(firestore.collection("daily_claims").doc(String(admn)), {
-                        claims: claims[admn]
-                    });
-                }
-                await writer.commit();
-
-                setProgress(100);
-                log("\n🎉 [SUCCESS] Entire Database Migrated to Firestore smoothly with 0 Freezes!");
-            } catch (err) {
-                log("[FATAL ERROR] " + err.message, true);
-            } finally {
-                btn.disabled = false;
-            }
-        }
-
-        // ========================================================
-        // PURGE BLOATED BASE64 PHOTOS FROM RTDB
-        // ========================================================
-        async function purgePhotosFromRTDB() {
-            if(!confirm("Are you sure? This will delete all heavy base64 photo strings from Realtime Database to reclaim the 12MB space.")) return;
-
-            const btn = document.getElementById("btnCleanRTDB");
+            const btn = document.getElementById("btnStartJson");
             btn.disabled = true;
             log("\n========================================================");
-            log("Cleaning Realtime Database image bloat...");
+            log("Reading JSON file into memory...");
 
-            try {
-                await ensureSession();
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const fullData = JSON.parse(e.target.result);
+                    log(`JSON file parsed successfully! Size: ${(e.target.result.length / (1024*1024)).toFixed(2)} MB`);
+                    
+                    const writer = new FirestoreBatch();
 
-                // Remove bulk photo root nodes
-                await rtdb.ref("student_photos").remove().catch(()=>{});
-                await rtdb.ref("teacher_photos").remove().catch(()=>{});
-                log("✔ Removed /student_photos and /teacher_photos root trees.");
+                    // 1. STUDENTS (Strip 12MB photos)
+                    if (fullData.students) {
+                        const sKeys = Object.keys(fullData.students);
+                        log(`\n[1/7] Migrating ${sKeys.length} Students (Stripping Base64 Images)...`);
+                        for (let k of sKeys) {
+                            const sObj = { ...fullData.students[k] };
+                            sObj.photo = ""; // Base64 completely stripped
+                            sObj.admn = String(k);
+                            await writer.set(firestore.collection("students").doc(String(k)), sObj);
+                        }
+                        await writer.commit();
+                        setProg(25);
+                        log("✔ Students migrated without photo bloat.");
+                    }
 
-                // Strip photo keys from students
-                const snapS = await rtdb.ref("students").once("value");
-                const students = snapS.val() || {};
-                const sUpdates = {};
-                for(let a of Object.keys(students)) {
-                    if(students[a].photo) sUpdates[`students/${a}/photo`] = "";
+                    // 2. TEACHERS
+                    if (fullData.teachers) {
+                        const tKeys = Object.keys(fullData.teachers);
+                        log(`\n[2/7] Migrating ${tKeys.length} Teachers...`);
+                        for (let u of tKeys) {
+                            const tObj = { ...fullData.teachers[u] };
+                            tObj.photo = "";
+                            tObj.username = String(u);
+                            await writer.set(firestore.collection("teachers").doc(String(u)), tObj);
+                        }
+                        await writer.commit();
+                        setProg(45);
+                        log("✔ Teachers migrated.");
+                    }
+
+                    // 3. USERS (Credentials Vault)
+                    if (fullData.users) {
+                        log(`\n[3/7] Migrating Users Credentials...`);
+                        for (let u of Object.keys(fullData.users)) {
+                            await writer.set(firestore.collection("users").doc(String(u)), fullData.users[u]);
+                        }
+                        await writer.commit();
+                        setProg(60);
+                        log("✔ Users credentials migrated.");
+                    }
+
+                    // 4. FEES MATRIX
+                    if (fullData.fees_matrix) {
+                        log(`\n[4/7] Migrating Fees Matrix...`);
+                        for (let admn of Object.keys(fullData.fees_matrix)) {
+                            await writer.set(firestore.collection("fees_matrix").doc(String(admn)), {
+                                admn: String(admn),
+                                matrix: fullData.fees_matrix[admn],
+                                updatedAt: new Date().toISOString()
+                            });
+                        }
+                        await writer.commit();
+                        setProg(75);
+                        log("✔ Fees Matrix migrated.");
+                    }
+
+                    // 5. FEES ENTRIES
+                    if (fullData.fees_entries) {
+                        log(`\n[5/7] Migrating Fees Receipts...`);
+                        for (let admn of Object.keys(fullData.fees_entries)) {
+                            for (let eid of Object.keys(fullData.fees_entries[admn])) {
+                                await writer.set(firestore.collection("fees_entries").doc(`${admn}_${eid}`), {
+                                    ...fullData.fees_entries[admn][eid],
+                                    admn: String(admn),
+                                    entryId: String(eid)
+                                });
+                            }
+                        }
+                        await writer.commit();
+                        setProg(85);
+                        log("✔ Fees Entries receipts migrated.");
+                    }
+
+                    // 6. ATTENDANCE
+                    if (fullData.attendance) {
+                        log(`\n[6/7] Migrating Attendance...`);
+                        for (let admn of Object.keys(fullData.attendance)) {
+                            for (let m of Object.keys(fullData.attendance[admn])) {
+                                await writer.set(firestore.collection("attendance").doc(`${admn}_${m}`), {
+                                    admn: String(admn),
+                                    month: String(m),
+                                    days: fullData.attendance[admn][m],
+                                    updatedAt: new Date().toISOString()
+                                });
+                            }
+                        }
+                        await writer.commit();
+                        setProg(95);
+                        log("✔ Attendance records migrated.");
+                    }
+
+                    // 7. TESTS & DAILY CLAIMS
+                    if (fullData.tests) {
+                        for (let admn of Object.keys(fullData.tests)) {
+                            for (let tid of Object.keys(fullData.tests[admn])) {
+                                await writer.set(firestore.collection("tests").doc(`${admn}_${tid}`), {
+                                    ...fullData.tests[admn][tid],
+                                    admn: String(admn),
+                                    testId: String(tid)
+                                });
+                            }
+                        }
+                    }
+                    if (fullData.daily_claims) {
+                        for (let admn of Object.keys(fullData.daily_claims)) {
+                            await writer.set(firestore.collection("daily_claims").doc(String(admn)), {
+                                claims: fullData.daily_claims[admn]
+                            });
+                        }
+                    }
+                    await writer.commit();
+                    setProg(100);
+
+                    log("\n🎉 [SUCCESS] Poora data bina kisi permission error ke Cloud Firestore mein transfer ho chuka hai!");
+                } catch(err) {
+                    log("Migration Failed: " + err.message, true);
+                } finally {
+                    btn.disabled = false;
                 }
-                if(Object.keys(sUpdates).length > 0) {
-                    await rtdb.ref().update(sUpdates);
-                    log(`✔ Cleared photo string from ${Object.keys(sUpdates).length} students.`);
-                }
-
-                // Strip photo keys from teachers
-                const snapT = await rtdb.ref("teachers").once("value");
-                const teachers = snapT.val() || {};
-                const tUpdates = {};
-                for(let u of Object.keys(teachers)) {
-                    if(teachers[u].photo) tUpdates[`teachers/${u}/photo`] = "";
-                }
-                if(Object.keys(tUpdates).length > 0) {
-                    await rtdb.ref().update(tUpdates);
-                    log(`✔ Cleared photo string from ${Object.keys(tUpdates).length} teachers.`);
-                }
-
-                log("\n🎉 [RTDB PURGED] Heavy images deleted. Database is now super lightweight!");
-            } catch(e) {
-                log("Cleanup error: " + e.message, true);
-            } finally {
-                btn.disabled = false;
-            }
+            };
+            reader.readAsText(fileInput.files[0]);
         }
     </script>
 </body>
