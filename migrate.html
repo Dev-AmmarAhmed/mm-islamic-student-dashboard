@@ -93,13 +93,15 @@
                 }
             }
 
-            async commit() {
+                        async commit() {
                 if (this.count > 0) {
                     await this.batch.commit();
                     log(`    [Batch] Final ${this.total} records committed.`);
                     this.count = 0;
+                    this.batch = this.db.batch(); // Naye section ke liye fresh batch tayar
                 }
             }
+
         }
 
         async function runCompleteMigration() {
