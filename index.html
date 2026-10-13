@@ -6622,10 +6622,30 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
         document.getElementById("sDailyClaimedBadge").style.display = "block";
         await updateHeaderStarBadge();
 
-              await update(ref(db), {
+
+
+                await update(ref(db), {
           [`daily_claims/${student.admn}/${todayKey}`]: true,
           [`students/${student.admn}/points`]: newPts
         });
+
+        // 🚀 Firestore sync taake unlimited loop na bane
+        try {
+          await setDoc(doc(fsDb, "daily_claims", String(student.admn)), {
+            claims: { [todayKey]: true }
+          }, { merge: true });
+
+          await setDoc(doc(fsDb, "students", String(student.admn)), {
+            points: newPts
+          }, { merge: true });
+
+          if (window.AccuEngine) {
+            await window.AccuEngine.invalidate("students", student.admn);
+          }
+        } catch (fsErr) {
+          console.warn("Claim sync warning:", fsErr);
+        }
+
 
         // Force memory update strictly before refresh
         if (fullDbCache && fullDbCache.students && fullDbCache.students[student.admn]) {
