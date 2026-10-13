@@ -1,14 +1,14 @@
 /**
- * AccuEngine v3.0 - Enterprise Offline-First Engine
+ * AccuEngine v3.5 - Complete Unified Offline & Firestore Cache Engine
  * MM Islamic English School ERP
- * Batch Persistent Cache + Complete Offline Scope
+ * Fully Integrated with Cloud Firestore Collections & IndexedDB Persistent Outbox
  */
 
 (function (window) {
   "use strict";
 
   const DB_NAME = "AccuEngine_Storage";
-  const DB_VERSION = 5; // Clean upgraded store schema
+  const DB_VERSION = 6;
   const STORES = [
     "users",
     "students",
@@ -52,9 +52,6 @@
         };
         resolve(idbInstance);
       };
-      request.onblocked = () => {
-        console.warn("[AccuEngine] DB upgrade waiting on other tabs.");
-      };
       request.onerror = (e) => reject(e.target.error);
     });
   }
@@ -78,14 +75,17 @@
       if (!db.objectStoreNames.contains(storeName)) return false;
       return new Promise((resolve) => {
         const tx = db.transaction(storeName, "readwrite");
-        tx.objectStore(storeName).put(value, String(key));
+        if (value === null) {
+          tx.objectStore(storeName).delete(String(key));
+        } else {
+          tx.objectStore(storeName).put(value, String(key));
+        }
         tx.oncomplete = () => resolve(true);
         tx.onerror = () => resolve(false);
       });
     } catch (e) { return false; }
   }
 
-  // 🚀 Fast Batch Writer (Single Transaction me hazaron records bina phone freeze kiye save honge)
   async function idbSetBatch(storeName, entriesMap) {
     try {
       const db = await openIDB();
@@ -94,7 +94,11 @@
         const tx = db.transaction(storeName, "readwrite");
         const store = tx.objectStore(storeName);
         Object.entries(entriesMap).forEach(([k, v]) => {
-          store.put(v, String(k));
+          if (v === null) {
+            store.delete(String(k));
+          } else {
+            store.put(v, String(k));
+          }
         });
         tx.oncomplete = () => resolve(true);
         tx.onerror = () => resolve(false);
@@ -128,20 +132,21 @@
   const AccuEngine = {
     init: function (config) {
       modules = config;
-      console.log("[AccuEngine v3.0] Ready with Full Offline Cache.");
+      console.log("[AccuEngine v3.5] Active. Dual Firestore + IndexedDB Router.");
       window.addEventListener("online", () => this.processSyncQueue());
       if (navigator.onLine) {
-        setTimeout(() => this.processSyncQueue(), 2000);
+        setTimeout(() => this.processSyncQueue(), 2500);
       }
     },
 
+    // 🚀 CACHE-FIRST & FIRESTORE ROUTER
     fetch: async function (path) {
       if (!path) return null;
       const parts = path.split("/");
       const root = parts[0];
       const { fsDb, db: rtdb, doc, getDoc, collection, getDocs, ref, get, child } = (modules || {});
 
-      // 1. STUDENTS
+      // 1. STUDENTS (Firestore Primary)
       if (root === "students") {
         if (parts[1]) {
           const admn = String(parts[1]);
@@ -177,7 +182,7 @@
           if (navigator.onLine && fsDb && getDocs && collection) {
             try {
               const snap = await getDocs(collection(fsDb, "students"));
-              if (snap && !snap.empty) {
+              if (!snap.empty) {
                 const allS = {};
                 snap.forEach((d) => { allS[d.id] = d.data(); });
                 await idbSetBatch("students", allS);
@@ -189,15 +194,51 @@
         }
       }
 
-      // 2. TEACHERS
+      // 2. USERS (Credentials Vault - Firestore Primary)
+      if (root === "users") {
+        if (parts[1]) {
+          const uid = String(parts[1]);
+          const cached = await idbGet("users", uid);
+          if (cached) return cached;
+          if (navigator.onLine && fsDb && getDoc && doc) {
+            try {
+              const snap = await getDoc(doc(fsDb, "users", uid));
+              if (snap && snap.exists()) {
+                const data = snap.data();
+                await idbSet("users", uid, data);
+                return data;
+              }
+            } catch (e) {}
+          }
+          return null;
+        } else {
+          const localMap = await idbGetAllMap("users");
+          if (Object.keys(localMap).length > 0) return localMap;
+
+          if (navigator.onLine && fsDb && getDocs && collection) {
+            try {
+              const snap = await getDocs(collection(fsDb, "users"));
+              if (!snap.empty) {
+                const allUsers = {};
+                snap.forEach((d) => { allUsers[d.id] = d.data(); });
+                await idbSetBatch("users", allUsers);
+                return allUsers;
+              }
+            } catch (e) {}
+          }
+          return {};
+        }
+      }
+
+      // 3. TEACHERS (Firestore Primary)
       if (root === "teachers") {
         if (parts[1]) {
-          const user = parts[1];
+          const user = String(parts[1]);
           const cached = await idbGet("teachers", user);
           if (cached) return cached;
           if (navigator.onLine && fsDb && getDoc && doc) {
             try {
-              const snap = await getDoc(doc(fsDb, "teachers", String(user)));
+              const snap = await getDoc(doc(fsDb, "teachers", user));
               if (snap && snap.exists()) {
                 const data = snap.data();
                 await idbSet("teachers", user, data);
@@ -209,6 +250,7 @@
         } else {
           const localMap = await idbGetAllMap("teachers");
           if (Object.keys(localMap).length > 0) return localMap;
+
           if (navigator.onLine && fsDb && getDocs && collection) {
             try {
               const snap = await getDocs(collection(fsDb, "teachers"));
@@ -224,7 +266,104 @@
         }
       }
 
-      // 3. ATTENDANCE
+      // 4. FEES MATRIX (Firestore Primary)
+      if (root === "fees_matrix") {
+        if (parts[1]) {
+          const admn = String(parts[1]);
+          const cached = await idbGet("fees_matrix", admn);
+          if (cached) return cached;
+          if (navigator.onLine && fsDb && getDoc && doc) {
+            try {
+              const snap = await getDoc(doc(fsDb, "fees_matrix", admn));
+              if (snap && snap.exists()) {
+                const res = snap.data().matrix || snap.data();
+                await idbSet("fees_matrix", admn, res);
+                return res;
+              }
+            } catch (e) {}
+          }
+          return {};
+        } else {
+          const localMap = await idbGetAllMap("fees_matrix");
+          if (Object.keys(localMap).length > 0) return localMap;
+
+          if (navigator.onLine && fsDb && getDocs && collection) {
+            try {
+              const snap = await getDocs(collection(fsDb, "fees_matrix"));
+              const allMatrix = {};
+              snap.forEach((d) => {
+                const data = d.data();
+                allMatrix[d.id] = data.matrix || data;
+              });
+              await idbSetBatch("fees_matrix", allMatrix);
+              return allMatrix;
+            } catch (e) {}
+          }
+          return {};
+        }
+      }
+
+      // 5. FEES ENTRIES (Receipts - Firestore Primary)
+      if (root === "fees_entries") {
+        if (parts[1]) {
+          const admn = String(parts[1]);
+          const localMap = await idbGetAllMap("fees_entries");
+          const filtered = {};
+          Object.entries(localMap).forEach(([k, v]) => {
+            if (v && String(v.admn) === admn) filtered[k] = v;
+          });
+          if (Object.keys(filtered).length > 0) return filtered;
+
+          if (navigator.onLine && fsDb && getDocs && collection) {
+            try {
+              const snap = await getDocs(collection(fsDb, "fees_entries"));
+              const studentEntries = {};
+              snap.forEach((d) => {
+                const data = d.data();
+                idbSet("fees_entries", d.id, data);
+                if (data && String(data.admn) === admn) {
+                  studentEntries[data.id || d.id] = data;
+                }
+              });
+              return studentEntries;
+            } catch (e) {}
+          }
+          return {};
+        } else {
+          const localMap = await idbGetAllMap("fees_entries");
+          if (Object.keys(localMap).length > 0) {
+            const nested = {};
+            Object.values(localMap).forEach((item) => {
+              if (item && item.admn) {
+                if (!nested[item.admn]) nested[item.admn] = {};
+                nested[item.admn][item.id || item.entryId || Math.random()] = item;
+              }
+            });
+            return nested;
+          }
+
+          if (navigator.onLine && fsDb && getDocs && collection) {
+            try {
+              const snap = await getDocs(collection(fsDb, "fees_entries"));
+              const nested = {};
+              const batchMap = {};
+              snap.forEach((d) => {
+                const data = d.data();
+                batchMap[d.id] = data;
+                if (data && data.admn) {
+                  if (!nested[data.admn]) nested[data.admn] = {};
+                  nested[data.admn][data.id || d.id] = data;
+                }
+              });
+              idbSetBatch("fees_entries", batchMap);
+              return nested;
+            } catch (e) {}
+          }
+          return {};
+        }
+      }
+
+      // 6. ATTENDANCE (Firestore Primary)
       if (root === "attendance") {
         if (parts[1] && parts[2]) {
           const key = `${parts[1]}_${parts[2]}`;
@@ -273,43 +412,100 @@
         }
       }
 
-      // 4. FEES MATRIX
-      if (root === "fees_matrix") {
-        if (parts[1]) {
-          const admn = parts[1];
-          const cached = await idbGet("fees_matrix", admn);
+      // 7. TESTS (Offline Test Marks - Firestore Primary)
+      if (root === "tests") {
+        const admn = parts[1];
+        if (admn) {
+          const cached = await idbGet("tests", admn);
           if (cached) return cached;
-          if (navigator.onLine && fsDb && getDoc && doc) {
-            try {
-              const snap = await getDoc(doc(fsDb, "fees_matrix", String(admn)));
-              if (snap && snap.exists()) {
-                const res = snap.data().matrix || snap.data();
-                await idbSet("fees_matrix", admn, res);
-                return res;
-              }
-            } catch (e) {}
-          }
-          return {};
-        } else {
-          const localMap = await idbGetAllMap("fees_matrix");
-          if (Object.keys(localMap).length > 0) return localMap;
           if (navigator.onLine && fsDb && getDocs && collection) {
             try {
-              const snap = await getDocs(collection(fsDb, "fees_matrix"));
-              const allMatrix = {};
+              const snap = await getDocs(collection(fsDb, "tests"));
+              const testsObj = {};
               snap.forEach((d) => {
                 const data = d.data();
-                allMatrix[d.id] = data.matrix || data;
+                if (String(data.admn) === String(admn)) {
+                  testsObj[data.testId || d.id] = data;
+                }
               });
-              await idbSetBatch("fees_matrix", allMatrix);
-              return allMatrix;
+              if (Object.keys(testsObj).length > 0) {
+                await idbSet("tests", admn, testsObj);
+                return testsObj;
+              }
             } catch (e) {}
           }
           return {};
         }
       }
 
-      // 5. TIMETABLE (Offline Fixed)
+      // 8. ONLINE TESTS (Firestore Primary)
+      if (root === "online_tests") {
+        const classKey = parts[1];
+        const testId = parts[2];
+
+        if (testId) {
+          const cached = await idbGet("online_tests", testId);
+          if (cached) return cached;
+          if (navigator.onLine && fsDb && getDoc && doc) {
+            try {
+              const snap = await getDoc(doc(fsDb, "online_tests", testId));
+              if (snap && snap.exists()) {
+                const data = snap.data();
+                await idbSet("online_tests", testId, data);
+                return data;
+              }
+            } catch (e) {}
+          }
+          return null;
+        } else {
+          const localMap = await idbGetAllMap("online_tests");
+          const classTests = {};
+          Object.entries(localMap).forEach(([id, t]) => {
+            if (!classKey || String(t.class) === String(classKey)) {
+              classTests[id] = t;
+            }
+          });
+          if (Object.keys(classTests).length > 0) return classTests;
+
+          if (navigator.onLine && fsDb && getDocs && collection) {
+            try {
+              const snap = await getDocs(collection(fsDb, "online_tests"));
+              const tests = {};
+              const batchMap = {};
+              snap.forEach((d) => {
+                const data = d.data();
+                batchMap[d.id] = data;
+                if (!classKey || String(data.class) === String(classKey)) {
+                  tests[d.id] = data;
+                }
+              });
+              idbSetBatch("online_tests", batchMap);
+              return tests;
+            } catch (e) {}
+          }
+          return {};
+        }
+      }
+
+      // 9. DAILY CLAIMS (Firestore Primary)
+      if (root === "daily_claims" && parts[1]) {
+        const admn = String(parts[1]);
+        const cached = await idbGet("daily_claims", admn);
+        if (cached) return cached;
+        if (navigator.onLine && fsDb && getDoc && doc) {
+          try {
+            const snap = await getDoc(doc(fsDb, "daily_claims", admn));
+            if (snap && snap.exists()) {
+              const res = snap.data().claims || snap.data();
+              await idbSet("daily_claims", admn, res);
+              return res;
+            }
+          } catch (e) {}
+        }
+        return {};
+      }
+
+      // 10. LIGHTWEIGHT RTDB CONFIGS (Timetable, Subjects, Syllabus)
       if (root === "timetable") {
         const cls = parts[1] || "1";
         const cached = await idbGet("timetable", cls);
@@ -327,85 +523,6 @@
         return [];
       }
 
-      // 6. STUDY MATERIAL & HOMEWORK (Offline Fixed)
-      if (root === "study_material" || root === "homework") {
-        const cls = parts[1] || "1";
-        const key = `${root}_${cls}`;
-        const cached = await idbGet("study_material", key);
-        if (cached) return cached;
-        if (navigator.onLine && rtdb && ref && get && child) {
-          try {
-            const snap = await get(child(ref(rtdb), `${root}/${cls}`));
-            if (snap && snap.exists()) {
-              const val = snap.val();
-              await idbSet("study_material", key, val);
-              return val;
-            }
-          } catch (e) {}
-        }
-        return {};
-      }
-
-      // 7. SYLLABUS (Offline Fixed)
-      if (root === "enabled_syllabus" || root === "syllabus_chapters" || root === "syllabus_progress") {
-        const key = `${root}_${parts.slice(1).join("_")}`;
-        const cached = await idbGet("syllabus", key);
-        if (cached) return cached;
-        if (navigator.onLine && rtdb && ref && get && child) {
-          try {
-            const snap = await get(child(ref(rtdb), path));
-            if (snap && snap.exists()) {
-              const val = snap.val();
-              await idbSet("syllabus", key, val);
-              return val;
-            }
-          } catch (e) {}
-        }
-        return {};
-      }
-
-      // 8. TESTS & TEST ATTEMPTS
-      if (root === "tests" && parts[1]) {
-        const admn = parts[1];
-        const cached = await idbGet("tests", admn);
-        if (cached) return cached;
-        if (navigator.onLine && fsDb && getDocs && collection) {
-          try {
-            const snap = await getDocs(collection(fsDb, "tests"));
-            const testsObj = {};
-            snap.forEach((d) => {
-              const data = d.data();
-              if (String(data.admn) === String(admn)) {
-                testsObj[data.testId || d.id] = data;
-              }
-            });
-            if (Object.keys(testsObj).length > 0) {
-              await idbSet("tests", admn, testsObj);
-              return testsObj;
-            }
-          } catch (e) {}
-        }
-        return {};
-      }
-
-      if (root === "student_test_attempts" && parts[1]) {
-        const admn = parts[1];
-        const cached = await idbGet("student_test_attempts", admn);
-        if (cached) return cached;
-        if (navigator.onLine && rtdb && ref && get && child) {
-          try {
-            const snap = await get(child(ref(rtdb), path));
-            if (snap && snap.exists()) {
-              const val = snap.val();
-              await idbSet("student_test_attempts", admn, val);
-              return val;
-            }
-          } catch (e) {}
-        }
-        return {};
-      }
-
-      // 9. SUBJECTS
       if (root === "subjects") {
         const localSubs = await idbGet("subjects", "all_subjects");
         if (localSubs) return localSubs;
@@ -422,31 +539,14 @@
         return ["English", "Mathematics", "Science", "Social Studies", "Urdu", "Hindi", "Deeniyat"];
       }
 
-      // 10. DAILY CLAIMS
-      if (root === "daily_claims" && parts[1]) {
-        const admn = parts[1];
-        const cached = await idbGet("daily_claims", admn);
-        if (cached) return cached;
-        if (navigator.onLine && fsDb && getDoc && doc) {
-          try {
-            const snap = await getDoc(doc(fsDb, "daily_claims", String(admn)));
-            if (snap && snap.exists()) {
-              const res = snap.data().claims || snap.data();
-              await idbSet("daily_claims", admn, res);
-              return res;
-            }
-          } catch (e) {}
-        }
-        return {};
-      }
-
-      // Fallback
+      // RTDB Fallback for other paths
       if (navigator.onLine && rtdb && ref && get && child) {
         try {
           const snap = await get(child(ref(rtdb), path));
           return snap.exists() ? snap.val() : null;
         } catch (e) { return null; }
       }
+
       return null;
     },
 
@@ -493,7 +593,7 @@
       });
 
       if (items.length === 0) return;
-      const { fsDb, doc, setDoc, db: rtdb, ref, update: rtdbUpdate } = modules;
+      const { fsDb, doc, setDoc, deleteDoc, db: rtdb, ref, update: rtdbUpdate } = modules;
 
       for (const item of items) {
         try {
@@ -515,11 +615,28 @@
             await setDoc(doc(fsDb, "students", String(admn)), studentData, { merge: true });
             if (userData) await setDoc(doc(fsDb, "users", String(admn)), userData, { merge: true });
             if (rtdb && rtdbPayload && rtdbUpdate && ref) await rtdbUpdate(ref(rtdb), rtdbPayload).catch(() => {});
+          } else if (item.actionType === "student_delete") {
+            const { admn } = item.payload;
+            await deleteDoc(doc(fsDb, "students", String(admn))).catch(() => {});
+            await deleteDoc(doc(fsDb, "users", String(admn))).catch(() => {});
+            await deleteDoc(doc(fsDb, "fees_matrix", String(admn))).catch(() => {});
+          } else if (item.actionType === "teacher_update") {
+            const { username, teacherData, userData } = item.payload;
+            await setDoc(doc(fsDb, "teachers", String(username)), teacherData, { merge: true });
+            if (userData) await setDoc(doc(fsDb, "users", String(username)), userData, { merge: true });
+          } else if (item.actionType === "teacher_delete") {
+            const { username } = item.payload;
+            await deleteDoc(doc(fsDb, "teachers", String(username))).catch(() => {});
+            await deleteDoc(doc(fsDb, "users", String(username))).catch(() => {});
           } else if (item.actionType === "offline_test") {
             const { testDocId, testData, admn, newPoints } = item.payload;
             await setDoc(doc(fsDb, "tests", testDocId), testData, { merge: true });
             await setDoc(doc(fsDb, "students", String(admn)), { points: newPoints }, { merge: true });
+          } else if (item.actionType === "points_update") {
+            const { admn, newPoints } = item.payload;
+            await setDoc(doc(fsDb, "students", String(admn)), { points: newPoints }, { merge: true });
           }
+
           const delTx = db.transaction("sync_queue", "readwrite");
           delTx.objectStore("sync_queue").delete(item.id);
         } catch (err) {
