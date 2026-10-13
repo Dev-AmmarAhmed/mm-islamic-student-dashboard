@@ -1,7 +1,6 @@
 /**
  * AccuEngine v1.0 - High Performance Cache & Security Engine
  * MM Islamic English School ERP
- * Author: Dev Ammar Ahmed & Gemini Architecture
  */
 
 (function (window) {
@@ -9,14 +8,13 @@
 
   const DB_NAME = "AccuEngine_Storage";
   const DB_VERSION = 1;
-  const STORES = ["users", "students", "fees_matrix", "fees_entries", "attendance", "tests", "online_tests", "versions"];
+  const STORES = ["users", "fees_matrix", "fees_entries", "attendance", "tests", "online_tests", "test_attempts"];
 
   let idbInstance = null;
   let fsDb = null;
   let rtdb = null;
-  let currentUser = null;
 
-  // 1. IndexedDB Initialization
+  // 1. Permanent IndexedDB
   function openIDB() {
     if (idbInstance) return Promise.resolve(idbInstance);
     return new Promise((resolve, reject) => {
@@ -37,150 +35,218 @@
     });
   }
 
-  // 2. Storage Helpers
   async function idbGet(storeName, key) {
-    const db = await openIDB();
-    return new Promise((resolve) => {
-      const tx = db.transaction(storeName, "readonly");
-      const store = tx.objectStore(storeName);
-      const req = store.get(String(key));
-      req.onsuccess = () => resolve(req.result || null);
-      req.onerror = () => resolve(null);
-    });
+    try {
+      const db = await openIDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction(storeName, "readonly");
+        const req = tx.objectStore(storeName).get(String(key));
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => resolve(null);
+      });
+    } catch (e) { return null; }
   }
 
   async function idbSet(storeName, key, value) {
-    const db = await openIDB();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(storeName, "readwrite");
-      const store = tx.objectStore(storeName);
-      store.put(value, String(key));
-      tx.oncomplete = () => resolve(true);
-      tx.onerror = () => reject(tx.error);
-    });
-  }
-
-  async function idbGetAll(storeName) {
-    const db = await openIDB();
-    return new Promise((resolve) => {
-      const tx = db.transaction(storeName, "readonly");
-      const store = tx.objectStore(storeName);
-      const req = store.getAll();
-      req.onsuccess = () => resolve(req.result || []);
-      req.onerror = () => resolve([]);
-    });
-  }
-
-  async function idbClearAll() {
-    const db = await openIDB();
-    return new Promise((resolve) => {
-      const tx = db.transaction(STORES, "readwrite");
-      STORES.forEach((storeName) => {
-        tx.objectStore(storeName).clear();
+    try {
+      const db = await openIDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction(storeName, "readwrite");
+        tx.objectStore(storeName).put(value, String(key));
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
       });
-      tx.oncomplete = () => resolve(true);
-    });
+    } catch (e) { return false; }
   }
 
-  // 3. Engine API
   const AccuEngine = {
-    // Engine Initialize: Firebase instances attach karna
     init: function (firebaseFirestore, firebaseRtdb) {
       fsDb = firebaseFirestore;
       rtdb = firebaseRtdb;
-      console.log("[AccuEngine] Core initialized successfully.");
+      console.log("[AccuEngine] Data Adapter & Cache Engine Online.");
     },
 
-    // Session aur Security Guard
-    attachKillSwitch: function (userId, onRevokedCallback) {
-      currentUser = userId;
-      if (!rtdb || !userId) return;
+    // Smart Multi-Path Router (Firestore + IndexedDB Cache + RTDB Fallback)
+    fetch: async function (path) {
+      if (!path) return null;
+      const parts = path.split("/");
+      const root = parts[0];
 
-      const statusRef = rtdb.ref(`user_status/${userId}`);
-      statusRef.on("value", async (snap) => {
-        const val = snap.val();
-        if (!snap.exists() || val === "deleted" || val === "inactive") {
-          console.warn("[AccuEngine] KillSwitch Triggered: Purging local storage...");
-          await idbClearAll();
-          localStorage.clear();
-          sessionStorage.clear();
-          if (typeof onRevokedCallback === "function") {
-            onRevokedCallback();
-          }
-        }
-      });
-    },
-
-    // Smart Cache Fetch (IndexedDB First -> Background Version Check)
-    get: async function (collectionName, docId) {
-      // Step A: Phone memory se instant uthao
-      const cached = await idbGet(collectionName, docId);
-      if (cached) {
-        return cached;
-      }
-
-      // Step B: Agar cache miss hua toh Firestore se pull karo aur store karo
-      if (fsDb) {
-        try {
-          const docSnap = await fsDb.collection(collectionName).doc(String(docId)).get();
-          if (docSnap.exists) {
+      // A. USERS
+      if (root === "users" && parts[1]) {
+        const uid = parts[1];
+        const cached = await idbGet("users", uid);
+        if (cached) return cached;
+        if (fsDb) {
+          const docSnap = await fsDb.collection("users").doc(uid).get().catch(() => null);
+          if (docSnap && docSnap.exists) {
             const data = docSnap.data();
-            await idbSet(collectionName, docId, data);
+            await idbSet("users", uid, data);
             return data;
           }
-        } catch (err) {
-          console.error(`[AccuEngine] Fetch error for ${collectionName}/${docId}:`, err);
         }
+      }
+
+      // B. FEES MATRIX (Single Student ya All)
+      if (root === "fees_matrix") {
+        if (parts[1]) {
+          const admn = parts[1];
+          const cached = await idbGet("fees_matrix", admn);
+          if (cached) return cached;
+          if (fsDb) {
+            const docSnap = await fsDb.collection("fees_matrix").doc(admn).get().catch(() => null);
+            if (docSnap && docSnap.exists) {
+              const res = docSnap.data().matrix || docSnap.data();
+              await idbSet("fees_matrix", admn, res);
+              return res;
+            }
+          }
+        } else {
+          // All students fees matrix
+          if (fsDb) {
+            const snap = await fsDb.collection("fees_matrix").get().catch(() => null);
+            if (snap && !snap.empty) {
+              const allMatrix = {};
+              snap.forEach((d) => {
+                const data = d.data();
+                allMatrix[d.id] = data.matrix || data;
+                idbSet("fees_matrix", d.id, allMatrix[d.id]);
+              });
+              return allMatrix;
+            }
+          }
+        }
+      }
+
+      // C. ATTENDANCE (Student + Month, ya All)
+      if (root === "attendance") {
+        if (parts[1] && parts[2]) {
+          const admn = parts[1];
+          const month = parts[2];
+          const key = `${admn}_${month}`;
+          const cached = await idbGet("attendance", key);
+          if (cached) return cached;
+          if (fsDb) {
+            const docSnap = await fsDb.collection("attendance").doc(key).get().catch(() => null);
+            if (docSnap && docSnap.exists) {
+              const res = docSnap.data().days || docSnap.data();
+              await idbSet("attendance", key, res);
+              return res;
+            }
+          }
+        } else if (!parts[1] && fsDb) {
+          // All Attendance
+          const snap = await fsDb.collection("attendance").get().catch(() => null);
+          if (snap && !snap.empty) {
+            const fullAtt = {};
+            snap.forEach((d) => {
+              const docData = d.data();
+              const admn = docData.admn || d.id.split("_")[0];
+              const month = docData.month || d.id.split("_")[1];
+              if (!fullAtt[admn]) fullAtt[admn] = {};
+              fullAtt[admn][month] = docData.days || docData;
+            });
+            return fullAtt;
+          }
+        }
+      }
+
+      // D. TESTS (Offline Marks)
+      if (root === "tests" && parts[1]) {
+        const admn = parts[1];
+        const cached = await idbGet("tests", admn);
+        if (cached) return cached;
+        if (fsDb) {
+          const snap = await fsDb.collection("tests").where("admn", "==", String(admn)).get().catch(() => null);
+          if (snap && !snap.empty) {
+            const testsObj = {};
+            snap.forEach((d) => {
+              testsObj[d.data().testId || d.id] = d.data();
+            });
+            await idbSet("tests", admn, testsObj);
+            return testsObj;
+          }
+        }
+      }
+
+      // E. FEES ENTRIES (Receipts)
+      if (root === "fees_entries") {
+        if (parts[1]) {
+          const admn = parts[1];
+          const cached = await idbGet("fees_entries", admn);
+          if (cached) return cached;
+          if (fsDb) {
+            const snap = await fsDb.collection("fees_entries").where("admn", "==", String(admn)).get().catch(() => null);
+            if (snap && !snap.empty) {
+              const entriesObj = {};
+              snap.forEach((d) => {
+                entriesObj[d.data().entryId || d.id] = d.data();
+              });
+              await idbSet("fees_entries", admn, entriesObj);
+              return entriesObj;
+            }
+          }
+        } else if (fsDb) {
+          // All fees entries
+          const snap = await fsDb.collection("fees_entries").get().catch(() => null);
+          if (snap && !snap.empty) {
+            const allEntries = {};
+            snap.forEach((d) => {
+              const entry = d.data();
+              const a = entry.admn || "unknown";
+              if (!allEntries[a]) allEntries[a] = {};
+              allEntries[a][entry.entryId || d.id] = entry;
+            });
+            return allEntries;
+          }
+        }
+      }
+
+      // F. ONLINE TESTS & ATTEMPTS
+      if (root === "online_tests") {
+        const classKey = parts[1];
+        const testId = parts[2];
+        if (testId && fsDb) {
+          const docSnap = await fsDb.collection("online_tests").doc(testId).get().catch(() => null);
+          return docSnap && docSnap.exists ? docSnap.data() : null;
+        } else if (classKey && fsDb) {
+          const snap = await fsDb.collection("online_tests").where("class", "==", String(classKey)).get().catch(() => null);
+          if (snap && !snap.empty) {
+            const tests = {};
+            snap.forEach((d) => { tests[d.id] = d.data(); });
+            return tests;
+          }
+        }
+      }
+
+      if (root === "test_attempts" && parts[1] && fsDb) {
+        const testId = parts[1];
+        const snap = await fsDb.collection("test_attempts").where("testId", "==", String(testId)).get().catch(() => null);
+        if (snap && !snap.empty) {
+          const attempts = {};
+          snap.forEach((d) => {
+            const data = d.data();
+            attempts[data.admn || d.id] = data;
+          });
+          return attempts;
+        }
+      }
+
+      // Fallback to RTDB for other configurations (Subjects, Timetables, Settings)
+      if (rtdb) {
+        try {
+          const snap = await rtdb.ref(path).once("value");
+          return snap.exists() ? snap.val() : null;
+        } catch (e) { return null; }
       }
       return null;
     },
 
-    // Collection Level Fetch (e.g., student ki saari fees ya attendance)
-    getByStudent: async function (collectionName, admn) {
-      const cached = await idbGet(collectionName, admn);
-      if (cached) return cached;
-
-      if (fsDb) {
-        try {
-          // Direct document ID check (${admn})
-          const docSnap = await fsDb.collection(collectionName).doc(String(admn)).get();
-          if (docSnap.exists) {
-            const data = docSnap.data();
-            await idbSet(collectionName, admn, data);
-            return data;
-          }
-        } catch (err) {
-          console.error(`[AccuEngine] getByStudent error for ${collectionName}/${admn}:`, err);
-        }
-      }
-      return null;
-    },
-
-    // Smart Save: Firestore mein save karega, IndexedDB update karega, aur RTDB trigger increment karega
-    save: async function (collectionName, docId, data, syncTriggerKey = null) {
-      // 1. Local Cache Update
-      await idbSet(collectionName, docId, data);
-
-      // 2. Firestore Sync
-      if (fsDb) {
-        await fsDb.collection(collectionName).doc(String(docId)).set(data, { merge: true });
-      }
-
-      // 3. RTDB Trigger increment (Baaqi users ko notify karne ke liye)
-      if (rtdb && syncTriggerKey) {
-        const triggerRef = rtdb.ref(`sync_triggers/${syncTriggerKey}`);
-        triggerRef.transaction((current) => (current || 0) + 1);
-      }
-      return true;
-    },
-
-    // Wipe storage on manual logout
-    purgeCache: async function () {
-      await idbClearAll();
-      console.log("[AccuEngine] Local IndexedDB fully purged.");
+    // Cache Write Invalidation Helper
+    invalidate: async function (storeName, key) {
+      await idbSet(storeName, key, null);
     }
   };
 
   window.AccuEngine = AccuEngine;
 })(window);
-23
