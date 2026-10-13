@@ -263,6 +263,44 @@
                 btn.disabled = false;
             }
         }
+
+        async function migrateStudentsAndTeachers() {
+    const btn = document.getElementById("startAllBtn");
+    btn.disabled = true;
+    log("\n[AccuEngine] Migrating Students & Teachers to Firestore...");
+
+    const writer = new FirestoreBatchWriter(firestore);
+
+    // 1. Students Bio-data
+    const snapStudents = await rtdb.ref("students").once("value");
+    const studentsData = snapStudents.val() || {};
+    const sKeys = Object.keys(studentsData);
+    log(`Found ${sKeys.length} students. Transferring to Firestore...`);
+
+    for (const admn of sKeys) {
+        const sDocRef = firestore.collection("students").doc(String(admn));
+        await writer.set(sDocRef, studentsData[admn]);
+    }
+    await writer.commit();
+    log(`✔ ${sKeys.length} Students profiles shifted to Firestore.`);
+
+    // 2. Teachers Profiles
+    const snapTeachers = await rtdb.ref("teachers").once("value");
+    const teachersData = snapTeachers.val() || {};
+    const tKeys = Object.keys(teachersData);
+    log(`Found ${tKeys.length} teachers. Transferring to Firestore...`);
+
+    for (const username of tKeys) {
+        const tDocRef = firestore.collection("teachers").doc(String(username));
+        await writer.set(tDocRef, teachersData[username]);
+    }
+    await writer.commit();
+    log(`✔ ${tKeys.length} Teachers profiles shifted to Firestore.`);
+
+    log("\n🎉 [DONE] Students & Teachers are now 100% in Firestore!");
+    btn.disabled = false;
+        }
+        
     </script>
 </body>
 </html>
