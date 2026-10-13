@@ -5000,21 +5000,25 @@ Exact Output JSON Format Required:
     const auth = getAuth(app);
     const fsDb = getFirestore(app);
 
-        // 🚀 Phase 2: AccuEngine Bridge Connect (v10 Modular Ready)
+          // 🚀 Phase 2: AccuEngine Bridge Connect (Offline Outbox Ready)
     if (window.AccuEngine) {
       window.AccuEngine.init({
         fsDb: fsDb,
         db: db,
         doc: doc,
         getDoc: getDoc,
+        setDoc: setDoc,
         collection: collection,
         getDocs: getDocs,
         ref: ref,
         get: get,
-        child: child
+        child: child,
+        update: update,
+        onValue: onValue
       });
     }
 
+      
     // Ensure background Firebase Auth token is always active for Security Rules
     window.ensureFirebaseAuth = async function() {
 
@@ -5157,7 +5161,7 @@ Exact Output JSON Format Required:
         } catch(e) { console.error("Cache cleanup error:", e); }
     };
 
-       // 🚀 Load Offline Persistent Data on Startup
+       // 🚀 Load Offline Persistent Data on Startup (AccuEngine Powered)
     window.addEventListener('load', async () => {
       window.cleanExpiredTestCaches();
       const localStudents = await safeDataFetch("students");
@@ -5168,6 +5172,7 @@ Exact Output JSON Format Required:
         window.showCustomAlert("⚡ Working in Offline Mode. Attendance & entries will auto-sync when online.");
       }
     });
+
 
 
       
@@ -5538,14 +5543,31 @@ Exact Output JSON Format Required:
     };
 
 
-          window.openModal = function(id) {
+                     // 📱 Smart Navigation Controller Variables
+    let isProgrammaticNav = false;
+
+    function getHomeTabId() {
+      if (currentRole === "student") return "studentTabHome";
+      if (currentRole === "teacher") return "teacherTabHome";
+      return "adminTabHome";
+    }
+
+    function pushNavState(type, id) {
+      history.pushState({ appNav: true, type: type, id: id }, "");
+    }
+
+    window.openModal = function(id) {
       window.closeDrawer();
       const modal = document.getElementById(id);
       if(modal) {
         modal.classList.remove("closing");
         if (typeof window.applyModalGenieOrigin === "function") window.applyModalGenieOrigin(modal);
         modal.classList.add("active");
+        pushNavState("modal", id);
       }
+
+
+      
 if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       if(id === "adminLeaderboardModal") {
         isAdminLbEditMode = false;
@@ -5898,14 +5920,22 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       return null;
     }
 
-       // Left Drawer Logic
+         // Left Drawer Logic
     addSafeListener("hamburgerBtn", "click", () => {
       document.getElementById("leftDrawer").classList.add("active");
       document.getElementById("drawerOverlay").classList.add("active");
+      pushNavState("drawer", "left");
     });
     window.closeDrawer = function() {
-      document.getElementById("leftDrawer").classList.remove("active");
-      document.getElementById("drawerOverlay").classList.remove("active");
+      const d = document.getElementById("leftDrawer");
+      if (d && d.classList.contains("active")) {
+        d.classList.remove("active");
+        document.getElementById("drawerOverlay").classList.remove("active");
+        if (history.state && history.state.type === "drawer" && history.state.id === "left") {
+          isProgrammaticNav = true;
+          history.back();
+        }
+      }
     };
     addSafeListener("closeDrawerBtn", "click", window.closeDrawer);
     addSafeListener("drawerOverlay", "click", window.closeDrawer);
@@ -5914,11 +5944,19 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
     addSafeListener("notifBellBtn", "click", () => {
       document.getElementById("rightDrawer").classList.add("active");
       document.getElementById("rightDrawerOverlay").classList.add("active");
-      document.getElementById("notifBadgeCount").style.display = "none"; // Hide badge when opened
+      document.getElementById("notifBadgeCount").style.display = "none";
+      pushNavState("drawer", "right");
     });
     window.closeRightDrawer = function() {
-      document.getElementById("rightDrawer").classList.remove("active");
-      document.getElementById("rightDrawerOverlay").classList.remove("active");
+      const d = document.getElementById("rightDrawer");
+      if (d && d.classList.contains("active")) {
+        d.classList.remove("active");
+        document.getElementById("rightDrawerOverlay").classList.remove("active");
+        if (history.state && history.state.type === "drawer" && history.state.id === "right") {
+          isProgrammaticNav = true;
+          history.back();
+        }
+      }
     };
     addSafeListener("closeRightDrawerBtn", "click", window.closeRightDrawer);
     addSafeListener("rightDrawerOverlay", "click", window.closeRightDrawer);
@@ -6515,9 +6553,24 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       });
     });
 
-    window.switchTab = function(tabId, el, event) {
+       window.switchTab = function(tabId, el, event) {
       const targetTab = document.getElementById(tabId);
       if(!targetTab) return;
+
+      const homeTabId = getHomeTabId();
+
+      // Sub-tab pe jaane par single-layer history manage karo
+      if (tabId !== homeTabId && tabId !== "loginScreen") {
+        if (history.state && history.state.type === "tab") {
+          history.replaceState({ appNav: true, type: "tab", id: tabId }, "");
+        } else {
+          pushNavState("tab", tabId);
+        }
+      } else if (tabId === homeTabId && history.state && history.state.type === "tab") {
+        isProgrammaticNav = true;
+        history.back();
+      }
+
       document.querySelectorAll(".tab-section").forEach(t => { t.classList.remove("active", "animate-in"); });
       if(tabId === 'adminTabEntry') window.calculateAdminEntryTabAnalytics();
       
@@ -6531,26 +6584,106 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       if(tabId === "studentTabTest") loadStudentDueTests();
     };
 
-           // MISSING FUNCTION ADDED: Teacher Class Leaderboard
-    window.loadTeacherLeaderboard = function() {
-      const container = document.getElementById("leaderboardListContainer");
-      if(!container) return;
-      
-      const students = getLiveStudents().filter(s => cleanClassStr(s.class) === cleanClassStr(assignedClass));
-      students.sort((a,b) => (b.points || 0) - (a.points || 0));
-      
-      container.innerHTML = "";
-      if(students.length === 0) { 
-        container.innerHTML = `<p style="padding:14px; font-size:12px; color:var(--text-muted); text-align:center;">No students found in Class ${assignedClass}.</p>`; 
-        return; 
+    // 🚀 HARDWARE / PHONE BACK GESTURE HANDLER
+    window.addEventListener("popstate", (e) => {
+      if (isProgrammaticNav) {
+        isProgrammaticNav = false;
+        return;
       }
 
-      students.forEach((st, idx) => {
-        const pts = st.points || 0;
-        const stars = Math.floor(pts / 10);
-        container.innerHTML += `<div class="lb-row"><div style="display:flex; align-items:center;"><div class="lb-badge">${idx + 1}</div><span style="font-size:13px; font-weight:700;">${st.name}</span></div><span class="pts-chip" style="background:#fbbf24; color:#0f172a !important;">⭐ ${stars} (${pts} PTS)</span></div>`;
-      });
+      // Priority 1: Agar koi bhi Modal open hai, to pehle use close karo
+      const activeModals = Array.from(document.querySelectorAll(".modal-overlay.active"));
+      if (activeModals.length > 0) {
+        const topModal = activeModals[activeModals.length - 1];
+        topModal.classList.remove("active", "closing");
+
+        if (topModal.id === "registerStudentModal" && document.getElementById("regStd")) {
+          document.getElementById("regStd").disabled = false;
+        }
+        if (topModal.id === "teacherMusterModal" && typeof musterClockInterval !== "undefined") {
+          clearInterval(musterClockInterval);
+        }
+        if (topModal.id === "studentLiveTestModal" && typeof activeLiveTestTimer !== "undefined") {
+          clearInterval(activeLiveTestTimer);
+        }
+        if (topModal.id === "customSelectModal") {
+          activeSelectTarget = null;
+        }
+        return;
+      }
+
+      // Priority 2: Agar koi Drawer khula hai, to use close karo
+      const leftDrawer = document.getElementById("leftDrawer");
+      const rightDrawer = document.getElementById("rightDrawer");
+      if (leftDrawer && leftDrawer.classList.contains("active")) {
+        leftDrawer.classList.remove("active");
+        document.getElementById("drawerOverlay").classList.remove("active");
+        return;
+      }
+      if (rightDrawer && rightDrawer.classList.contains("active")) {
+        rightDrawer.classList.remove("active");
+        document.getElementById("rightDrawerOverlay").classList.remove("active");
+        return;
+      }
+
+      // Priority 3: Agar user kisi Sub-Tab par hai, to Home Tab par shift karo
+      const homeTabId = getHomeTabId();
+      const currentTab = document.querySelector(".tab-section.active:not(#loginScreen)");
+      if (currentTab && currentTab.id !== homeTabId) {
+        const bNav = document.getElementById("bottomNav");
+        const homeBtn = bNav ? bNav.children[0] : null;
+        window.switchTab(homeTabId, homeBtn);
+        return;
+      }
+
+      // Priority 4: Agar user pehle se Home Tab par hai aur koi modal nahi khula, to app exit/close ho jayegi
+    });
+
+
+           // MISSING FUNCTION ADDED: Teacher Class Leaderboard
+      window.loadTeacherLeaderboard = async function() {
+      const container = document.getElementById("teacherLeaderboardList");
+      if (!container) return;
+
+      try {
+        let teachersData = await safeDataFetch("teachers") || {};
+        let tList = Object.values(teachersData).filter(t => t && typeof t === "object");
+
+        if (tList.length === 0 && !navigator.onLine) {
+          container.innerHTML = `<div style="text-align:center; padding:15px; color:var(--text-muted); font-size:13px;">No offline teacher standings cached yet.</div>`;
+          return;
+        }
+
+        // Sort by Points descending
+        tList.sort((a, b) => (Number(b.points) || 0) - (Number(a.points) || 0));
+
+        let html = "";
+        tList.forEach((t, idx) => {
+          const rank = idx + 1;
+          const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : `#${rank}`;
+          html += `
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:12px; background:var(--card-inner); border-radius:12px; margin-bottom:8px; border:1px solid var(--border-color);">
+              <div style="display:flex; align-items:center; gap:12px;">
+                <span style="font-weight:900; font-size:15px; width:28px; text-align:center;">${medal}</span>
+                <div>
+                  <div style="font-weight:800; font-size:14px; color:var(--text-color);">${t.name || t.username || "Teacher"}</div>
+                  <div style="font-size:11px; color:var(--text-muted);">Class: ${t.assignedClass || "N/A"}</div>
+                </div>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-weight:900; font-size:14px; color:#f59e0b;">⭐ ${t.points || 0}</div>
+                <div style="font-size:10px; color:var(--text-muted);">Points</div>
+              </div>
+            </div>
+          `;
+        });
+
+        container.innerHTML = html || `<div style="text-align:center; padding:15px; color:var(--text-muted);">No standings data available.</div>`;
+      } catch (err) {
+        console.warn("Teacher leaderboard render error:", err);
+      }
     };
+
 
      async function refreshAllTeacherData() {
       const stData = await safeDataFetch("students") || {};
@@ -7350,10 +7483,11 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
         // Agar offline tha ya network drop hua toh queue mein daalo
         if (!navigator.onLine && window.AccuEngine) {
           await window.AccuEngine.queueOfflineAction("attendance_batch", offlineQueuePayload);
-          alert("⚡ Attendance saved locally (Offline Mode).");
+                  alert("⚡ Attendance saved locally (Offline Mode). Will automatically sync to the server once online.");
         } else {
           alert("✔ Today's Attendance saved successfully.");
         }
+
 
       });
     });
@@ -7573,20 +7707,21 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
             await setDoc(doc(fsDb, "tests", `${admn}_${testId}`), testObj, { merge: true });
             await setDoc(doc(fsDb, "students", String(admn)), { points: newPts }, { merge: true });
             alert(`✔ Test Marks & Points saved successfully!`);
-          } catch (e) {
+                   } catch (e) {
             if (window.AccuEngine) {
               await window.AccuEngine.queueOfflineAction("offline_test", offlineTestPayload);
               window.AccuEngine.triggerBackgroundSync();
             }
-            alert(`⚡ Marks saved offline. Server par auto-sync ho jayega.`);
+            alert("⚡ Marks saved offline. Will automatically sync to the server once online.");
           }
         } else {
           if (window.AccuEngine) {
             await window.AccuEngine.queueOfflineAction("offline_test", offlineTestPayload);
             window.AccuEngine.triggerBackgroundSync();
           }
-          alert(`⚡ Offline Mode: Test marks aur points locally save ho gaye!`);
+          alert("⚡ Offline Mode: Test marks and points saved locally!");
         }
+
 
         await refreshAllTeacherData();
 
@@ -8197,12 +8332,13 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
             alert("⚡ Student details saved locally (Offline). Server sync queued!");
           }
         } else {
-          if (window.AccuEngine) {
+                   if (window.AccuEngine) {
             await window.AccuEngine.queueOfflineAction("student_update", syncPayload);
             window.AccuEngine.triggerBackgroundSync();
           }
-          alert("⚡ Saved in Offline Mode. Jaise hi internet aayega, server par auto-sync ho jayega.");
+          alert("⚡ Saved in Offline Mode. Profile updates will automatically sync to the server once online.");
         }
+
 
         if(currentRole === "teacher") await refreshAllTeacherData(); else renderAdminStudentsDirectory();
         window.closeModal("studentProfileModal");
@@ -8716,7 +8852,7 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
     });
 
 
-          async function populateClassSubjectsDropdown() {
+                  async function populateClassSubjectsDropdown() {
       const select = document.getElementById("cTestSubjectSelect");
       if(!select) return;
       select.innerHTML = '<option value="">-- Loading Subjects... --</option>';
@@ -8733,14 +8869,27 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       }
       
       const classKey = cleanClassStr(targetClass);
-      const subjectsData = await safeDataFetch(`subjects/${classKey}`);
+      const subjectsData = await safeDataFetch(`subjects/${classKey}`) || await safeDataFetch("subjects");
       select.innerHTML = '<option value="">-- Select Subject --</option>';
       let hasCustomSubjects = false;
-      if(subjectsData && typeof subjectsData === 'object') {
-        Object.values(subjectsData).forEach(s => { if(s && s.name) { hasCustomSubjects = true; select.innerHTML += `<option value="${s.name}">${s.name}</option>`; } });
+
+      if(subjectsData) {
+        const list = Array.isArray(subjectsData) ? subjectsData : Object.values(subjectsData);
+        list.forEach(s => {
+          const subName = typeof s === "string" ? s : (s && s.name ? s.name : null);
+          if(subName) {
+            hasCustomSubjects = true;
+            select.innerHTML += `<option value="${subName}">${subName}</option>`;
+          }
+        });
       }
-      if(!hasCustomSubjects) { select.innerHTML += `<option value="English">English</option><option value="Mathematics">Mathematics</option><option value="Science">Science</option><option value="Urdu">Urdu</option><option value="General">General</option>`; }
+      if(!hasCustomSubjects) {
+        ["English", "Mathematics", "Science", "Social Studies", "Urdu", "Hindi", "Deeniyat"].forEach(s => {
+          select.innerHTML += `<option value="${s}">${s}</option>`;
+        });
+      }
     }
+
 
 
      addSafeListener("continueTestBuilderBtn", "click", () => {
@@ -8838,19 +8987,19 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
             await set(ref(db, `online_tests/${cleanClass}/${testId}`), testPayloadData);
             await setDoc(doc(fsDb, "online_tests", String(testId)), testPayloadData, { merge: true });
             alert(`✔ Online Test "${name}" published successfully for Class ${assignedClass}!`);
-          } catch (e) {
+                   } catch (e) {
             if (window.AccuEngine) {
               await window.AccuEngine.queueOfflineAction("online_test", onlineTestSyncPayload);
               window.AccuEngine.triggerBackgroundSync();
             }
-            alert(`⚡ Online Test saved locally. Internet aane par server par publish ho jayega.`);
+            alert("⚡ Online Test saved locally. Will be published to the server once online.");
           }
         } else {
           if (window.AccuEngine) {
             await window.AccuEngine.queueOfflineAction("online_test", onlineTestSyncPayload);
             window.AccuEngine.triggerBackgroundSync();
           }
-          alert(`⚡ Offline Mode: Test locally create ho gaya! Network aane par server par sync ho jayega.`);
+          alert("⚡ Offline Mode: Test created locally! Will sync to the server once online.");
         }
 
         if (typeof window.loadTeacherActiveOnlineTests === "function") {
