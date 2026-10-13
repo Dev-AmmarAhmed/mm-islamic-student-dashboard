@@ -5194,21 +5194,16 @@ Exact Output JSON Format Required:
           return;
         }
 
-        // Sirf Admin ya Teacher ke liye students list load karo
+              // Sirf Admin ya Teacher ke liye students list load karo
         onValue(ref(db, 'students'), (snap) => {
           if (snap.exists()) {
             inMemoryStudentsData = snap.val();
-            if(dbSaveTimeout) clearTimeout(dbSaveTimeout);
-            dbSaveTimeout = setTimeout(() => {
-                localStorage.setItem("offlineDbCache_students", JSON.stringify(inMemoryStudentsData));
-            }, 5000); 
-
             if(currentRole === "admin") renderAdminStudentsDirectory(true);
             if(currentRole === "teacher") { refreshAllTeacherData(); window.loadTeacherLeaderboard(); }
-          } else {
-            inMemoryStudentsData = {};
           }
+          // 🚀 FIX: snap na milne par cache wipe nahi karenge!
         });
+
       };
 
 
@@ -6899,8 +6894,18 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       }
     }
 
-    async function refreshStudentDashboard() {
-      const student = await getStudentRecord(currentStudentAdmn);
+
+          async function refreshStudentDashboard() {
+      // 🚀 Offline Safety: Pehle AccuEngine se student record confirm karo
+      if (Object.keys(inMemoryStudentsData).length === 0) {
+        const cachedAll = await safeDataFetch("students") || {};
+        if (cachedAll && Object.keys(cachedAll).length > 0) inMemoryStudentsData = cachedAll;
+      }
+      let student = await getStudentRecord(currentStudentAdmn);
+      if(!student) {
+        student = await safeDataFetch(`students/${currentStudentAdmn}`);
+        if(student) inMemoryStudentsData[currentStudentAdmn] = student;
+      }
       if(!student) return;
       assignedClass = cleanClassStr(student.class);
 
