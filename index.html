@@ -5352,6 +5352,7 @@ Exact Output JSON Format Required:
 
 
         // Firestore se single user fetch karne ka helper
+       // Firestore se single user fetch karne ka helper
     async function getFirestoreUser(userId) {
       try {
         const userSnap = await getDoc(doc(fsDb, "users", String(userId)));
@@ -5362,61 +5363,58 @@ Exact Output JSON Format Required:
       }
     }
 
-    // 🚀 MASTER FIRESTORE LOADER FOR ADMIN DASHBOARD (AVAILABLE GLOBALLY)
-    window.loadAdminDashboardData = async function() {
-      console.log("⚡ [AccuEngine] Fetching complete school data from Cloud Firestore...");
+    // 🚀 MASTER ACCUENGINE SENTINEL LOADER (LOGIN KE PEHLE READY)
+    window.loadAdminDashboardData = async function(forceDownload = false) {
+      console.log("⚡ [AccuEngine] Sync check started...");
 
       try {
-        // 1. Fetch Students & Passwords
-        const [studentsData, usersData] = await Promise.all([
-          safeDataFetch("students"),
-          safeDataFetch("users")
+        await window.ensureFirebaseAuth();
+
+        // 1. Version Check: Naya data hai toh download karega, warna 0ms me local storage se load karega
+        if (window.AccuEngine && typeof window.AccuEngine.checkAndSyncData === "function") {
+          await window.AccuEngine.checkAndSyncData(forceDownload);
+        }
+
+        // 2. Local Fast Fetch
+        const [studentsData, teachersData, feesMatrixData, usersData] = await Promise.all([
+          window.AccuEngine.fetch("students"),
+          window.AccuEngine.fetch("teachers"),
+          window.AccuEngine.fetch("fees_matrix"),
+          window.AccuEngine.fetch("users")
         ]);
 
         if (studentsData && Object.keys(studentsData).length > 0) {
           inMemoryStudentsData = studentsData;
           window.inMemoryStudentsData = studentsData;
-          console.log(`✔ [Firestore] Loaded ${Object.keys(studentsData).length} students.`);
+          console.log(`✔ [AccuEngine] Memory active: ${Object.keys(studentsData).length} students.`);
         }
 
-        if (usersData && Object.keys(usersData).length > 0) {
-          cachedUsersMap = usersData;
-        }
+        if (teachersData) window.inMemoryTeachersData = teachersData;
+        if (feesMatrixData) window.inMemoryFeesMatrix = feesMatrixData;
+        if (usersData) cachedUsersMap = usersData;
 
-        // 2. Render Admin Students Directory
+        // 3. Screen par data dikhana
         if (typeof renderAdminStudentsDirectory === "function") {
           renderAdminStudentsDirectory(true);
         }
-
-        // 3. Background mein Teachers aur Fees load karke cards update karo
-        const [teachersData, feesMatrixData] = await Promise.all([
-          safeDataFetch("teachers"),
-          safeDataFetch("fees_matrix")
-        ]);
-
-        if (teachersData) {
-          window.inMemoryTeachersData = teachersData;
-          if (typeof window.renderAdminHomeTeacherboardCards === "function") {
-            window.renderAdminHomeTeacherboardCards();
-          }
-          if (typeof window.loadManageTeacherList === "function") {
-            window.loadManageTeacherList();
-          }
+        if (typeof window.renderAdminHomeTeacherboardCards === "function") {
+          window.renderAdminHomeTeacherboardCards();
         }
-
-        if (feesMatrixData) {
-          window.inMemoryFeesMatrix = feesMatrixData;
+        if (typeof window.loadManageTeacherList === "function") {
+          window.loadManageTeacherList();
         }
-
         if (typeof window.calculateAdminEntryTabAnalytics === "function") {
           window.calculateAdminEntryTabAnalytics();
         }
 
-        console.log("🎉 [Firestore] Admin Dashboard Fully Populated!");
+        console.log("🎉 [AccuEngine] Admin Dashboard Loaded Successfully!");
       } catch (err) {
-        console.error("❌ Failed to load admin data from Firestore:", err);
+        console.error("❌ Admin loader error:", err);
       }
     };
+
+
+    
 
 
 
