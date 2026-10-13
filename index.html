@@ -5256,12 +5256,24 @@ Exact Output JSON Format Required:
     
     
 
-    async function safeDataFetch(refPath) {
+        async function safeDataFetch(refPath) {
       try {
         const snap = await get(child(ref(db), refPath));
         return snap.exists() ? snap.val() : null;
       } catch(err) { return null; }
     }
+
+    // Firestore se single user fetch karne ka helper
+    async function getFirestoreUser(userId) {
+      try {
+        const userSnap = await getDoc(doc(fsDb, "users", String(userId)));
+        return userSnap.exists() ? userSnap.data() : null;
+      } catch (err) {
+        console.error("Firestore user fetch error:", err);
+        return null;
+      }
+    }
+
 
         // Smart Image Compressor ( Keeps under ~120KB for fast Firestore storage )
     function readFileAsDataURL(file, maxWidth = 900, quality = 0.72) {
@@ -6007,7 +6019,8 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
           targetUserId = resolved;
         }
 
-        const uData = await safeDataFetch(`users/${targetUserId}`);
+              // Firestore se user data check karna
+        const uData = await getFirestoreUser(targetUserId);
         if(uData && uData.password === p) {
           // Success - Sab attempts clear karo
           localStorage.removeItem("loginFails");
@@ -6017,6 +6030,7 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
         } else {
           handleFailedLogin(errorEl);
         }
+
       });
     });
 
@@ -6064,13 +6078,15 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
             return;
           }
 
-          const uData = await safeDataFetch(`users/${resolvedUserId}`);
+                   // Firestore se Google user verify karna
+          const uData = await getFirestoreUser(resolvedUserId);
           if (!uData) {
             await auth.signOut().catch(() => {});
             await window.ensureFirebaseAuth();
             window.showCustomAlert("Only active users allowed to sign in with Google");
             return;
           }
+
 
           window.completePortalLoginSession(resolvedUserId, uData);
         } catch (err) {
@@ -6136,24 +6152,16 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       
       window.syncAuthSessionRole(role, loggedUser || sAdmn, aClass);
 
-      if(loggedUser) {
-        onValue(ref(db, `users/${loggedUser}`), (snap) => {
-          if(!snap.exists()) return forceLogout("⚠️ ACCOUNT DELETED: Your account no longer exists.");
-          
-          const dbUser = snap.val();
-          const expectedToken = btoa(dbUser.password + loggedUser);
-          
-          // Check 1: Token mismatch (Password changed by admin)
-          if(sessionToken !== expectedToken) {
-            return forceLogout("⚠️ SESSION EXPIRED: Password was changed by Admin.");
-          }
-          
-          // Check 2: Privilege Escalation (Hack attempt: localStorage role != DB role)
-          if(claimedRole !== dbUser.role || role !== dbUser.role) {
-            return forceLogout("🚨 SECURITY ALERT: Role manipulation detected. Logging out.");
+           if(loggedUser) {
+        // RTDB ka lightweight status flag check (Sirf 10-bytes)
+        onValue(ref(db, `user_status/${loggedUser}`), (snap) => {
+          const status = snap.val();
+          if(!snap.exists() || status === "deleted" || status === "inactive") {
+            return forceLogout("⚠️ ACCOUNT DELETED: Your account no longer exists or was removed by Admin.");
           }
         });
       }
+
 
       function forceLogout(msg) {
         localStorage.removeItem("loggedUser");
