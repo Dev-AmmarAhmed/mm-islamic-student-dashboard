@@ -4971,11 +4971,11 @@ Exact Output JSON Format Required:
     import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js";
     import { getDatabase, ref, onValue, set, update, remove, child, get, query, orderByChild, equalTo } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
     import { getAuth, signInAnonymously, onAuthStateChanged, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-    import { getFirestore, doc, setDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+       import { getFirestore, doc, setDoc, getDoc, deleteDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
       
     // M.M ISLAMIC ENGLISH SCHOOL FIREBASE CREDENTIALS
-    const firebaseConfig = {
+ const firebaseConfig = {
       apiKey: "AIzaSyBHpbgoGs7HFQ3-1tBn9BpGT4YYDaKkZB8",
       authDomain: "mm-islamic-erp.firebaseapp.com",
       databaseURL: "https://mm-islamic-erp-default-rtdb.firebaseio.com",
@@ -5000,9 +5000,19 @@ Exact Output JSON Format Required:
     const auth = getAuth(app);
     const fsDb = getFirestore(app);
 
-    // 🚀 Phase 2: AccuEngine Bridge Connect & Sync Sentinel Setup
+        // 🚀 Phase 2: AccuEngine Bridge Connect (v10 Modular Ready)
     if (window.AccuEngine) {
-      window.AccuEngine.init(fsDb, db);
+      window.AccuEngine.init({
+        fsDb: fsDb,
+        db: db,
+        doc: doc,
+        getDoc: getDoc,
+        collection: collection,
+        getDocs: getDocs,
+        ref: ref,
+        get: get,
+        child: child
+      });
     }
 
     // Ensure background Firebase Auth token is always active for Security Rules
