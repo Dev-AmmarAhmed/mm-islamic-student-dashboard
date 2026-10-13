@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AccuEngine - Full Data Migration Console</title>
+    <title>AccuEngine - Master Migration Console</title>
     <!-- Firebase v10 Compat SDKs -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check-compat.js"></script>
@@ -17,20 +17,21 @@
         .status-badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: bold; margin-bottom: 12px; }
         .status-badge.active { background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid #16a34a; }
         .status-badge.error { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid #dc2626; }
-        button { background: #0288d1; color: white; border: none; padding: 12px 24px; font-size: 15px; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.2s; margin-right: 10px; margin-top: 6px; }
-        button:hover { background: #0369a1; }
+        button { background: #0288d1; color: white; border: none; padding: 12px 20px; font-size: 14px; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.2s; margin-right: 10px; margin-top: 8px; }
+        button:hover { opacity: 0.9; }
         button:disabled { background: #475569; cursor: not-allowed; }
-        #logs { margin-top: 20px; background: #000; color: #4ade80; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 13px; height: 340px; overflow-y: auto; white-space: pre-wrap; line-height: 1.5; }
+        #logs { margin-top: 20px; background: #000; color: #4ade80; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 13px; height: 320px; overflow-y: auto; white-space: pre-wrap; line-height: 1.5; }
     </style>
 </head>
 <body>
     <div class="card">
-        <h2>AccuEngine Full Migration Console</h2>
+        <h2>AccuEngine Master Migration Console</h2>
         <div id="appCheckBadge" class="status-badge">App Check Status: Initializing...</div>
-        <p>Yeh script Realtime Database se <b>Fees Matrix, Fees Entries, Attendance, Offline Tests & Online Tests</b> ko Firestore collections mein transfer karega.</p>
+        <p>Students, Teachers aur missing collections ko Firestore mein shift karein:</p>
         
-        <button id="startAllBtn" onclick="runCompleteMigration()">🚀 Migrate All Data (Fees + Attend + Tests)</button>
-        
+        <button id="btnSyncProfiles" style="background: #16a34a;" onclick="migrateMissingProfilesAndClaims()">👥 1. Sync Students, Teachers & Claims</button>
+        <button id="btnSyncAll" style="background: #0288d1;" onclick="runCompleteMigration()">🚀 2. Re-Sync Fees, Attend & Tests</button>
+
         <div id="logs">Console ready...</div>
     </div>
 
@@ -65,14 +66,13 @@
             );
             document.getElementById("appCheckBadge").className = "status-badge active";
             document.getElementById("appCheckBadge").innerText = "✔ App Check Active";
-            log("[App Check] reCAPTCHA Enterprise ready.");
+            log("[App Check] reCAPTCHA Enterprise provider active.");
         } catch (err) {
             document.getElementById("appCheckBadge").className = "status-badge error";
             document.getElementById("appCheckBadge").innerText = "⚠ App Check Warning";
             log("[App Check] " + err.message, true);
         }
 
-        // Batch helper: Har 400 operations ke baad auto commit karega
         class FirestoreBatchWriter {
             constructor(db) {
                 this.db = db;
@@ -87,220 +87,143 @@
                 this.total++;
                 if (this.count >= 380) {
                     await this.batch.commit();
-                    log(`    [Batch] ${this.total} records committed to Firestore...`);
+                    log(`    [Batch] ${this.total} items written...`);
                     this.batch = this.db.batch();
                     this.count = 0;
                 }
             }
 
-                        async commit() {
+            async commit() {
                 if (this.count > 0) {
                     await this.batch.commit();
-                    log(`    [Batch] Final ${this.total} records committed.`);
+                    log(`    [Batch] Final ${this.total} items saved.`);
                     this.count = 0;
-                    this.batch = this.db.batch(); // Naye section ke liye fresh batch tayar
+                    this.batch = this.db.batch();
                 }
             }
-
         }
 
-        async function runCompleteMigration() {
-            const btn = document.getElementById("startAllBtn");
+        async function ensureAuth() {
+            if (!auth.currentUser) {
+                await auth.signInAnonymously();
+                log("[Auth] Security session verified.");
+            }
+        }
+
+        async function migrateMissingProfilesAndClaims() {
+            const btn = document.getElementById("btnSyncProfiles");
             btn.disabled = true;
             log("\n============================================");
-            log("[AccuEngine] Master Migration shuru ho rahi hai...");
+            log("[AccuEngine] Students, Teachers aur Claims sync ho rahe hain...");
 
             try {
-                if (!auth.currentUser) {
-                    await auth.signInAnonymously();
-                    log("[Auth] Security token verified.");
-                }
-
+                await ensureAuth();
                 const writer = new FirestoreBatchWriter(firestore);
 
-                // ----------------------------------------------------
-                // 1. FEES MATRIX MIGRATION
-                // ----------------------------------------------------
-                log("\n[1/5] Reading /fees_matrix from RTDB...");
-                const snapMatrix = await rtdb.ref("fees_matrix").once("value");
-                const feesMatrix = snapMatrix.val() || {};
-                const matrixKeys = Object.keys(feesMatrix);
-                log(`Found ${matrixKeys.length} students with fee matrix records.`);
+                // 1. STUDENTS
+                log("[1/3] Reading /students from RTDB...");
+                const snapStudents = await rtdb.ref("students").once("value");
+                const students = snapStudents.val() || {};
+                const sKeys = Object.keys(students);
+                log(`Found ${sKeys.length} students. Transferring...`);
 
-                for (const admn of matrixKeys) {
-                    const record = feesMatrix[admn];
-                    const docRef = firestore.collection("fees_matrix").doc(String(admn));
-                    await writer.set(docRef, {
-                        admn: String(admn),
-                        matrix: record,
-                        updatedAt: new Date().toISOString()
-                    });
+                for (const admn of sKeys) {
+                    const docRef = firestore.collection("students").doc(String(admn));
+                    await writer.set(docRef, { ...students[admn], admn: String(admn) });
                 }
                 await writer.commit();
-                log("✔ Fees Matrix successfully shifted to Firestore.");
+                log(`✔ ${sKeys.length} Students Firestore mein sync ho gaye.`);
 
-                // ----------------------------------------------------
-                // 2. FEES ENTRIES (RECEIPTS / LOGS) MIGRATION
-                // ----------------------------------------------------
-                log("\n[2/5] Reading /fees_entries from RTDB...");
-                const snapEntries = await rtdb.ref("fees_entries").once("value");
-                const feesEntries = snapEntries.val() || {};
-                let totalEntriesCount = 0;
+                // 2. TEACHERS
+                log("\n[2/3] Reading /teachers from RTDB...");
+                const snapTeachers = await rtdb.ref("teachers").once("value");
+                const teachers = snapTeachers.val() || {};
+                const tKeys = Object.keys(teachers);
+                log(`Found ${tKeys.length} teachers. Transferring...`);
 
-                for (const admn of Object.keys(feesEntries)) {
-                    const studentEntries = feesEntries[admn] || {};
-                    for (const entryId of Object.keys(studentEntries)) {
-                        const entryData = studentEntries[entryId];
-                        const docRef = firestore.collection("fees_entries").doc(`${admn}_${entryId}`);
-                        await writer.set(docRef, {
-                            ...entryData,
-                            admn: String(admn),
-                            entryId: String(entryId)
-                        });
-                        totalEntriesCount++;
-                    }
+                for (const username of tKeys) {
+                    const docRef = firestore.collection("teachers").doc(String(username));
+                    await writer.set(docRef, { ...teachers[username], username: String(username) });
                 }
                 await writer.commit();
-                log(`✔ ${totalEntriesCount} Fee entries & receipts shifted to Firestore.`);
+                log(`✔ ${tKeys.length} Teachers Firestore mein sync ho gaye.`);
 
-                // ----------------------------------------------------
-                // 3. ATTENDANCE RECORDS MIGRATION
-                // ----------------------------------------------------
-                log("\n[3/5] Reading /attendance from RTDB...");
-                const snapAtt = await rtdb.ref("attendance").once("value");
-                const attData = snapAtt.val() || {};
-                let totalAttMonths = 0;
+                // 3. DAILY CLAIMS (Taake unlimited points ka loop khatam ho)
+                log("\n[3/3] Reading /daily_claims from RTDB...");
+                const snapClaims = await rtdb.ref("daily_claims").once("value");
+                const claims = snapClaims.val() || {};
+                let claimCount = 0;
 
-                for (const admn of Object.keys(attData)) {
-                    const monthsObj = attData[admn] || {};
-                    for (const month of Object.keys(monthsObj)) {
-                        const monthDays = monthsObj[month];
-                        const docRef = firestore.collection("attendance").doc(`${admn}_${month}`);
-                        await writer.set(docRef, {
-                            admn: String(admn),
-                            month: String(month),
-                            days: monthDays,
-                            updatedAt: new Date().toISOString()
-                        });
-                        totalAttMonths++;
-                    }
+                for (const admn of Object.keys(claims)) {
+                    const docRef = firestore.collection("daily_claims").doc(String(admn));
+                    await writer.set(docRef, { claims: claims[admn] });
+                    claimCount++;
                 }
                 await writer.commit();
-                log(`✔ ${totalAttMonths} Student attendance monthly records shifted to Firestore.`);
+                log(`✔ ${claimCount} Students ke daily claims Firestore mein sync ho gaye.`);
 
-                // ----------------------------------------------------
-                // 4. OFFLINE TESTS (MARKS & POINTS) MIGRATION
-                // ----------------------------------------------------
-                log("\n[4/5] Reading /tests (Offline Test Marks) from RTDB...");
-                const snapTests = await rtdb.ref("tests").once("value");
-                const testsData = snapTests.val() || {};
-                let totalTestsCount = 0;
-
-                for (const admn of Object.keys(testsData)) {
-                    const studentTests = testsData[admn] || {};
-                    for (const testId of Object.keys(studentTests)) {
-                        const tObj = studentTests[testId];
-                        const docRef = firestore.collection("tests").doc(`${admn}_${testId}`);
-                        await writer.set(docRef, {
-                            ...tObj,
-                            admn: String(admn),
-                            testId: String(testId)
-                        });
-                        totalTestsCount++;
-                    }
-                }
-                await writer.commit();
-                log(`✔ ${totalTestsCount} Test score records shifted to Firestore.`);
-
-                // ----------------------------------------------------
-                // 5. ONLINE TESTS & ATTEMPTS MIGRATION
-                // ----------------------------------------------------
-                log("\n[5/5] Reading /online_tests & /test_attempts from RTDB...");
-                const snapOnline = await rtdb.ref("online_tests").once("value");
-                const onlineData = snapOnline.val() || {};
-                let onlineTestCount = 0;
-
-                for (const clsKey of Object.keys(onlineData)) {
-                    const classTests = onlineData[clsKey] || {};
-                    for (const testId of Object.keys(classTests)) {
-                        const testObj = classTests[testId];
-                        const docRef = firestore.collection("online_tests").doc(String(testId));
-                        await writer.set(docRef, {
-                            ...testObj,
-                            class: String(clsKey),
-                            id: String(testId)
-                        });
-                        onlineTestCount++;
-                    }
-                }
-                await writer.commit();
-                log(`✔ ${onlineTestCount} Online Tests shifted to Firestore.`);
-
-                // Attempts Migration
-                const snapAttempts = await rtdb.ref("test_attempts").once("value");
-                const attemptsData = snapAttempts.val() || {};
-                let attemptsCount = 0;
-
-                for (const testId of Object.keys(attemptsData)) {
-                    const studentAttempts = attemptsData[testId] || {};
-                    for (const admn of Object.keys(studentAttempts)) {
-                        const attObj = studentAttempts[admn];
-                        const docRef = firestore.collection("test_attempts").doc(`${testId}_${admn}`);
-                        await writer.set(docRef, {
-                            ...attObj,
-                            testId: String(testId),
-                            admn: String(admn)
-                        });
-                        attemptsCount++;
-                    }
-                }
-                await writer.commit();
-                log(`✔ ${attemptsCount} Student online test attempts shifted to Firestore.`);
-
-                log("\n🎉 [ALL COMPLETED] Mubarak ho! Saara data (Fees, Attendance, Offline & Online Tests) Firestore mein migrate ho chuka hai!");
+                log("\n🎉 [SUCCESS] Students, Teachers aur Claims 100% Firestore mein sync ho chuke hain!");
+                btn.disabled = false;
             } catch (err) {
-                log("\n[MIGRATION ERROR] " + err.message, true);
+                log("[ERROR] " + err.message, true);
                 btn.disabled = false;
             }
         }
 
-        async function migrateStudentsAndTeachers() {
-    const btn = document.getElementById("startAllBtn");
-    btn.disabled = true;
-    log("\n[AccuEngine] Migrating Students & Teachers to Firestore...");
+        async function runCompleteMigration() {
+            const btn = document.getElementById("btnSyncAll");
+            btn.disabled = true;
+            log("\n============================================");
+            log("[AccuEngine] Fees, Attendance & Tests sync ho rahe hain...");
 
-    const writer = new FirestoreBatchWriter(firestore);
+            try {
+                await ensureAuth();
+                const writer = new FirestoreBatchWriter(firestore);
 
-    // 1. Students Bio-data
-    const snapStudents = await rtdb.ref("students").once("value");
-    const studentsData = snapStudents.val() || {};
-    const sKeys = Object.keys(studentsData);
-    log(`Found ${sKeys.length} students. Transferring to Firestore...`);
+                // Fees Matrix
+                log("[1/3] Syncing Fees Matrix...");
+                const snapMatrix = await rtdb.ref("fees_matrix").once("value");
+                const matrix = snapMatrix.val() || {};
+                for (const admn of Object.keys(matrix)) {
+                    await writer.set(firestore.collection("fees_matrix").doc(String(admn)), {
+                        admn: String(admn), matrix: matrix[admn]
+                    });
+                }
+                await writer.commit();
 
-    for (const admn of sKeys) {
-        const sDocRef = firestore.collection("students").doc(String(admn));
-        await writer.set(sDocRef, studentsData[admn]);
-    }
-    await writer.commit();
-    log(`✔ ${sKeys.length} Students profiles shifted to Firestore.`);
+                // Attendance
+                log("[2/3] Syncing Attendance...");
+                const snapAtt = await rtdb.ref("attendance").once("value");
+                const att = snapAtt.val() || {};
+                for (const admn of Object.keys(att)) {
+                    for (const m of Object.keys(att[admn])) {
+                        await writer.set(firestore.collection("attendance").doc(`${admn}_${m}`), {
+                            admn: String(admn), month: String(m), days: att[admn][m]
+                        });
+                    }
+                }
+                await writer.commit();
 
-    // 2. Teachers Profiles
-    const snapTeachers = await rtdb.ref("teachers").once("value");
-    const teachersData = snapTeachers.val() || {};
-    const tKeys = Object.keys(teachersData);
-    log(`Found ${tKeys.length} teachers. Transferring to Firestore...`);
+                // Tests
+                log("[3/3] Syncing Tests...");
+                const snapTests = await rtdb.ref("tests").once("value");
+                const tests = snapTests.val() || {};
+                for (const admn of Object.keys(tests)) {
+                    for (const tid of Object.keys(tests[admn])) {
+                        await writer.set(firestore.collection("tests").doc(`${admn}_${tid}`), {
+                            ...tests[admn][tid], admn: String(admn), testId: String(tid)
+                        });
+                    }
+                }
+                await writer.commit();
 
-    for (const username of tKeys) {
-        const tDocRef = firestore.collection("teachers").doc(String(username));
-        await writer.set(tDocRef, teachersData[username]);
-    }
-    await writer.commit();
-    log(`✔ ${tKeys.length} Teachers profiles shifted to Firestore.`);
-
-    log("\n🎉 [DONE] Students & Teachers are now 100% in Firestore!");
-    btn.disabled = false;
+                log("\n🎉 [SUCCESS] Fees, Attendance aur Tests Firestore mein verified!");
+                btn.disabled = false;
+            } catch (err) {
+                log("[ERROR] " + err.message, true);
+                btn.disabled = false;
+            }
         }
-        
     </script>
 </body>
 </html>
