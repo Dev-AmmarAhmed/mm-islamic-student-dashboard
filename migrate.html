@@ -321,33 +321,52 @@
             setProg(95);
             log(`✔ ${attCount} Test Attempts migrated.`);
           }
+          // 10. EXPENSES & DAILY CLAIMS (Auto-Detect Flat vs Nested & Object Guard)
+          function isPureObject(val) {
+            return typeof val === "object" && val !== null && !Array.isArray(val);
+          }
 
-          // 10. EXPENSES & DAILY CLAIMS (Fixed Null Guard)
           if (fullData.expenses && typeof fullData.expenses === "object") {
             log(`\n[10/10] Migrating Expenses & Claims...`);
-            for (let m of Object.keys(fullData.expenses)) {
-              const monthExp = fullData.expenses[m];
-              if (monthExp && typeof monthExp === "object") {
-                for (let eid of Object.keys(monthExp)) {
-                  if (monthExp[eid]) {
-                    await writer.set(firestore.collection("expenses").doc(`${m}_${eid}`), monthExp[eid]);
+            let expCount = 0;
+            for (let k of Object.keys(fullData.expenses)) {
+              const item = fullData.expenses[k];
+              if (!isPureObject(item)) continue;
+
+              // Check karein: kya yeh direct single expense hai (jisme amount, date, type pada hai)?
+              if (item.amount !== undefined || item.type !== undefined || item.date !== undefined || item.detail !== undefined) {
+                expCount++;
+                await writer.set(firestore.collection("expenses").doc(String(k)), item);
+              } else {
+                // Agar month-wise nested folder hai:
+                for (let subKey of Object.keys(item)) {
+                  const subItem = item[subKey];
+                  if (isPureObject(subItem)) {
+                    expCount++;
+                    await writer.set(firestore.collection("expenses").doc(`${k}_${subKey}`), subItem);
                   }
                 }
               }
             }
+            await writer.commit();
+            log(`✔ ${expCount} Expenses records successfully migrated.`);
           }
 
           if (fullData.daily_claims && typeof fullData.daily_claims === "object") {
+            let claimCount = 0;
             for (let admn of Object.keys(fullData.daily_claims)) {
-              if (fullData.daily_claims[admn]) {
-                await writer.set(firestore.collection("daily_claims").doc(String(admn)), {
-                  claims: fullData.daily_claims[admn]
-                });
+              const claimVal = fullData.daily_claims[admn];
+              if (claimVal !== undefined && claimVal !== null) {
+                claimCount++;
+                const payload = isPureObject(claimVal) ? { claims: claimVal } : { claims: { [String(claimVal)]: true } };
+                await writer.set(firestore.collection("daily_claims").doc(String(admn)), payload);
               }
             }
+            await writer.commit();
+            log(`✔ ${claimCount} Daily Claims migrated.`);
           }
-          await writer.commit();
           setProg(100);
+
 
           log("\n🎉 [MASTER MIGRATION 100% COMPLETE]");
           log("Saara core data (Users, Students, Teachers, Fees Matrix, Receipts, Attendance, Tests, Attempts, Expenses) bina kisi error ke Cloud Firestore mein transfer ho chuka hai!");
