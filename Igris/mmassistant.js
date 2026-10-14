@@ -1,7 +1,6 @@
 /**
  * ====================================================================
- * MMASSISTANT AI v1.0 (PRO GENERATIVE AI ENGINE)
- * Powered by Groq Cloud (Llama-3.3-70b-versatile) & Igris Hardware Cache
+ * MMASSISTANT AI (GROQ POWERED + IGRIS SECURE CACHE)
  * M.M ISLAMIC ENGLISH SCHOOL ERP
  * ====================================================================
  */
@@ -9,14 +8,39 @@
 (function (window) {
   "use strict";
 
-  // 🔑 GROQ API CONFIGURATION
   const GROQ_API_KEY = "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";
   const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
-  const AI_MODEL = "llama-3.3-70b-versatile";
   const STORAGE_KEY = "mm_assistant_chat_history_v1";
 
+  // 2D AI Sparkle Icon (Copyright-Free Gemini style vector)
+  const AI_SPARKLE_SVG = `
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 2C12 7.52285 7.52285 12 2 12C7.52285 12 12 16.4771 12 22C12 16.4771 16.4771 12 22 12C16.4771 12 12 7.52285 12 2Z" fill="url(#sparkleGrad)" />
+      <defs>
+        <linearGradient id="sparkleGrad" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+          <stop stop-color="#38bdf8"/>
+          <stop offset="1" stop-color="#818cf8"/>
+        </linearGradient>
+      </defs>
+    </svg>
+  `;
+
+  const BIG_SPARKLE_SVG = `
+    <svg width="56" height="56" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 2C12 7.52285 7.52285 12 2 12C7.52285 12 12 16.4771 12 22C12 16.4771 16.4771 12 22 12C16.4771 12 12 7.52285 12 2Z" fill="url(#bigSparkleGrad)" />
+      <circle cx="19" cy="5" r="1.5" fill="#38bdf8" />
+      <circle cx="5" cy="19" r="1.5" fill="#818cf8" />
+      <defs>
+        <linearGradient id="bigSparkleGrad" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+          <stop stop-color="#38bdf8"/>
+          <stop offset="1" stop-color="#a855f7"/>
+        </linearGradient>
+      </defs>
+    </svg>
+  `;
+
   // ----------------------------------------------------
-  // 1. DYNAMIC CHAT UI INJECTOR (Keeps index.html clean)
+  // 1. CHAT UI INJECTION
   // ----------------------------------------------------
   function injectChatUI() {
     if (document.getElementById("mmAssistantOverlay")) return;
@@ -30,37 +54,36 @@
     `;
 
     overlay.innerHTML = `
-      <div id="mmAssistantContainer" style="width: 100%; max-width: 680px; height: 94vh; border-radius: 24px 24px 0 0; background: var(--card-bg, #ffffff); display: flex; flex-direction: column; overflow: hidden; border: 1.5px solid var(--border-color, #e2e8f0); box-shadow: 0 -10px 40px rgba(0,0,0,0.45); animation: sheetFlyUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;">
+      <div id="mmAssistantContainer" style="width: 100%; max-width: 680px; height: 94vh; border-radius: 24px 24px 0 0; background: var(--card-bg, #0f172a); display: flex; flex-direction: column; overflow: hidden; border: 1.5px solid var(--border-color, #1e293b); box-shadow: 0 -10px 40px rgba(0,0,0,0.45); animation: sheetFlyUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;">
         
         <!-- Header -->
-        <div style="background: var(--header-bg, linear-gradient(135deg, #022c22 0%, #059669 100%)); padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; color: white;">
+        <div style="background: var(--header-bg, #1e1b4b); padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; color: white;">
           <div style="display: flex; align-items: center; gap: 10px;">
-            <div style="font-size: 24px;">🤖</div>
+            <div style="display:flex; align-items:center; justify-content:center;">${AI_SPARKLE_SVG}</div>
             <div>
-              <div style="font-size: 15px; font-weight: 900; letter-spacing: 0.3px;">MMAssistant AI</div>
-              <div style="font-size: 10.5px; font-weight: 700; color: #34d399;">Llama-3.3 70B • Igris Verified Context</div>
+              <div style="font-size: 15px; font-weight: 900; letter-spacing: 0.3px;">MMAssistant</div>
             </div>
           </div>
           <div style="display: flex; align-items: center; gap: 8px;">
-            <button type="button" id="btnMmClearChat" title="Clear History" class="icon-btn" style="padding: 5px 9px; font-size: 12px; background: rgba(255,255,255,0.15);">🗑️</button>
-            <button type="button" id="btnMmCloseChat" class="btn-sm-del" style="margin: 0; padding: 6px 14px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.35);">✕</button>
+            <button type="button" id="btnMmClearChat" title="Clear History" class="icon-btn" style="padding: 5px 9px; font-size: 12px; background: rgba(255,255,255,0.12);">🗑️</button>
+            <button type="button" id="btnMmCloseChat" class="btn-sm-del" style="margin: 0; padding: 6px 14px; background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.3);">✕</button>
           </div>
         </div>
 
         <!-- Quick Prompts Carousel -->
-        <div style="display: flex; gap: 8px; overflow-x: auto; padding: 10px 14px; background: rgba(0,0,0,0.02); border-bottom: 1px solid var(--border-color, #e2e8f0); scrollbar-width: none;">
+        <div style="display: flex; gap: 8px; overflow-x: auto; padding: 10px 14px; background: rgba(0,0,0,0.04); border-bottom: 1px solid var(--border-color, #1e293b); scrollbar-width: none;">
           <div class="class-chip mm-chip" style="margin:0; padding:6px 12px; font-size:11px; cursor:pointer;" data-query="Is month kitne bachon ki fees pending hai?">💳 Unpaid Fees</div>
           <div class="class-chip mm-chip" style="margin:0; padding:6px 12px; font-size:11px; cursor:pointer;" data-query="School me total kitne students registered hain class-wise?">🎓 Total Students</div>
           <div class="class-chip mm-chip" style="margin:0; padding:6px 12px; font-size:11px; cursor:pointer;" data-query="Top teachers kaun hain points leaderboard me?">🏆 Mentors Rank</div>
-          <div class="class-chip mm-chip" style="margin:0; padding:6px 12px; font-size:11px; cursor:pointer;" data-query="Photosynthesis kya hota hai aasan lafzon me samjhao">🌱 Homework Help</div>
+          <div class="class-chip mm-chip" style="margin:0; padding:6px 12px; font-size:11px; cursor:pointer;" data-query="Explain the concept of photosynthesis simply">🌱 Homework Help</div>
         </div>
 
         <!-- Messages Container -->
         <div id="mmMessagesList" style="flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px;"></div>
 
         <!-- Bottom Input Bar -->
-        <div style="padding: 12px 14px; background: var(--nav-bg, #ffffff); border-top: 1.5px solid var(--border-color, #e2e8f0); display: flex; align-items: center; gap: 10px;">
-          <input type="text" id="mmInputBox" placeholder="Ask anything about school records or study doubts..." autocomplete="off" style="flex: 1; padding: 12px 16px; font-size: 13px; font-weight: 700; border: 1.5px solid #059669; border-radius: 14px; background: var(--input-bg, #ffffff); color: var(--text-color, #0f172a); outline: none;">
+        <div style="padding: 12px 14px; background: var(--nav-bg, #0f172a); border-top: 1.5px solid var(--border-color, #1e293b); display: flex; align-items: center; gap: 10px;">
+          <input type="text" id="mmInputBox" placeholder="Ask MMAssistant" autocomplete="off" style="flex: 1; padding: 12px 16px; font-size: 13px; font-weight: 700; border: 1.5px solid #059669; border-radius: 14px; background: var(--input-bg, #1e293b); color: var(--text-color, #ffffff); outline: none;">
           <button id="mmSendBtn" class="btn-primary btn-green" style="width: auto; padding: 12px 18px; margin: 0; border-radius: 14px; font-size: 14px;">
             Send ➔
           </button>
@@ -71,7 +94,6 @@
 
     document.body.appendChild(overlay);
 
-    // Event Listeners
     document.getElementById("btnMmCloseChat").onclick = window.MMAssistant.close;
     document.getElementById("btnMmClearChat").onclick = window.MMAssistant.clearHistory;
     document.getElementById("mmSendBtn").onclick = window.MMAssistant.submitMessage;
@@ -89,7 +111,7 @@
   }
 
   // ----------------------------------------------------
-  // 2. CHAT HISTORY PERSISTENCE (LocalStorage)
+  // 2. CHAT STORAGE & RENDERING
   // ----------------------------------------------------
   function getHistory() {
     try {
@@ -119,11 +141,11 @@
 
     if (history.length === 0) {
       box.innerHTML = `
-        <div style="text-align:center; padding:36px 16px; color:var(--text-muted);">
-          <div style="font-size:42px; margin-bottom:10px;">🤖</div>
-          <div style="font-size:16px; font-weight:900; color:var(--text-color); margin-bottom:6px;">Assalamu Alaikum! I am MMAssistant.</div>
-          <div style="font-size:12px; font-weight:600; line-height:1.6; max-width:440px; margin:0 auto;">
-            Main M.M Islamic English School ka official smart AI assistant hoon. Aap mujhse kisi bhi student ki attendance, pending fees, teacher rank, timetable ke baare me pooch sakte hain — ya phir padhai aur homework se judi kisi bhi cheez ko aasan lafzon me samajh sakte hain.
+        <div style="text-align:center; padding:36px 16px; color:var(--text-muted, #94a3b8);">
+          <div style="display:flex; justify-content:center; margin-bottom:14px;">${BIG_SPARKLE_SVG}</div>
+          <div style="font-size:18px; font-weight:900; color:var(--text-color, #f8fafc); margin-bottom:8px;">Assalamualaikum</div>
+          <div style="font-size:12.5px; font-weight:600; line-height:1.6; max-width:440px; margin:0 auto;">
+            Welcome to MMAssistant. You can inquire about student attendance, fee collections, teacher leaderboards, timetable schedules, or ask academic questions for study help.
           </div>
         </div>
       `;
@@ -134,8 +156,8 @@
       const isUser = m.role === "user";
       box.innerHTML += `
         <div style="display:flex; flex-direction:column; align-items:${isUser ? 'flex-end' : 'flex-start'};">
-          <div style="max-width:85%; padding:12px 16px; border-radius:${isUser ? '18px 18px 4px 18px' : '18px 18px 18px 4px'}; background:${isUser ? 'linear-gradient(135deg, #10b981 0%, #047857 100%)' : 'rgba(0,0,0,0.04)'}; color:${isUser ? '#ffffff' : 'var(--text-color)'}; border:1px solid ${isUser ? 'transparent' : 'var(--border-color, #e2e8f0)'}; font-size:13px; font-weight:650; line-height:1.55; white-space:pre-wrap; word-break:break-word; box-shadow:0 2px 8px rgba(0,0,0,0.05);">${m.text}</div>
-          <span style="font-size:9.5px; color:var(--text-muted); margin-top:3px; padding:0 4px;">${m.time}</span>
+          <div style="max-width:85%; padding:12px 16px; border-radius:${isUser ? '18px 18px 4px 18px' : '18px 18px 18px 4px'}; background:${isUser ? 'linear-gradient(135deg, #10b981 0%, #047857 100%)' : 'rgba(255,255,255,0.06)'}; color:${isUser ? '#ffffff' : 'var(--text-color, #f8fafc)'}; border:1px solid ${isUser ? 'transparent' : 'var(--border-color, #1e293b)'}; font-size:13px; font-weight:650; line-height:1.55; white-space:pre-wrap; word-break:break-word; box-shadow:0 2px 8px rgba(0,0,0,0.05);">${m.text}</div>
+          <span style="font-size:9.5px; color:var(--text-muted, #64748b); margin-top:3px; padding:0 4px;">${m.time}</span>
         </div>
       `;
     });
@@ -143,7 +165,7 @@
   }
 
   // ----------------------------------------------------
-  // 3. IGRIS HARDWARE CACHE SLICING ENGINE
+  // 3. IGRIS CACHE SLICING
   // ----------------------------------------------------
   async function buildContextSlice(userQuery) {
     const Sentinel = window.Igris || window.AccuEngine;
@@ -155,7 +177,6 @@
       const students = Object.values(studentsMap).filter(Boolean);
       const teachers = Object.values(teachersMap).filter(Boolean);
 
-      // School overview summary for LLM
       const context = {
         total_students_count: students.length,
         total_teachers_count: teachers.length,
@@ -168,7 +189,6 @@
 
       const q = userQuery.toLowerCase();
 
-      // Attendance check intent: If student name is detected, fetch their exact attendance
       for (const st of students) {
         if (st.name && q.includes(st.name.toLowerCase())) {
           context.queried_student = {
@@ -178,7 +198,6 @@
             phone: st.phone,
             points: st.points || 0
           };
-          // Fetch student attendance for active month
           const currentMonth = ["January","February","March","April","May","June","July","August","September","October","November","December"][new Date().getMonth()];
           context.queried_student_attendance = {
             month: currentMonth,
@@ -188,10 +207,9 @@
         }
       }
 
-      // Fees inquiry intent
       if (/(fee|unpaid|pending|paid|due|rupaye|paisa)/i.test(q)) {
         const feesMap = (await Sentinel.fetch("fees_matrix")) || {};
-        const currentMonth = "September"; // Academic active reference
+        const currentMonth = "September";
         let unpaidCount = 0;
         let paidCount = 0;
         let totalDues = 0;
@@ -215,7 +233,6 @@
         };
       }
 
-      // Today's Muster intent
       if (/(muster|in time|check in|teacher present)/i.test(q)) {
         const currentMonth = ["January","February","March","April","May","June","July","August","September","October","November","December"][new Date().getMonth()];
         const todayNum = new Date().getDate();
@@ -230,58 +247,71 @@
   }
 
   // ----------------------------------------------------
-  // 4. GROQ INFERENCE CALL (Llama-3.3 70B)
+  // 4. GROQ API WITH AUTO-FALLBACK
   // ----------------------------------------------------
   async function callGroqLlama(userPrompt, verifiedContext) {
     const role = localStorage.getItem("loggedRole") || "admin";
     const user = localStorage.getItem("loggedUser") || "Admin";
 
     const systemPrompt = `
-You are MMAssistant, the authentic, highly intelligent, supportive and professional AI of M.M ISLAMIC ENGLISH SCHOOL.
+You are MMAssistant, the authentic, supportive, and intelligent AI collaborator of M.M ISLAMIC ENGLISH SCHOOL.
 Current User Role: ${role} (${user})
 
 PORTAL VERIFIED CONTEXT (From local secure hardware cache):
 ${verifiedContext}
 
-GUIDELINES FOR ANSWERS:
+OPERATING RULES:
 1. SCHOOL PORTAL DATA (Attendance, Fees, Students, Teachers, Timetable, Muster):
    - Answer accurately based ONLY on the verified context above.
-   - For student attendance: If marked true -> Present ✔. If marked false -> Absent ❌. If "H" -> Holiday.
-   - If a specific date record is missing, state politely that the attendance is not marked yet.
-2. HOMEWORK, GENERAL ACADEMIC & STUDY DOUBTS:
-   - When asked academic questions (Science, Math, English translation, History, Quran/Urdu concepts, general knowledge), explain clearly, accurately, and step-by-step like a great teacher.
-   - Help students solve doubts, write essays, or understand complex topics without refusing.
-3. LANGUAGE & TONE:
-   - Match the user's language style (Roman Urdu, Hindi, or English).
-   - Be respectful, concise, warm, and natural.
+   - For attendance: true -> Present ✔, false -> Absent ❌, "H" -> Holiday.
+   - If a date is missing, politely say the attendance is not yet marked.
+2. ACADEMIC & STUDY DOUBTS:
+   - For homework or general subjects (Science, Math, English translation, History, Quranic/Islamic concepts), provide clear, polite, step-by-step educational guidance.
+3. TONE & LANGUAGE:
+   - Naturally adapt to the user's language (Roman Urdu, Hindi, or English).
+   - Be concise, friendly, and respectful.
 `;
 
-    const payload = {
-      model: AI_MODEL,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-      temperature: 0.25,
-      max_tokens: 650
-    };
+    // Fail-safe model waterfall
+    const models = ["llama-3.1-8b-instant", "llama3-70b-8192", "gemma2-9b-it"];
+    let lastError = null;
 
-    const response = await fetch(GROQ_ENDPOINT, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${GROQ_API_KEY}`
-      },
-      body: JSON.stringify(payload)
-    });
+    for (const currentModel of models) {
+      try {
+        const payload = {
+          model: currentModel,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt }
+          ],
+          temperature: 0.25,
+          max_tokens: 650
+        };
 
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      throw new Error(err.error?.message || "Groq Inference Error (" + response.status + ")");
+        const response = await fetch(GROQ_ENDPOINT, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${GROQ_API_KEY}`
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.choices && data.choices[0] && data.choices[0].message) {
+            return data.choices[0].message.content.trim();
+          }
+        } else {
+          const errData = await response.json().catch(() => ({}));
+          lastError = new Error(errData.error?.message || `HTTP ${response.status}`);
+        }
+      } catch (e) {
+        lastError = e;
+      }
     }
 
-    const data = await response.json();
-    return data.choices[0].message.content.trim();
+    throw lastError || new Error("Failed to receive response from AI engine.");
   }
 
   // ----------------------------------------------------
@@ -322,7 +352,7 @@ GUIDELINES FOR ANSWERS:
       renderHistory();
 
       btn.disabled = true;
-      btn.innerText = "Thinking 🧠...";
+      btn.innerText = "Thinking...";
 
       try {
         const contextSlice = await buildContextSlice(text);
@@ -331,7 +361,7 @@ GUIDELINES FOR ANSWERS:
         renderHistory();
       } catch (err) {
         console.error("MMAssistant Error:", err);
-        saveMessage("assistant", "⚠️ Maazrat, main abhi server se connect nahi kar paaya: " + err.message);
+        saveMessage("assistant", "⚠️ Error: " + err.message);
         renderHistory();
       } finally {
         btn.disabled = false;
@@ -342,7 +372,6 @@ GUIDELINES FOR ANSWERS:
     }
   };
 
-  // Auto-init on script load
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", injectChatUI);
   } else {
