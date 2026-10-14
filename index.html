@@ -30,7 +30,6 @@
 
    <!-- MMASSISTANT AI (FORCED FRESH CACHE) -->
 <script src="./Igris/mmassistant.js?v=10.0"></script>
-  
 
   <!-- 🚨 IGRIS INTEGRITY VERIFICATION GATE (ANTI-BYPASS PROTOCOL) -->
   <script>
@@ -5639,11 +5638,44 @@ Exact Output JSON Format Required:
     
         async function safeDataFetch(refPath) {
       const Sentinel = window.Igris || window.AccuEngine;
+      
+      // 1. Sabse pehle Igris local cache check karo
       if (Sentinel && typeof Sentinel.fetch === "function") {
-        return await Sentinel.fetch(refPath);
+        const cached = await Sentinel.fetch(refPath);
+        if (cached && (typeof cached !== "object" || Object.keys(cached).length > 0)) {
+          return cached;
+        }
       }
+
+      // 2. Agar cache khali hai, toh seedha FIRESTORE (fsDb) se fetch karo (RTDB nahi!)
+      try {
+        await window.ensureFirebaseAuth();
+        const parts = refPath.split("/");
+        const collectionName = parts[0];
+
+        if (parts.length === 1) {
+          // Poori collection fetch karo Firestore se
+          const snap = await getDocs(collection(fsDb, collectionName));
+          const map = {};
+          snap.forEach(d => { map[d.id] = d.data(); });
+          
+          // Igris cache mein save kar do taaki agli baar 0ms mein mile
+          if (Sentinel && typeof Sentinel.setLocal === "function" && Object.keys(map).length > 0) {
+            Sentinel.setLocal(collectionName, map);
+          }
+          return map;
+        } else if (parts.length === 2) {
+          // Single document fetch karo Firestore se
+          const docSnap = await getDoc(doc(fsDb, collectionName, parts[1]));
+          return docSnap.exists() ? docSnap.data() : null;
+        }
+      } catch (err) {
+        console.warn("Firestore direct read error:", err);
+      }
+
       return null;
     }
+
 
 
 
@@ -5661,56 +5693,45 @@ Exact Output JSON Format Required:
 
 
            // 🛡️ IGRIS MASTER DASHBOARD & MEMORY LOADER
-    window.loadAdminDashboardData = async function(forceDownload = false) {
+     // 🛡️ UNIVERSAL IGRIS BOOTSTRAPPER (ADMIN, TEACHER & STUDENT)
+    window.ensureUniversalIgrisSync = async function(force = false) {
       const Sentinel = window.Igris || window.AccuEngine;
-      if (!Sentinel) return;
+      if (!Sentinel || typeof Sentinel.checkAndSyncData !== "function") return;
 
       try {
-        await window.ensureFirebaseAuth();
+        if (typeof window.ensureFirebaseAuth === "function") {
+          await window.ensureFirebaseAuth();
+        }
 
-        // 1. Local Cache Se Instant Render (Zero Delay)
-        const [localSt, localTch, localFees, localUsers] = await Promise.all([
+        // Check if data is already in memory or needs download
+        const didSync = await Sentinel.checkAndSyncData(force);
+        
+        // Load into global window memory
+        const [stData, tchData, feesData] = await Promise.all([
           Sentinel.fetch("students"),
           Sentinel.fetch("teachers"),
-          Sentinel.fetch("fees_matrix"),
-          Sentinel.fetch("users")
+          Sentinel.fetch("fees_matrix")
         ]);
 
-        if (localSt && Object.keys(localSt).length > 0) {
-          inMemoryStudentsData = localSt;
-          window.inMemoryStudentsData = localSt;
+        if (stData && Object.keys(stData).length > 0) {
+          window.inMemoryStudentsData = stData;
+          inMemoryStudentsData = stData;
+          console.log(`✔ [Universal Igris] ${Object.keys(stData).length} Students active in memory.`);
         }
-        if (localTch) window.inMemoryTeachersData = localTch;
-        if (localFees) window.inMemoryFeesMatrix = localFees;
-        if (localUsers) cachedUsersMap = localUsers;
-
-        if (typeof renderAdminStudentsDirectory === "function") renderAdminStudentsDirectory(true);
-        if (typeof window.renderAdminHomeTeacherboardCards === "function") window.renderAdminHomeTeacherboardCards();
-        if (typeof window.loadManageTeacherList === "function") window.loadManageTeacherList();
-        if (typeof window.calculateAdminEntryTabAnalytics === "function") window.calculateAdminEntryTabAnalytics();
-
-        // 2. Background Sync Check
-        const updated = await Sentinel.checkAndSyncData(forceDownload);
-        if (updated) {
-          const freshSt = await Sentinel.fetch("students");
-          const freshTch = await Sentinel.fetch("teachers");
-          const freshFees = await Sentinel.fetch("fees_matrix");
-
-          if (freshSt && Object.keys(freshSt).length > 0) {
-            inMemoryStudentsData = freshSt;
-            window.inMemoryStudentsData = freshSt;
-          }
-          if (freshTch) window.inMemoryTeachersData = freshTch;
-          if (freshFees) window.inMemoryFeesMatrix = freshFees;
-
-          if (typeof renderAdminStudentsDirectory === "function") renderAdminStudentsDirectory(true);
-          if (typeof window.calculateAdminEntryTabAnalytics === "function") window.calculateAdminEntryTabAnalytics();
-          if (typeof window.renderAdminHomeTeacherboardCards === "function") window.renderAdminHomeTeacherboardCards();
+        if (tchData) {
+          window.inMemoryTeachersData = tchData;
         }
+        if (feesData) {
+          window.inMemoryFeesMatrix = feesData;
+        }
+
+        return true;
       } catch (err) {
-        console.warn("Dashboard loader safe fallback:", err);
+        console.error("❌ Universal Sync failed:", err);
+        return false;
       }
     };
+
 
 
 
@@ -6591,7 +6612,8 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
     };
 
 
-    window.completePortalLoginSession = function(resolvedUserId, uData) {
+
+          window.completePortalLoginSession = async function(resolvedUserId, uData) {
       const previousUser = localStorage.getItem("loggedUser");
       if (previousUser !== resolvedUserId) {
         const theme = localStorage.getItem("appTheme");
@@ -6608,8 +6630,7 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
         }
       }
 
-              localStorage.setItem("loggedUser", resolvedUserId);
-      // 🔥 FIX: Plain text password localStorage se hata diya. Sirf session token save hoga.
+      localStorage.setItem("loggedUser", resolvedUserId);
       localStorage.setItem("sessionToken", btoa(uData.password + resolvedUserId)); 
       localStorage.setItem("loggedRole", uData.role);
       if(uData.assignedClass) localStorage.setItem("assignedClass", uData.assignedClass);
@@ -6618,21 +6639,19 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       if (typeof window.initNativePushAndSW === "function") {
         window.initNativePushAndSW();
       }
+
+      // 🛡️ Login hote hi Firestore se seedha Igris cache populate karein
+      const Sentinel = window.Igris || window.AccuEngine;
+      if (Sentinel && typeof Sentinel.checkAndSyncData === "function") {
+        await Sentinel.checkAndSyncData(false);
+      }
+
       renderDashboardForRole(uData.role, uData.assignedClass, uData.admn);
     };
 
 
-      // 🚀 LOGIN HOTE HI IGRIS SYNC TRIGGER
-      const Sentinel = window.Igris || window.AccuEngine;
-      if (Sentinel && typeof Sentinel.checkAndSyncData === "function") {
-        Sentinel.checkAndSyncData(false).then(() => {
-          if (role === "admin" && typeof window.loadAdminDashboardData === "function") {
-            window.loadAdminDashboardData();
-          } else if (role === "teacher" && typeof refreshAllTeacherData === "function") {
-            refreshAllTeacherData();
-          }
-        });
-      }
+
+    
 
           // --- LIVE BRUTE FORCE TIMER SETUP ---
     let lockoutTimerInterval;
@@ -6897,19 +6916,27 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
         refreshStudentDashboard();
         window.switchTab('studentTabHome', bottomNav.children[0]);
 
-            } else if(role === "teacher") {
+                       } else if(role === "teacher") {
         document.body.classList.remove("student-mode");
         document.body.classList.add("teacher-mode");
         document.getElementById("portalRoleSubHeader").innerText = "TEACHERS DASHBOARD PRO";
-
-        // 🚀 Teacher login par turant local student list populate karna
-        safeDataFetch("students").then(stData => {
-          if(stData) inMemoryStudentsData = stData;
-          refreshAllTeacherData();
-        });
-  document.getElementById("classBadgeContainer").style.display = "inline-block";
+        document.getElementById("classBadgeContainer").style.display = "inline-block";
         document.getElementById("classBadgeContainer").innerText = `Class: ${assignedClass}`;
         document.getElementById("studentStarsContainer").style.display = "none";
+
+        // 🚀 Teacher Dashboard Load: Pehle Firestore Sync, phir UI Render
+        (async () => {
+          const Sentinel = window.Igris || window.AccuEngine;
+          if (Sentinel && typeof Sentinel.checkAndSyncData === "function") {
+            await Sentinel.checkAndSyncData(false);
+          }
+          const stData = await safeDataFetch("students");
+          if (stData && Object.keys(stData).length > 0) {
+            inMemoryStudentsData = stData;
+            window.inMemoryStudentsData = stData;
+          }
+          await refreshAllTeacherData();
+        })();
 
         document.querySelectorAll(".admin-only").forEach(e => e.style.display = "none");
         document.querySelectorAll(".student-only").forEach(e => e.style.display = "none");
@@ -7294,38 +7321,27 @@ isAdminLbEditMode = false;
     };
 
 
-          async function refreshAllTeacherData() {
+             async function refreshAllTeacherData() {
       const Sentinel = window.Igris || window.AccuEngine;
       
-      // 1. Local Cache Render
-      if (Sentinel && typeof Sentinel.fetch === "function") {
-        const localSt = await Sentinel.fetch("students");
-        if (localSt && Object.keys(localSt).length > 0) {
-          inMemoryStudentsData = localSt;
-          window.inMemoryStudentsData = localSt;
-          await loadTeacherTodayAttendance();
-          loadTeacherStudentsDirectory();
-          if (typeof window.loadTeacherLeaderboard === "function") window.loadTeacherLeaderboard();
-          populateTeacherStudentDropdowns();
-        }
+      // 1. Agar phone me students data nahi hai, toh foran sync chalao!
+      let stData = Sentinel ? await Sentinel.fetch("students") : null;
+      if (!stData || Object.keys(stData).length === 0) {
+        console.log("⚠️ [Teacher Dashboard] Local students cache empty. Triggering sync...");
+        await window.ensureUniversalIgrisSync(false);
+        stData = Sentinel ? await Sentinel.fetch("students") : null;
       }
 
-      // 2. Background Sync (Naye data ke liye)
-      if (Sentinel && typeof Sentinel.checkAndSyncData === "function") {
-        const updated = await Sentinel.checkAndSyncData(false);
-        if (updated) {
-          const freshSt = await Sentinel.fetch("students");
-          if (freshSt && Object.keys(freshSt).length > 0) {
-            inMemoryStudentsData = freshSt;
-            window.inMemoryStudentsData = freshSt;
-            await loadTeacherTodayAttendance();
-            loadTeacherStudentsDirectory();
-            if (typeof window.loadTeacherLeaderboard === "function") window.loadTeacherLeaderboard();
-            populateTeacherStudentDropdowns();
-          }
-        }
+      if (stData && Object.keys(stData).length > 0) {
+        inMemoryStudentsData = stData;
+        window.inMemoryStudentsData = stData;
       }
-      
+
+      // 2. Ab attendance aur students load karo (Students ab 100% milenge)
+      await loadTeacherTodayAttendance();
+      loadTeacherStudentsDirectory();
+      if (typeof window.loadTeacherLeaderboard === "function") window.loadTeacherLeaderboard();
+      populateTeacherStudentDropdowns();
       if (typeof window.loadTeacherActiveOnlineTests === 'function') {
          window.loadTeacherActiveOnlineTests();
       }
