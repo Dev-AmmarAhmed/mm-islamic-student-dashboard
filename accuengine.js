@@ -15,8 +15,8 @@
   "use strict";
 
   const DB_NAME = "AccuEngine_Storage";
-  const DB_VERSION = 10;
-   const STORES = [
+  const DB_VERSION = 12;
+  const STORES = [
     "users",
     "students",
     "teachers",
@@ -25,12 +25,20 @@
     "attendance",
     "study_material",
     "homework",
+    "timetable",
+    "leaves",
+    "subjects",
+    "syllabus_config",
+    "syllabus_chapters",
+    "syllabus_progress",
+    "muster",
     "tests",
     "online_tests",
     "test_attempts",
     "sync_queue",
     "secure_keys"
   ];
+
 
   let idbInstance = null;
   let modules = null;
@@ -326,7 +334,11 @@
       console.log("📥 [AccuEngine] Fetching cloud data and encrypting into device storage...");
 
       try {        
-        const [studentsSnap, teachersSnap, usersSnap, feesMatrixSnap, feesEntriesSnap, attendanceSnap, studyMatSnap, homeworkSnap] = await Promise.all([
+                const [
+          studentsSnap, teachersSnap, usersSnap, feesMatrixSnap, feesEntriesSnap, 
+          attendanceSnap, studyMatSnap, homeworkSnap, timetableSnap, leavesSnap, 
+          subjectsSnap, sylConfigSnap, sylChaptersSnap, sylProgressSnap, musterSnap
+        ] = await Promise.all([
           getDocs(collection(fsDb, "students")),
           getDocs(collection(fsDb, "teachers")),
           getDocs(collection(fsDb, "users")),
@@ -334,8 +346,16 @@
           getDocs(collection(fsDb, "fees_entries")),
           getDocs(collection(fsDb, "attendance")),
           getDocs(collection(fsDb, "study_material")),
-          getDocs(collection(fsDb, "homework"))
+          getDocs(collection(fsDb, "homework")),
+          getDocs(collection(fsDb, "timetable")),
+          getDocs(collection(fsDb, "leaves")),
+          getDocs(collection(fsDb, "subjects")),
+          getDocs(collection(fsDb, "syllabus_config")),
+          getDocs(collection(fsDb, "syllabus_chapters")),
+          getDocs(collection(fsDb, "syllabus_progress")),
+          getDocs(collection(fsDb, "muster"))
         ]);
+
 
 
         // 1. Students
@@ -379,10 +399,45 @@
         studyMatSnap.forEach((d) => { matMap[d.id] = d.data(); });
         await idbSetBatch("study_material", matMap);
 
-        // 8. Homework Encrypted Batch
+               // 8. Homework Encrypted Batch
         const hwMap = {};
         homeworkSnap.forEach((d) => { hwMap[d.id] = d.data(); });
         await idbSetBatch("homework", hwMap);
+
+        // 9. Timetable
+        const ttMap = {};
+        timetableSnap.forEach((d) => { ttMap[d.id] = d.data().schedule || d.data(); });
+        await idbSetBatch("timetable", ttMap);
+
+        // 10. Leaves (Students & Teachers)
+        const lvMap = {};
+        leavesSnap.forEach((d) => { lvMap[d.id] = d.data(); });
+        await idbSetBatch("leaves", lvMap);
+
+        // 11. Subjects
+        const subMap = {};
+        subjectsSnap.forEach((d) => { subMap[d.id] = d.data(); });
+        await idbSetBatch("subjects", subMap);
+
+        // 12. Syllabus Config (Enabled subjects per class)
+        const sylCfgMap = {};
+        sylConfigSnap.forEach((d) => { sylCfgMap[d.id] = d.data().subjects || d.data(); });
+        await idbSetBatch("syllabus_config", sylCfgMap);
+
+        // 13. Syllabus Chapters
+        const chMap = {};
+        sylChaptersSnap.forEach((d) => { chMap[d.id] = d.data().chapters || d.data(); });
+        await idbSetBatch("syllabus_chapters", chMap);
+
+        // 14. Syllabus Progress
+        const progMap = {};
+        sylProgressSnap.forEach((d) => { progMap[d.id] = d.data().progress || d.data(); });
+        await idbSetBatch("syllabus_progress", progMap);
+
+        // 15. Teachers' Muster
+        const musMap = {};
+        musterSnap.forEach((d) => { musMap[d.id] = d.data(); });
+        await idbSetBatch("muster", musMap);
 
         const finalVer = remoteVersion || Date.now().toString();
         localStorage.setItem("accu_local_version", finalVer);
@@ -486,6 +541,137 @@
           return res;
         }
         return all;
+      }
+
+           // Timetable Resolver
+      if (root === "timetable") {
+        if (parts[1]) {
+          const cls = String(parts[1]).replace(/class\s*/i, "").trim();
+          return await idbGet("timetable", cls);
+        }
+        return await idbGetAllMap("timetable");
+      }
+
+      // Leaves Resolver (leave_applications & teacher_leave_applications)
+      if (root === "leave_applications" || root === "teacher_leave_applications") {
+        const allLeaves = await idbGetAllMap("leaves");
+        const isTeacherQuery = root === "teacher_leave_applications";
+        if (parts[1]) {
+          const targetAdmn = String(parts[1]).trim();
+          const userLeaves = {};
+          Object.entries(allLeaves).forEach(([k, v]) => {
+            if (v && String(v.admn).trim() === targetAdmn) userLeaves[k] = v;
+          });
+          return userLeaves;
+        }
+        const filteredAll = {};
+        Object.entries(allLeaves).forEach(([k, v]) => {
+          if (v && (isTeacherQuery ? v.applicantRole === "teacher" : v.applicantRole !== "teacher")) {
+            if (!filteredAll[v.admn]) filteredAll[v.admn] = {};
+            filteredAll[v.admn][v.id] = v;
+          }
+        });
+        return filteredAll;
+      }
+
+      // Subjects Resolver
+      if (root === "subjects") {
+        const allSubs = await idbGetAllMap("subjects");
+        if (parts[1]) {
+          const cls = String(parts[1]).replace(/class\s*/i, "").trim();
+          const classSubs = {};
+          Object.entries(allSubs).forEach(([k, v]) => {
+            if (v && String(v.class).replace(/class\s*/i, "").trim() === cls) classSubs[k] = v;
+          });
+          return classSubs;
+        }
+        return allSubs;
+      }
+
+      // Enabled Syllabus Resolver
+      if (root === "enabled_syllabus") {
+        if (parts[1]) {
+          const cls = String(parts[1]).replace(/class\s*/i, "").trim();
+          return await idbGet("syllabus_config", cls);
+        }
+        return await idbGetAllMap("syllabus_config");
+      }
+
+      // Syllabus Chapters Resolver
+      if (root === "syllabus_chapters") {
+        if (parts[1] && parts[2]) {
+          const cls = String(parts[1]).replace(/class\s*/i, "").trim();
+          const sub = String(parts[2]).trim();
+          return await idbGet("syllabus_chapters", `${cls}_${sub}`);
+        } else if (parts[1]) {
+          const cls = String(parts[1]).replace(/class\s*/i, "").trim();
+          const allCh = await idbGetAllMap("syllabus_chapters");
+          const classCh = {};
+          Object.entries(allCh).forEach(([k, v]) => {
+            if (k.startsWith(`${cls}_`)) {
+              const subName = k.substring(cls.length + 1);
+              classCh[subName] = v;
+            }
+          });
+          return classCh;
+        }
+        const allCh = await idbGetAllMap("syllabus_chapters");
+        const nested = {};
+        Object.entries(allCh).forEach(([k, v]) => {
+          const idx = k.indexOf("_");
+          if (idx !== -1) {
+            const cls = k.substring(0, idx);
+            const sub = k.substring(idx + 1);
+            if (!nested[cls]) nested[cls] = {};
+            nested[cls][sub] = v;
+          }
+        });
+        return nested;
+      }
+
+      // Syllabus Progress Resolver
+      if (root === "syllabus_progress") {
+        if (parts[1] && parts[2]) {
+          const admn = String(parts[1]).trim();
+          const sub = String(parts[2]).trim();
+          return await idbGet("syllabus_progress", `${admn}_${sub}`);
+        } else if (parts[1]) {
+          const admn = String(parts[1]).trim();
+          const allP = await idbGetAllMap("syllabus_progress");
+          const res = {};
+          Object.entries(allP).forEach(([k, v]) => {
+            if (k.startsWith(`${admn}_`)) {
+              const subName = k.substring(admn.length + 1);
+              res[subName] = v;
+            }
+          });
+          return res;
+        }
+        const allP = await idbGetAllMap("syllabus_progress");
+        const nested = {};
+        Object.entries(allP).forEach(([k, v]) => {
+          const idx = k.indexOf("_");
+          if (idx !== -1) {
+            const admn = k.substring(0, idx);
+            const sub = k.substring(idx + 1);
+            if (!nested[admn]) nested[admn] = {};
+            nested[admn][sub] = v;
+          }
+        });
+        return nested;
+      }
+
+      // Muster Resolver
+      if (root === "muster") {
+        if (parts[1] && parts[2] && parts[3]) {
+          // muster/Month/day_X/teacherUser
+          const mDoc = await idbGet("muster", parts[1]) || {};
+          const dayObj = mDoc[parts[2]] || {};
+          return dayObj[parts[3]] || null;
+        } else if (parts[1]) {
+          return await idbGet("muster", parts[1]);
+        }
+        return await idbGetAllMap("muster");
       }
 
       // Standard Stores (students, teachers, users, fees_matrix)
