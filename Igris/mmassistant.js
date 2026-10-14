@@ -1,6 +1,6 @@
 /**
  * ====================================================================
- * MMASSISTANT AI (GROQ POWERED + IGRIS SECURE CACHE)
+ * MMASSISTANT AI (DYNAMIC ACTIVE MODEL SELECTOR + IGRIS CACHE)
  * M.M ISLAMIC ENGLISH SCHOOL ERP
  * ====================================================================
  */
@@ -10,9 +10,12 @@
 
   const GROQ_API_KEY = "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";
   const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
+  const GROQ_MODELS_ENDPOINT = "https://api.groq.com/openai/v1/models";
   const STORAGE_KEY = "mm_assistant_chat_history_v1";
 
-  // 2D AI Sparkle Icon (Copyright-Free Gemini style vector)
+  let activeModelCache = null;
+
+  // 2D AI Sparkle SVG
   const AI_SPARKLE_SVG = `
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M12 2C12 7.52285 7.52285 12 2 12C7.52285 12 12 16.4771 12 22C12 16.4771 16.4771 12 22 12C16.4771 12 12 7.52285 12 2Z" fill="url(#sparkleGrad)" />
@@ -247,8 +250,51 @@
   }
 
   // ----------------------------------------------------
-  // 4. GROQ API WITH AUTO-FALLBACK
+  // 4. LIVE ACTIVE MODEL DISCOVERY & INFERENCE
   // ----------------------------------------------------
+  async function getBestActiveGroqModel() {
+    if (activeModelCache) return activeModelCache;
+
+    try {
+      const res = await fetch(GROQ_MODELS_ENDPOINT, {
+        method: "GET",
+        headers: { "Authorization": `Bearer ${GROQ_API_KEY}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const availableIds = (data.data || []).map(m => m.id);
+
+        // Preference order of currently supported active models
+        const preferences = [
+          "llama-3.3-70b-versatile",
+          "llama-3.1-8b-instant",
+          "llama-3.2-3b-preview",
+          "llama-3.2-1b-preview",
+          "mixtral-8x7b-32768"
+        ];
+
+        for (const pref of preferences) {
+          if (availableIds.includes(pref)) {
+            activeModelCache = pref;
+            console.log("⚡ [MMAssistant] Active Groq Model Selected:", activeModelCache);
+            return activeModelCache;
+          }
+        }
+
+        // Agar koi match na ho toh pehla active model pick karein
+        if (availableIds.length > 0) {
+          activeModelCache = availableIds[0];
+          return activeModelCache;
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to fetch live model list:", e);
+    }
+
+    // Default safe fallback
+    return "llama-3.1-8b-instant";
+  }
+
   async function callGroqLlama(userPrompt, verifiedContext) {
     const role = localStorage.getItem("loggedRole") || "admin";
     const user = localStorage.getItem("loggedUser") || "Admin";
@@ -272,46 +318,36 @@ OPERATING RULES:
    - Be concise, friendly, and respectful.
 `;
 
-    // Fail-safe model waterfall
-    const models = ["llama-3.1-8b-instant", "llama3-70b-8192", "gemma2-9b-it"];
-    let lastError = null;
+    const selectedModel = await getBestActiveGroqModel();
 
-    for (const currentModel of models) {
-      try {
-        const payload = {
-          model: currentModel,
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt }
-          ],
-          temperature: 0.25,
-          max_tokens: 650
-        };
+    const payload = {
+      model: selectedModel,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      temperature: 0.25,
+      max_tokens: 650
+    };
 
-        const response = await fetch(GROQ_ENDPOINT, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${GROQ_API_KEY}`
-          },
-          body: JSON.stringify(payload)
-        });
+    const response = await fetch(GROQ_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${GROQ_API_KEY}`
+      },
+      body: JSON.stringify(payload)
+    });
 
-        if (response.ok) {
-          const data = await response.json();
-          if (data.choices && data.choices[0] && data.choices[0].message) {
-            return data.choices[0].message.content.trim();
-          }
-        } else {
-          const errData = await response.json().catch(() => ({}));
-          lastError = new Error(errData.error?.message || `HTTP ${response.status}`);
-        }
-      } catch (e) {
-        lastError = e;
-      }
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      // Reset cache if model failed
+      activeModelCache = null;
+      throw new Error(errData.error?.message || `HTTP ${response.status}`);
     }
 
-    throw lastError || new Error("Failed to receive response from AI engine.");
+    const data = await response.json();
+    return data.choices[0].message.content.trim();
   }
 
   // ----------------------------------------------------
