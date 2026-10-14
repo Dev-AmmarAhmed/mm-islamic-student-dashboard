@@ -335,6 +335,24 @@
       } catch (e) {}
     },
 
+
+        // ----------------------------------------------------
+    // STRICT UPDATE-ONLY SENTINEL (0 READS IF NO UPDATE)
+    // ----------------------------------------------------
+    _syncInProgress: false,
+
+    bumpSyncVersion: async function () {
+      if (!navigator.onLine || !modules) return;
+      try {
+        const { db: rtdb, ref, set } = modules;
+        if (typeof set !== "function") return;
+        const newVer = Date.now().toString();
+        await set(ref(rtdb, "sync_triggers/version"), newVer);
+        localStorage.setItem("igris_local_version", newVer);
+        console.log("⚡ [Igris Sentinel] Remote version bumped:", newVer);
+      } catch (e) {}
+    },
+
     checkAndSyncData: async function (force = false) {
       if (!modules) return false;
       if (this._syncInProgress) return false;
@@ -343,6 +361,7 @@
       let remoteVersion = null;
       const localVersion = localStorage.getItem("igris_local_version");
 
+      // 1. RTDB se sirf 10-byte ka version number check karein
       if (navigator.onLine && rtdb) {
         try {
           const snap = await get(child(ref(rtdb), "sync_triggers/version"));
@@ -352,25 +371,34 @@
             remoteVersion = "10001";
             await set(ref(rtdb, "sync_triggers/version"), remoteVersion);
           }
-        } catch (e) {}
+        } catch (e) {
+          console.warn("Sentinel check error:", e);
+        }
       }
 
-      // Check if decrypted data is already available locally
+      // Check karein ki local cache me students ka data pehle se hai ya nahi
       const localStudents = await idbGetAllMap("students");
-      const hasLocalStudents = Object.keys(localStudents).length > 0;
+      const hasLocalData = Object.keys(localStudents).length > 0;
 
-      // 🛑 STRICT GATE: Agar local data decrypt hokar mil gaya hai aur version match hai -> 0 READS!
-      if (!force && hasLocalStudents && remoteVersion && remoteVersion === localVersion) {
-        console.log("🎯 [Igris] 0 Firestore Reads: Loaded from local unencrypted memory.");
-        return false;
-      }
-      if (!navigator.onLine && hasLocalStudents) {
+      // 🛑 STRICT RULE: Agar local data maujood hai aur remoteVersion == localVersion hai, 
+      // toh Firestore ko bilkul touch mat karo! (ZERO READS)
+      if (!force && hasLocalData && remoteVersion && remoteVersion === localVersion) {
+        console.log("🔒 [Igris Gatekeeper] No updates detected. Cloud download BLOCKED (0 Reads).");
         return false;
       }
 
+      // Agar offline hain aur local data hai tab bhi download nahi hoga
+      if (!navigator.onLine && hasLocalData) {
+        return false;
+      }
+
+      // 🚨 Download SIRF 2 conditions me chalega:
+      // Condition A: Local cache bilkul khali hai (Naya phone / fresh install).
+      // Condition B: Remote database par kisi teacher/admin ne naya update kiya hai (remoteVersion !== localVersion).
+      console.log("📥 [Igris Sentinel] Update detected or fresh install. Starting single cloud sync...");
       this._syncInProgress = true;
+
       try {
-        console.log("📥 [Igris] Syncing fresh school records into encrypted cache...");
         const [
           studentsSnap, teachersSnap, usersSnap, feesMatrixSnap, feesEntriesSnap, 
           attendanceSnap, studyMatSnap, homeworkSnap, timetableSnap, leavesSnap, 
@@ -459,16 +487,19 @@
         const attpMap = {}; testAttemptsSnap.forEach(d => { attpMap[d.id] = d.data(); });
         await idbSetBatch("test_attempts", attpMap);
 
+        // Version lock karein
         const finalVer = remoteVersion || "10001";
         localStorage.setItem("igris_local_version", finalVer);
+        console.log("✔ [Igris Sync Done] Cache updated to version:", finalVer);
         return true;
       } catch (err) {
-        console.error("Sync error:", err);
+        console.error("Sync failed:", err);
         return false;
       } finally {
         this._syncInProgress = false;
       }
     },
+
 
     // 🚀 HAR QUERY PAR 100% UNENCRYPTED PLAIN OBJECT MILEGA
     fetch: async function (path) {
