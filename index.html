@@ -5732,6 +5732,14 @@ Exact Output JSON Format Required:
       }
     };
 
+          // 🛡️ ADMIN DASHBOARD MASTER LOADER (IGRIS CONNECTED)
+    window.loadAdminDashboardData = async function(force = false) {
+      await window.ensureUniversalIgrisSync(force);
+      if (typeof renderAdminStudentsDirectory === "function") renderAdminStudentsDirectory(true);
+      if (typeof window.renderAdminHomeTeacherboardCards === "function") window.renderAdminHomeTeacherboardCards();
+      if (typeof window.calculateAdminEntryTabAnalytics === "function") window.calculateAdminEntryTabAnalytics();
+    };
+
 
 
 
@@ -6916,7 +6924,7 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
         refreshStudentDashboard();
         window.switchTab('studentTabHome', bottomNav.children[0]);
 
-                       } else if(role === "teacher") {
+                    } else if(role === "teacher") {
         document.body.classList.remove("student-mode");
         document.body.classList.add("teacher-mode");
         document.getElementById("portalRoleSubHeader").innerText = "TEACHERS DASHBOARD PRO";
@@ -6924,25 +6932,11 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
         document.getElementById("classBadgeContainer").innerText = `Class: ${assignedClass}`;
         document.getElementById("studentStarsContainer").style.display = "none";
 
-        // 🚀 Teacher Dashboard Load: Pehle Firestore Sync, phir UI Render
-        (async () => {
-          const Sentinel = window.Igris || window.AccuEngine;
-          if (Sentinel && typeof Sentinel.checkAndSyncData === "function") {
-            await Sentinel.checkAndSyncData(false);
-          }
-          const stData = await safeDataFetch("students");
-          if (stData && Object.keys(stData).length > 0) {
-            inMemoryStudentsData = stData;
-            window.inMemoryStudentsData = stData;
-          }
-          await refreshAllTeacherData();
-        })();
-
         document.querySelectorAll(".admin-only").forEach(e => e.style.display = "none");
         document.querySelectorAll(".student-only").forEach(e => e.style.display = "none");
         document.querySelectorAll(".teacher-only").forEach(e => e.style.display = "block");
 
-                bottomNav.innerHTML = `
+        bottomNav.innerHTML = `
           <div class="nav-item active" onclick="switchTab('teacherTabHome', this, event)"><div class="nav-icon">🏠</div>Home</div>
           <div class="nav-item" data-tfeat="attend" onclick="window.runTeacherFeature('attend', () => switchTab('teacherTabAttend', this, event))"><div class="nav-icon">📅</div>Attend</div>
           <div class="nav-item" data-tfeat="trackAtt" onclick="window.runTeacherFeature('trackAtt', () => switchTab('teacherTabTrackAtt', this, event))"><div class="nav-icon">🔍</div>Track</div>
@@ -6952,7 +6946,6 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
         `;
         if (typeof window.syncTeacherFeatureLocksRealtime === "function") window.syncTeacherFeatureLocksRealtime();
 
-        
         const activeSelect = document.getElementById("teacherActiveSelect");
         if(activeSelect) {
           activeSelect.innerHTML = "";
@@ -6961,7 +6954,15 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
         }
 
         window.switchTab('teacherTabHome', bottomNav.children[0]);
-        setTimeout(() => { if(typeof window.refreshTeacherDashboardData === 'function') window.refreshTeacherDashboardData(); refreshAllTeacherData(); }, 100);
+
+        // 🚀 Pehle Sync COMPLETE hoga, USKE BAAD hi UI populate hogi (Zero Race Condition)
+        (async () => {
+          await window.ensureUniversalIgrisSync(false);
+          await refreshAllTeacherData();
+          if (typeof window.refreshTeacherDashboardData === 'function') {
+            await window.refreshTeacherDashboardData();
+          }
+        })();
 
       } else {
         document.body.classList.remove("teacher-mode", "student-mode");
@@ -11228,11 +11229,13 @@ window.checkMusterButtonStates();
             }
           }
 
-          if(loggedRole === "student") {
+                if(loggedRole === "student") {
+            await window.ensureUniversalIgrisSync(false);
             if(typeof refreshStudentDashboard === "function") {
               await refreshStudentDashboard();
             }
           }
+
         }
       }, 200);
 
