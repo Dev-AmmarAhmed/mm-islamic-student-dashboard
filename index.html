@@ -29,7 +29,7 @@
   <script src="./Igris/igris.js"></script>
 
    <!-- MMASSISTANT AI (FORCED FRESH CACHE) -->
-<script src="./Igris/mmassistant.js?v=8.0"></script>
+<script src="./Igris/mmassistant.js?v=7.5"></script>
 
   <!-- 🚨 IGRIS INTEGRITY VERIFICATION GATE (ANTI-BYPASS PROTOCOL) -->
   <script>
@@ -8267,8 +8267,10 @@ document.getElementById("hwTitleInput").value = "";
           card.style.background = "rgba(124, 58, 237, 0.08)";
         }
         card.onclick = () => window.openStudentProfileModal(s.admn);
-        card.innerHTML = `<img src="${s.photo || 'https://via.placeholder.com/150'}" class="student-avatar" alt="Avatar"><div style="flex:1;"><div style="font-size:13px; font-weight:800;">${s.name} ${isMatched ? '<span style="font-size:10px; background:#7c3aed; color:white; padding:2px 6px; border-radius:6px; margin-left:4px;">Match</span>' : ''}</div><div style="font-size:11px; color:var(--text-muted);">Admn No: ${s.admn} | Phone: ${s.phone}</div><div style="font-size:10px; font-weight:700; color:#0288d1; margin-top:2px;">DOB: ${s.dob || '-'} | PTS: ${s.points || 0}</div></div><div style="font-size:16px;">✏️</div>`;
-        container.appendChild(card);
+      const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(s.name || 'S')}&background=7c3aed&color=fff&bold=true`;
+const avatarSrc = (s.photo && !s.photo.includes("via.placeholder.com") && !s.photo.startsWith("firestore://")) ? s.photo : defaultAvatar;
+card.innerHTML = `<img src="${avatarSrc}" onerror="this.src='${defaultAvatar}'" class="student-avatar" alt="Avatar">...`;
+  container.appendChild(card);
       });
     }
 
@@ -9030,19 +9032,19 @@ document.getElementById("hwTitleInput").value = "";
 
         if(!newAdmn || !name) { alert("Student Name and Admission No are required."); return; }
 
-        const currentStudent = await getStudentRecord(oldAdmn);
-        let photoUrl = currentStudent ? (currentStudent.photo || "https://via.placeholder.com/150") : "https://via.placeholder.com/150";
+               const currentStudent = await getStudentRecord(oldAdmn);
+        const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0288d1&color=fff&bold=true`;
+        let photoUrl = (currentStudent && currentStudent.photo && !currentStudent.photo.includes("via.placeholder.com")) ? currentStudent.photo : defaultAvatar;
 
         const croppedData = window.croppedPhotosMap && window.croppedPhotosMap["profPhotoFileInput"];
         if (croppedData) {
-          photoUrl = await window.saveMediaToFirestore("student_photos", newAdmn, croppedData, { name: name, class: cls });
+          photoUrl = croppedData;
           delete window.croppedPhotosMap["profPhotoFileInput"];
         } else if(photoFile && photoFile.files.length > 0) {
-          const uploadedPhoto = await readFileAsDataURL(photoFile.files[0], 500, 0.72);
-          if(uploadedPhoto) {
-            photoUrl = await window.saveMediaToFirestore("student_photos", newAdmn, uploadedPhoto, { name: name, class: cls });
-          }
+          const uploadedPhoto = await readFileAsDataURL(photoFile.files[0], 400, 0.7);
+          if(uploadedPhoto) photoUrl = uploadedPhoto;
         }
+
 
         const updatedStudentObj = {
           ...(currentStudent || {}),
@@ -9142,16 +9144,21 @@ document.getElementById("hwTitleInput").value = "";
         const dob = document.getElementById("regDob").value;
         const fileInput = document.getElementById("regPhotoFile");
 
-        if(!name || !std || !rawPhone) { alert("Please fill Name, Class, and Phone number."); return; }
-              let photoUrl = "https://via.placeholder.com/150";
-        if(fileInput && fileInput.files.length > 0) {
-          const uploadedPhoto = await readFileAsDataURL(fileInput.files[0], 500, 0.72);
-          if(uploadedPhoto) {
-            photoUrl = await window.saveMediaToFirestore("student_photos", finalAdmn, uploadedPhoto, { name: name, class: std });
-          }
+               if(!name || !std || !rawPhone) { alert("Please fill Name, Class, and Phone number."); return; }
+
+        const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0288d1&color=fff&bold=true`;
+        let photoUrl = defaultAvatar;
+
+        const croppedData = window.croppedPhotosMap && window.croppedPhotosMap["regPhotoFile"];
+        if (croppedData) {
+          photoUrl = croppedData;
+          delete window.croppedPhotosMap["regPhotoFile"];
+        } else if (fileInput && fileInput.files.length > 0) {
+          const uploadedPhoto = await readFileAsDataURL(fileInput.files[0], 400, 0.7);
+          if (uploadedPhoto) photoUrl = uploadedPhoto;
         }
 
-                    const studentRecord = { 
+        const studentRecord = { 
           srNo: finalAdmn, 
           admn: finalAdmn, 
           name: name, 
@@ -9163,7 +9170,8 @@ document.getElementById("hwTitleInput").value = "";
           points: 0 
         };
 
-              // Firestore mein User credentials save karna (Email included)
+        // 🚀 1. Write to Firestore 'students' & 'users'
+        await setDoc(doc(fsDb, "students", String(finalAdmn)), studentRecord, { merge: true });
         await setDoc(doc(fsDb, "users", String(finalAdmn)), {
           password: "MM",
           role: "student",
@@ -9173,12 +9181,12 @@ document.getElementById("hwTitleInput").value = "";
           createdAt: new Date().toISOString()
         }, { merge: true });
 
-
-        // 🚀 2. Local AccuEngine Cache Instant Update
-        if (window.AccuEngine) {
-          await window.AccuEngine.setLocal("students", finalAdmn, studentRecord);
+        // 🚀 2. Update Unified Memory & Local Cache
+        window.MM_STORE.students[finalAdmn] = studentRecord;
+        const Sentinel = window.Igris || window.AccuEngine;
+        if (Sentinel && typeof Sentinel.setLocal === "function") {
+          await Sentinel.setLocal("students", finalAdmn, studentRecord);
         }
-        inMemoryStudentsData[finalAdmn] = studentRecord;
 
         // 🚀 3. RTDB Lightweight Sentinel (Kill-switch flag only)
         await set(ref(db, `user_status/${finalAdmn}`), "active").catch(() => {});
