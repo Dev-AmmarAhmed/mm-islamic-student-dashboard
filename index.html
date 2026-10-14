@@ -5634,52 +5634,52 @@ Exact Output JSON Format Required:
 
 
           // 🛡️ IGRIS MASTER DASHBOARD & MEMORY LOADER
-    window.loadAdminDashboardData = async function(forceDownload = false) {
+      window.loadAdminDashboardData = async function(forceDownload = false) {
       const Sentinel = window.Igris || window.AccuEngine;
+      if (!Sentinel) return;
+
       try {
         await window.ensureFirebaseAuth();
 
-        // 1. Pehle local cache se instant load karo (Bina kisi network delay ya quota block ke)
-        if (Sentinel && typeof Sentinel.fetch === "function") {
-          const [localSt, localTch, localFees, localUsers] = await Promise.all([
-            Sentinel.fetch("students"),
-            Sentinel.fetch("teachers"),
-            Sentinel.fetch("fees_matrix"),
-            Sentinel.fetch("users")
-          ]);
+        // 1. SABSE PEHLE: Bina kisi network call ke local cache se data turant screen par render karein
+        const [localSt, localTch, localFees, localUsers] = await Promise.all([
+          Sentinel.fetch("students"),
+          Sentinel.fetch("teachers"),
+          Sentinel.fetch("fees_matrix"),
+          Sentinel.fetch("users")
+        ]);
 
-          if (localSt && Object.keys(localSt).length > 0) {
-            inMemoryStudentsData = localSt;
-            window.inMemoryStudentsData = localSt;
-          }
-          if (localTch) window.inMemoryTeachersData = localTch;
-          if (localFees) window.inMemoryFeesMatrix = localFees;
-          if (localUsers) cachedUsersMap = localUsers;
-
-          // UI turant update karo
-          if (typeof renderAdminStudentsDirectory === "function") renderAdminStudentsDirectory(true);
-          if (typeof window.renderAdminHomeTeacherboardCards === "function") window.renderAdminHomeTeacherboardCards();
-          if (typeof window.loadManageTeacherList === "function") window.loadManageTeacherList();
-          if (typeof window.calculateAdminEntryTabAnalytics === "function") window.calculateAdminEntryTabAnalytics();
+        if (localSt && Object.keys(localSt).length > 0) {
+          inMemoryStudentsData = localSt;
+          window.inMemoryStudentsData = localSt;
         }
+        if (localTch) window.inMemoryTeachersData = localTch;
+        if (localFees) window.inMemoryFeesMatrix = localFees;
+        if (localUsers) cachedUsersMap = localUsers;
 
-        // 2. Background mein sync check karo
-        if (Sentinel && typeof Sentinel.checkAndSyncData === "function") {
-          const didSync = await Sentinel.checkAndSyncData(forceDownload);
-          if (didSync) {
-            const freshSt = await Sentinel.fetch("students");
-            if (freshSt && Object.keys(freshSt).length > 0) {
-              inMemoryStudentsData = freshSt;
-              window.inMemoryStudentsData = freshSt;
-              if (typeof renderAdminStudentsDirectory === "function") renderAdminStudentsDirectory(true);
-              if (typeof window.calculateAdminEntryTabAnalytics === "function") window.calculateAdminEntryTabAnalytics();
-            }
+        // UI foran render ho jayega
+        if (typeof renderAdminStudentsDirectory === "function") renderAdminStudentsDirectory(true);
+        if (typeof window.renderAdminHomeTeacherboardCards === "function") window.renderAdminHomeTeacherboardCards();
+        if (typeof window.loadManageTeacherList === "function") window.loadManageTeacherList();
+        if (typeof window.calculateAdminEntryTabAnalytics === "function") window.calculateAdminEntryTabAnalytics();
+
+        // 2. BACKGROUND CHECK: Sentinel check karega ki naya update aaya hai ya nahi.
+        // Agar naya update hoga tabhi download hoga, warna return false (0 READS)
+        const updated = await Sentinel.checkAndSyncData(forceDownload);
+        if (updated) {
+          const freshSt = await Sentinel.fetch("students");
+          if (freshSt && Object.keys(freshSt).length > 0) {
+            inMemoryStudentsData = freshSt;
+            window.inMemoryStudentsData = freshSt;
+            if (typeof renderAdminStudentsDirectory === "function") renderAdminStudentsDirectory(true);
+            if (typeof window.calculateAdminEntryTabAnalytics === "function") window.calculateAdminEntryTabAnalytics();
           }
         }
-      } catch (err) {
-        console.warn("Dashboard loader safe fallback:", err);
+      } catch (e) {
+        console.warn("Local memory loader error:", e);
       }
     };
+
 
 
 // ==========================================
