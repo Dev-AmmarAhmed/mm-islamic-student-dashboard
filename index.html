@@ -5635,55 +5635,55 @@ Exact Output JSON Format Required:
       }
     }
 
-    // 🚀 MASTER ACCUENGINE SENTINEL LOADER (LOGIN KE PEHLE READY)
-    window.loadAdminDashboardData = async function(forceDownload = false) {
-      console.log("⚡ [AccuEngine] Sync check started...");
 
+          // 🛡️ IGRIS MASTER DASHBOARD & MEMORY LOADER
+    window.loadAdminDashboardData = async function(forceDownload = false) {
+      const Sentinel = window.Igris || window.AccuEngine;
       try {
         await window.ensureFirebaseAuth();
 
-        // 1. Version Check: Naya data hai toh download karega, warna 0ms me local storage se load karega
-        if (window.AccuEngine && typeof window.AccuEngine.checkAndSyncData === "function") {
-          await window.AccuEngine.checkAndSyncData(forceDownload);
+        // 1. Pehle local cache se instant load karo (Bina kisi network delay ya quota block ke)
+        if (Sentinel && typeof Sentinel.fetch === "function") {
+          const [localSt, localTch, localFees, localUsers] = await Promise.all([
+            Sentinel.fetch("students"),
+            Sentinel.fetch("teachers"),
+            Sentinel.fetch("fees_matrix"),
+            Sentinel.fetch("users")
+          ]);
+
+          if (localSt && Object.keys(localSt).length > 0) {
+            inMemoryStudentsData = localSt;
+            window.inMemoryStudentsData = localSt;
+          }
+          if (localTch) window.inMemoryTeachersData = localTch;
+          if (localFees) window.inMemoryFeesMatrix = localFees;
+          if (localUsers) cachedUsersMap = localUsers;
+
+          // UI turant update karo
+          if (typeof renderAdminStudentsDirectory === "function") renderAdminStudentsDirectory(true);
+          if (typeof window.renderAdminHomeTeacherboardCards === "function") window.renderAdminHomeTeacherboardCards();
+          if (typeof window.loadManageTeacherList === "function") window.loadManageTeacherList();
+          if (typeof window.calculateAdminEntryTabAnalytics === "function") window.calculateAdminEntryTabAnalytics();
         }
 
-        // 2. Local Fast Fetch
-        const [studentsData, teachersData, feesMatrixData, usersData] = await Promise.all([
-          window.AccuEngine.fetch("students"),
-          window.AccuEngine.fetch("teachers"),
-          window.AccuEngine.fetch("fees_matrix"),
-          window.AccuEngine.fetch("users")
-        ]);
-
-        if (studentsData && Object.keys(studentsData).length > 0) {
-          inMemoryStudentsData = studentsData;
-          window.inMemoryStudentsData = studentsData;
-          console.log(`✔ [AccuEngine] Memory active: ${Object.keys(studentsData).length} students.`);
+        // 2. Background mein sync check karo
+        if (Sentinel && typeof Sentinel.checkAndSyncData === "function") {
+          const didSync = await Sentinel.checkAndSyncData(forceDownload);
+          if (didSync) {
+            const freshSt = await Sentinel.fetch("students");
+            if (freshSt && Object.keys(freshSt).length > 0) {
+              inMemoryStudentsData = freshSt;
+              window.inMemoryStudentsData = freshSt;
+              if (typeof renderAdminStudentsDirectory === "function") renderAdminStudentsDirectory(true);
+              if (typeof window.calculateAdminEntryTabAnalytics === "function") window.calculateAdminEntryTabAnalytics();
+            }
+          }
         }
-
-        if (teachersData) window.inMemoryTeachersData = teachersData;
-        if (feesMatrixData) window.inMemoryFeesMatrix = feesMatrixData;
-        if (usersData) cachedUsersMap = usersData;
-
-        // 3. Screen par data dikhana
-        if (typeof renderAdminStudentsDirectory === "function") {
-          renderAdminStudentsDirectory(true);
-        }
-        if (typeof window.renderAdminHomeTeacherboardCards === "function") {
-          window.renderAdminHomeTeacherboardCards();
-        }
-        if (typeof window.loadManageTeacherList === "function") {
-          window.loadManageTeacherList();
-        }
-        if (typeof window.calculateAdminEntryTabAnalytics === "function") {
-          window.calculateAdminEntryTabAnalytics();
-        }
-
-        console.log("🎉 [AccuEngine] Admin Dashboard Loaded Successfully!");
       } catch (err) {
-        console.error("❌ Admin loader error:", err);
+        console.warn("Dashboard loader safe fallback:", err);
       }
     };
+
 
 // ==========================================
     // 🔐 ACCUENGINE APP LOCK & BIOMETRICS ENGINE
@@ -7254,17 +7254,29 @@ isAdminLbEditMode = false;
     };
 
 
-     async function refreshAllTeacherData() {
-      const stData = await safeDataFetch("students") || {};
-      inMemoryStudentsData = stData; // 🚀 Student data memory mein assign hua
+        async function refreshAllTeacherData() {
+      const Sentinel = window.Igris || window.AccuEngine;
+      let stData = {};
+      if (Sentinel && typeof Sentinel.fetch === "function") {
+        stData = await Sentinel.fetch("students") || {};
+      }
+      if (!stData || Object.keys(stData).length === 0) {
+        stData = await safeDataFetch("students") || {};
+      }
+      if (stData && Object.keys(stData).length > 0) {
+        inMemoryStudentsData = stData;
+        window.inMemoryStudentsData = stData;
+      }
+
       await loadTeacherTodayAttendance();
       loadTeacherStudentsDirectory();
-      window.loadTeacherLeaderboard();
+      if (typeof window.loadTeacherLeaderboard === "function") window.loadTeacherLeaderboard();
       populateTeacherStudentDropdowns();
       if (typeof window.loadTeacherActiveOnlineTests === 'function') {
          window.loadTeacherActiveOnlineTests();
       }
     }
+
 
 
 
@@ -11116,23 +11128,33 @@ window.checkMusterButtonStates();
         resizeObserver.observe(pane);
     });
 
-                    window.initNativePushAndSW();
+              window.initNativePushAndSW();
       window.checkAppLockOnStartup();
-      setTimeout(() => {
+      setTimeout(async () => {
         const loggedUser = localStorage.getItem("loggedUser"), loggedRole = localStorage.getItem("loggedRole");
         if(loggedUser && loggedRole) {
           if(typeof window.listenToNotifications === 'function') window.listenToNotifications();
+          
           if(loggedRole === "teacher") { 
-            window.loadTeacherBoardNotifications(); 
-            window.checkTeacherDailyClaimStatus(); 
+            await refreshAllTeacherData();
+            if(typeof window.loadTeacherBoardNotifications === 'function') window.loadTeacherBoardNotifications(); 
+            if(typeof window.checkTeacherDailyClaimStatus === 'function') window.checkTeacherDailyClaimStatus(); 
           }
+          
           if(loggedRole === "admin") { 
-            // Duplicate download call eliminated. UI will update from memory.
-            window.calculateAdminEntryTabAnalytics(); 
-            window.renderAdminHomeTeacherboardCards(); 
+            if(typeof window.loadAdminDashboardData === "function") {
+              await window.loadAdminDashboardData();
+            }
+          }
+
+          if(loggedRole === "student") {
+            if(typeof refreshStudentDashboard === "function") {
+              await refreshStudentDashboard();
+            }
           }
         }
-      }, 300);
+      }, 200);
+
 
     });
 
