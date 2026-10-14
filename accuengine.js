@@ -455,9 +455,8 @@
     invalidate: async function (storeName, key) {
       await idbSet(storeName, key, null);
     },
-
     // ----------------------------------------------------
-    // 5. SECURITY VAULT: PIN HASHING & WEBAUTHN BIOMETRICS
+    // 5. SECURITY VAULT: PIN HASHING & WEBAUTHN BIOMETRICS (FIXED)
     // ----------------------------------------------------
     hashPin: async function (pin, salt) {
       const enc = new TextEncoder();
@@ -471,50 +470,54 @@
       const saltStr = arrayBufferToBase64(saltBuffer.buffer);
       const hashedPin = await this.hashPin(pin, saltStr);
 
-      const lockConfig = {
-        enabled: true,
-        userId: String(userId),
-        salt: saltStr,
-        pinHash: hashedPin,
-        biometricEnabled: !!enableBiometrics,
-        credentialId: null,
-        updatedAt: Date.now()
-      };
+      let savedCredId = null;
 
-      // Biometric Registration trigger agar enabled hai
+      // Agar user ne Biometrics tick kiya hai toh Device par Passkey register karo
       if (enableBiometrics && window.PublicKeyCredential) {
         try {
           const challenge = crypto.getRandomValues(new Uint8Array(32));
-          const userIdBuffer = new TextEncoder().encode(String(userId));
+          const userIdBuffer = new Uint8Array(16);
+          crypto.getRandomValues(userIdBuffer);
+
           const credential = await navigator.credentials.create({
             publicKey: {
               challenge: challenge,
-              rp: { name: "MM Islamic School ERP" },
+              rp: { name: "MM Islamic School ERP", id: window.location.hostname },
               user: {
                 id: userIdBuffer,
                 name: String(userId),
-                displayName: `User ${userId}`
+                displayName: `Account (${userId})`
               },
               pubKeyCredParams: [
-                { type: "public-key", alg: -7 },  // ES256
-                { type: "public-key", alg: -257 } // RS256
+                { type: "public-key", alg: -7 },   // ES256
+                { type: "public-key", alg: -257 }  // RS256
               ],
               authenticatorSelection: {
-                authenticatorAttachment: "platform",
-                userVerification: "required"
+                authenticatorAttachment: "platform", // Direct device Fingerprint / Face
+                userVerification: "required",
+                residentKey: "preferred"
               },
               timeout: 60000
             }
           });
 
-          if (credential && credential.id) {
-            lockConfig.credentialId = credential.id;
+          if (credential && credential.rawId) {
+            savedCredId = arrayBufferToBase64(credential.rawId);
           }
         } catch (bioErr) {
-          console.warn("Biometric setup warning:", bioErr.message);
-          // PIN lock tab bhi set rahega
+          console.warn("Biometric creation skipped/failed:", bioErr);
         }
       }
+
+      const lockConfig = {
+        enabled: true,
+        userId: String(userId),
+        salt: saltStr,
+        pinHash: hashedPin,
+        biometricEnabled: !!savedCredId,
+        credentialId: savedCredId,
+        updatedAt: Date.now()
+      };
 
       const db = await openIDB();
       return new Promise((resolve) => {
@@ -552,20 +555,24 @@
       }
 
       const cfg = await this.getAppLockConfig(userId);
+      if (!cfg || !cfg.credentialId) {
+        throw new Error("No registered biometric key found. Please setup PIN again.");
+      }
+
       const challenge = crypto.getRandomValues(new Uint8Array(32));
+      const credIdBuffer = base64ToArrayBuffer(cfg.credentialId);
 
       const publicKeyOptions = {
         challenge: challenge,
-        timeout: 60000,
-        userVerification: "required"
+        rpId: window.location.hostname,
+        allowCredentials: [{
+          id: new Uint8Array(credIdBuffer),
+          type: "public-key",
+          transports: ["internal"]
+        }],
+        userVerification: "required",
+        timeout: 60000
       };
-
-      if (cfg && cfg.credentialId) {
-        publicKeyOptions.allowCredentials = [{
-          id: base64ToArrayBuffer(window.btoa(cfg.credentialId)),
-          type: "public-key"
-        }];
-      }
 
       return await navigator.credentials.get({ publicKey: publicKeyOptions });
     }
@@ -573,3 +580,4 @@
 
   window.AccuEngine = AccuEngine;
 })(window);
+
