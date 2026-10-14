@@ -1,6 +1,6 @@
 /**
  * ====================================================================
- * MMASSISTANT AI (DYNAMIC ACTIVE MODEL SELECTOR + IGRIS CACHE)
+ * MMASSISTANT AI v2.1 (DIRECT GROQ ACTIVE ENGINE + IGRIS CACHE)
  * M.M ISLAMIC ENGLISH SCHOOL ERP
  * ====================================================================
  */
@@ -10,10 +10,8 @@
 
   const GROQ_API_KEY = "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";
   const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
-  const GROQ_MODELS_ENDPOINT = "https://api.groq.com/openai/v1/models";
+  const PRIMARY_MODEL = "llama-3.1-8b-instant";
   const STORAGE_KEY = "mm_assistant_chat_history_v1";
-
-  let activeModelCache = null;
 
   // 2D AI Sparkle SVG
   const AI_SPARKLE_SVG = `
@@ -168,7 +166,7 @@
   }
 
   // ----------------------------------------------------
-  // 3. IGRIS CACHE SLICING
+  // 3. IGRIS CACHE CONTEXT
   // ----------------------------------------------------
   async function buildContextSlice(userQuery) {
     const Sentinel = window.Igris || window.AccuEngine;
@@ -250,51 +248,8 @@
   }
 
   // ----------------------------------------------------
-  // 4. LIVE ACTIVE MODEL DISCOVERY & INFERENCE
+  // 4. DIRECT ACTIVE GROQ INFERENCE CALL
   // ----------------------------------------------------
-  async function getBestActiveGroqModel() {
-    if (activeModelCache) return activeModelCache;
-
-    try {
-      const res = await fetch(GROQ_MODELS_ENDPOINT, {
-        method: "GET",
-        headers: { "Authorization": `Bearer ${GROQ_API_KEY}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const availableIds = (data.data || []).map(m => m.id);
-
-        // Preference order of currently supported active models
-        const preferences = [
-          "llama-3.3-70b-versatile",
-          "llama-3.1-8b-instant",
-          "llama-3.2-3b-preview",
-          "llama-3.2-1b-preview",
-          "mixtral-8x7b-32768"
-        ];
-
-        for (const pref of preferences) {
-          if (availableIds.includes(pref)) {
-            activeModelCache = pref;
-            console.log("⚡ [MMAssistant] Active Groq Model Selected:", activeModelCache);
-            return activeModelCache;
-          }
-        }
-
-        // Agar koi match na ho toh pehla active model pick karein
-        if (availableIds.length > 0) {
-          activeModelCache = availableIds[0];
-          return activeModelCache;
-        }
-      }
-    } catch (e) {
-      console.warn("Failed to fetch live model list:", e);
-    }
-
-    // Default safe fallback
-    return "llama-3.1-8b-instant";
-  }
-
   async function callGroqLlama(userPrompt, verifiedContext) {
     const role = localStorage.getItem("loggedRole") || "admin";
     const user = localStorage.getItem("loggedUser") || "Admin";
@@ -318,10 +273,8 @@ OPERATING RULES:
    - Be concise, friendly, and respectful.
 `;
 
-    const selectedModel = await getBestActiveGroqModel();
-
     const payload = {
-      model: selectedModel,
+      model: PRIMARY_MODEL, // Direct active model: llama-3.1-8b-instant
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt }
@@ -341,9 +294,8 @@ OPERATING RULES:
 
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
-      // Reset cache if model failed
-      activeModelCache = null;
-      throw new Error(errData.error?.message || `HTTP ${response.status}`);
+      const detailedMsg = errData.error?.message || `HTTP ${response.status} Error`;
+      throw new Error(detailedMsg);
     }
 
     const data = await response.json();
