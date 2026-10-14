@@ -16,7 +16,7 @@
 
   // Security Signature to prevent dummy overrides
   const IGRIS_SIGNATURE = "IGRIS_CORE_SECURE_VAULT_7789";
-  const DB_NAME = "Igris_Storage_Vault";
+  const DB_NAME = "AccuEngine_Storage";
   const DB_VERSION = 14;
   const STORES = [
     "users",
@@ -434,7 +434,7 @@
       }
     },
 
-    fetch: async function (path) {
+       fetch: async function (path) {
       if (!path) return null;
       const parts = path.split("/");
       const root = parts[0];
