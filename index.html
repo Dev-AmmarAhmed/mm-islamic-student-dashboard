@@ -6527,13 +6527,23 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       });
     });
 
-               function getLiveStudents() {
+                 function getLiveStudents() {
       try { 
         const data = window.MM_STORE.students || {};
-        if (Array.isArray(data)) return data.filter(Boolean);
-        return Object.values(data).filter(item => item && typeof item === 'object'); 
+        let list = [];
+        if (Array.isArray(data)) {
+          list = data.filter(Boolean);
+        } else {
+          list = Object.values(data).filter(item => item && typeof item === 'object');
+        }
+        // Normalize class strings automatically so filtering never fails
+        return list.map(st => ({
+          ...st,
+          class: cleanClassStr(st.class)
+        }));
       } catch(e) { return []; }
     }
+
 
     async function getStudentRecord(admnId) {
 
@@ -7318,23 +7328,17 @@ isAdminLbEditMode = false;
     };
 
 
-             async function refreshAllTeacherData() {
-      const Sentinel = window.Igris || window.AccuEngine;
+          async function refreshAllTeacherData() {
+      // 🚀 Hamesha ensure karein ki MM_STORE aur Igris ke paas latest students data ho
+      await window.ensureUniversalIgrisSync(false);
       
-      // 1. Agar phone me students data nahi hai, toh foran sync chalao!
-      let stData = Sentinel ? await Sentinel.fetch("students") : null;
-      if (!stData || Object.keys(stData).length === 0) {
-        console.log("⚠️ [Teacher Dashboard] Local students cache empty. Triggering sync...");
-        await window.ensureUniversalIgrisSync(false);
-        stData = Sentinel ? await Sentinel.fetch("students") : null;
+      const stMap = window.MM_STORE.students || {};
+      if (Object.keys(stMap).length === 0) {
+        const fresh = await safeDataFetch("students") || {};
+        window.MM_STORE.students = fresh;
       }
 
-      if (stData && Object.keys(stData).length > 0) {
-        inMemoryStudentsData = stData;
-        window.inMemoryStudentsData = stData;
-      }
-
-      // 2. Ab attendance aur students load karo (Students ab 100% milenge)
+      // Ab attendance, directory, aur dropdowns load karo
       await loadTeacherTodayAttendance();
       loadTeacherStudentsDirectory();
       if (typeof window.loadTeacherLeaderboard === "function") window.loadTeacherLeaderboard();
@@ -7343,6 +7347,7 @@ isAdminLbEditMode = false;
          window.loadTeacherActiveOnlineTests();
       }
     }
+
 
 
 
