@@ -1,8 +1,8 @@
 /**
  * ====================================================================
- * IGRIS v7.0 - PURE LOCAL CACHE & TRANSPARENT HARDWARE SENTINEL
+ * IGRIS v9.5 - THE SECURE HARDWARE VAULT & RESILIENT SYNC SENTINEL
  * MM Islamic English School ERP
- * Zero-Network Fallback • Multi-Key Automatic Decryption Engine
+ * Hardware Encrypted Storage • Auto-Decryption • 0-Read Gatekeeper
  * ====================================================================
  */
 
@@ -42,9 +42,6 @@
   let primaryCryptoKey = null;
   let legacyCryptoKeys = [];
 
-  // ----------------------------------------------------
-  // 1. INDEXEDDB CONNECTION
-  // ----------------------------------------------------
   function openIDB() {
     if (idbInstance) return Promise.resolve(idbInstance);
     return new Promise((resolve, reject) => {
@@ -65,9 +62,6 @@
     });
   }
 
-  // ----------------------------------------------------
-  // 2. CRYPTO KEYS ENGINE (MULTI-KEY RESOLVER)
-  // ----------------------------------------------------
   function arrayBufferToBase64(buffer) {
     let binary = "";
     const bytes = new Uint8Array(buffer);
@@ -127,7 +121,6 @@
     }
 
     if (cryptoKeys.length === 0) {
-      // Nayi key generate karke save karna
       const newKey = await crypto.subtle.generateKey(
         { name: "AES-GCM", length: 256 },
         true,
@@ -156,9 +149,6 @@
     return cryptoKeys;
   }
 
-  // ----------------------------------------------------
-  // 3. TRANSPARENT ENCRYPTION & DECRYPTION ENGINE
-  // ----------------------------------------------------
   async function encryptPayload(plainObj) {
     if (plainObj === null || plainObj === undefined) return null;
     try {
@@ -185,13 +175,10 @@
 
   async function decryptPayload(storedRecord) {
     if (storedRecord === null || storedRecord === undefined) return null;
-
-    // 1. Agar record pehle se bina encrypt wala plain object hai toh waisa hi de do
     if (!storedRecord.__enc || !storedRecord.iv || !storedRecord.data) {
       return storedRecord;
     }
 
-    // 2. Agar record encrypted hai, toh use UNENCRYPT (decrypt) karo
     const keys = await loadAllAvailableCryptoKeys();
     const ivBuffer = base64ToArrayBuffer(storedRecord.iv);
     const cipherBuffer = base64ToArrayBuffer(storedRecord.data);
@@ -204,19 +191,12 @@
           cipherBuffer
         );
         const jsonStr = new TextDecoder().decode(decrypted);
-        return JSON.parse(jsonStr); // Plain unencrypted object successfully returned!
-      } catch (err) {
-        // Dusri chabi se try karo
-      }
+        return JSON.parse(jsonStr);
+      } catch (err) {}
     }
-
-    // Agar kisi chabi se nahi khula toh null do taaki app mein crash na ho
     return null;
   }
 
-  // ----------------------------------------------------
-  // 4. INDEXEDDB OPERATIONS (AUTO-DECRYPT ON READ)
-  // ----------------------------------------------------
   async function idbGet(storeName, key) {
     try {
       const db = await openIDB();
@@ -294,7 +274,6 @@
         req.onerror = () => resolve({});
       });
 
-      // Har ek item ko phone ke memory mein aate hi UNENCRYPT karo
       const cleanMap = {};
       for (const [k, v] of Object.entries(rawMap)) {
         const unencrypted = await decryptPayload(v);
@@ -309,7 +288,7 @@
   }
 
   // ----------------------------------------------------
-  // 5. IGRIS MASTER CONTROLLER
+  // IGRIS MASTER CONTROLLER
   // ----------------------------------------------------
   const Igris = {
     isAlive: true,
@@ -318,7 +297,7 @@
     init: function (config) {
       modules = config;
       loadAllAvailableCryptoKeys().then(() => {
-        console.log("🛡️ [Igris v7.0] Hardware Vault Active with Pure Auto-Decryption.");
+        console.log("🛡️ [Igris v9.5] Hardware Vault Initialized.");
       });
     },
 
@@ -335,24 +314,6 @@
       } catch (e) {}
     },
 
-
-        // ----------------------------------------------------
-    // STRICT UPDATE-ONLY SENTINEL (0 READS IF NO UPDATE)
-    // ----------------------------------------------------
-    _syncInProgress: false,
-
-    bumpSyncVersion: async function () {
-      if (!navigator.onLine || !modules) return;
-      try {
-        const { db: rtdb, ref, set } = modules;
-        if (typeof set !== "function") return;
-        const newVer = Date.now().toString();
-        await set(ref(rtdb, "sync_triggers/version"), newVer);
-        localStorage.setItem("igris_local_version", newVer);
-        console.log("⚡ [Igris Sentinel] Remote version bumped:", newVer);
-      } catch (e) {}
-    },
-
     checkAndSyncData: async function (force = false) {
       if (!modules) return false;
       if (this._syncInProgress) return false;
@@ -361,7 +322,6 @@
       let remoteVersion = null;
       const localVersion = localStorage.getItem("igris_local_version");
 
-      // 1. RTDB se sirf 10-byte ka version number check karein
       if (navigator.onLine && rtdb) {
         try {
           const snap = await get(child(ref(rtdb), "sync_triggers/version"));
@@ -371,137 +331,75 @@
             remoteVersion = "10001";
             await set(ref(rtdb, "sync_triggers/version"), remoteVersion);
           }
-        } catch (e) {
-          console.warn("Sentinel check error:", e);
-        }
+        } catch (e) {}
       }
 
-      // Check karein ki local cache me students ka data pehle se hai ya nahi
       const localStudents = await idbGetAllMap("students");
       const hasLocalData = Object.keys(localStudents).length > 0;
 
-      // 🛑 STRICT RULE: Agar local data maujood hai aur remoteVersion == localVersion hai, 
-      // toh Firestore ko bilkul touch mat karo! (ZERO READS)
+      // 0-Read strict gate: agar local data pehle se hai aur koi naya version nahi hai toh NO READS
       if (!force && hasLocalData && remoteVersion && remoteVersion === localVersion) {
-        console.log("🔒 [Igris Gatekeeper] No updates detected. Cloud download BLOCKED (0 Reads).");
         return false;
       }
+      if (!navigator.onLine && hasLocalData) return false;
 
-      // Agar offline hain aur local data hai tab bhi download nahi hoga
-      if (!navigator.onLine && hasLocalData) {
-        return false;
-      }
-
-      // 🚨 Download SIRF 2 conditions me chalega:
-      // Condition A: Local cache bilkul khali hai (Naya phone / fresh install).
-      // Condition B: Remote database par kisi teacher/admin ne naya update kiya hai (remoteVersion !== localVersion).
-      console.log("📥 [Igris Sentinel] Update detected or fresh install. Starting single cloud sync...");
       this._syncInProgress = true;
 
+      async function safeFetchCollection(name) {
+        try {
+          const snap = await getDocs(collection(fsDb, name));
+          const map = {};
+          snap.forEach(d => { map[d.id] = d.data(); });
+          return { name, map };
+        } catch (err) {
+          return { name, map: {} };
+        }
+      }
+
       try {
-        const [
-          studentsSnap, teachersSnap, usersSnap, feesMatrixSnap, feesEntriesSnap, 
-          attendanceSnap, studyMatSnap, homeworkSnap, timetableSnap, leavesSnap, 
-          subjectsSnap, sylConfigSnap, sylChaptersSnap, sylProgressSnap, musterSnap,
-          expensesSnap, dailyClaimsSnap, testsSnap, onlineTestsSnap, testAttemptsSnap
-        ] = await Promise.all([
-          getDocs(collection(fsDb, "students")),
-          getDocs(collection(fsDb, "teachers")),
-          getDocs(collection(fsDb, "users")),
-          getDocs(collection(fsDb, "fees_matrix")),
-          getDocs(collection(fsDb, "fees_entries")),
-          getDocs(collection(fsDb, "attendance")),
-          getDocs(collection(fsDb, "study_material")),
-          getDocs(collection(fsDb, "homework")),
-          getDocs(collection(fsDb, "timetable")),
-          getDocs(collection(fsDb, "leaves")),
-          getDocs(collection(fsDb, "subjects")),
-          getDocs(collection(fsDb, "syllabus_config")),
-          getDocs(collection(fsDb, "syllabus_chapters")),
-          getDocs(collection(fsDb, "syllabus_progress")),
-          getDocs(collection(fsDb, "muster")),
-          getDocs(collection(fsDb, "expenses")),
-          getDocs(collection(fsDb, "daily_claims")),
-          getDocs(collection(fsDb, "tests")),
-          getDocs(collection(fsDb, "online_tests")),
-          getDocs(collection(fsDb, "test_attempts"))
-        ]);
+        const collectionsList = [
+          "students", "teachers", "users", "fees_matrix", "fees_entries", 
+          "attendance", "study_material", "homework", "timetable", "leaves", 
+          "subjects", "syllabus_config", "syllabus_chapters", "syllabus_progress", 
+          "muster", "expenses", "daily_claims", "tests", "online_tests", "test_attempts"
+        ];
 
-        const studentsMap = {}; studentsSnap.forEach(d => { studentsMap[d.id] = d.data(); });
-        await idbSetBatch("students", studentsMap);
+        // Fail-safe parallel download: koi ek collection fail bhi ho tab bhi baaqi save honge
+        const results = await Promise.allSettled(collectionsList.map(c => safeFetchCollection(c)));
 
-        const teachersMap = {}; teachersSnap.forEach(d => { teachersMap[d.id] = d.data(); });
-        await idbSetBatch("teachers", teachersMap);
+        for (const res of results) {
+          if (res.status === "fulfilled" && res.value) {
+            const { name, map } = res.value;
+            if (Object.keys(map).length > 0) {
+              if (name === "fees_matrix") {
+                const cleanFees = {};
+                Object.entries(map).forEach(([k, v]) => { cleanFees[k] = v.matrix || v; });
+                await idbSetBatch(name, cleanFees);
+              } else if (name === "attendance") {
+                const cleanAtt = {};
+                Object.entries(map).forEach(([k, v]) => { cleanAtt[k] = v.days || v; });
+                await idbSetBatch(name, cleanAtt);
+              } else if (name === "timetable") {
+                const cleanTT = {};
+                Object.entries(map).forEach(([k, v]) => { cleanTT[k] = v.schedule || v; });
+                await idbSetBatch(name, cleanTT);
+              } else {
+                await idbSetBatch(name, map);
+              }
+            }
+          }
+        }
 
-        const usersMap = {}; usersSnap.forEach(d => { usersMap[d.id] = d.data(); });
-        await idbSetBatch("users", usersMap);
-
-        const feesMap = {}; feesMatrixSnap.forEach(d => { const dt = d.data(); feesMap[d.id] = dt.matrix || dt; });
-        await idbSetBatch("fees_matrix", feesMap);
-
-        const entriesMap = {}; feesEntriesSnap.forEach(d => { entriesMap[d.id] = d.data(); });
-        await idbSetBatch("fees_entries", entriesMap);
-
-        const attMap = {}; attendanceSnap.forEach(d => { const dt = d.data(); attMap[d.id] = dt.days || dt; });
-        await idbSetBatch("attendance", attMap);
-
-        const matMap = {}; studyMatSnap.forEach(d => { matMap[d.id] = d.data(); });
-        await idbSetBatch("study_material", matMap);
-
-        const hwMap = {}; homeworkSnap.forEach(d => { hwMap[d.id] = d.data(); });
-        await idbSetBatch("homework", hwMap);
-
-        const ttMap = {}; timetableSnap.forEach(d => { ttMap[d.id] = d.data().schedule || d.data(); });
-        await idbSetBatch("timetable", ttMap);
-
-        const lvMap = {}; leavesSnap.forEach(d => { lvMap[d.id] = d.data(); });
-        await idbSetBatch("leaves", lvMap);
-
-        const subMap = {}; subjectsSnap.forEach(d => { subMap[d.id] = d.data(); });
-        await idbSetBatch("subjects", subMap);
-
-        const sylCfgMap = {}; sylConfigSnap.forEach(d => { sylCfgMap[d.id] = d.data().subjects || d.data(); });
-        await idbSetBatch("syllabus_config", sylCfgMap);
-
-        const chMap = {}; sylChaptersSnap.forEach(d => { chMap[d.id] = d.data().chapters || d.data(); });
-        await idbSetBatch("syllabus_chapters", chMap);
-
-        const progMap = {}; sylProgressSnap.forEach(d => { progMap[d.id] = d.data().progress || d.data(); });
-        await idbSetBatch("syllabus_progress", progMap);
-
-        const musMap = {}; musterSnap.forEach(d => { musMap[d.id] = d.data(); });
-        await idbSetBatch("muster", musMap);
-
-        const expMap = {}; expensesSnap.forEach(d => { expMap[d.id] = d.data(); });
-        await idbSetBatch("expenses", expMap);
-
-        const claimMap = {}; dailyClaimsSnap.forEach(d => { claimMap[d.id] = d.data().claims || d.data(); });
-        await idbSetBatch("daily_claims", claimMap);
-
-        const testMap = {}; testsSnap.forEach(d => { testMap[d.id] = d.data(); });
-        await idbSetBatch("tests", testMap);
-
-        const onlTestMap = {}; onlineTestsSnap.forEach(d => { onlTestMap[d.id] = d.data(); });
-        await idbSetBatch("online_tests", onlTestMap);
-
-        const attpMap = {}; testAttemptsSnap.forEach(d => { attpMap[d.id] = d.data(); });
-        await idbSetBatch("test_attempts", attpMap);
-
-        // Version lock karein
         const finalVer = remoteVersion || "10001";
         localStorage.setItem("igris_local_version", finalVer);
-        console.log("✔ [Igris Sync Done] Cache updated to version:", finalVer);
         return true;
       } catch (err) {
-        console.error("Sync failed:", err);
         return false;
       } finally {
         this._syncInProgress = false;
       }
     },
 
-
-    // 🚀 HAR QUERY PAR 100% UNENCRYPTED PLAIN OBJECT MILEGA
     fetch: async function (path) {
       if (!path) return null;
       const parts = path.split("/");
