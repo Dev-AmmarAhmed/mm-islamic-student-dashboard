@@ -1,6 +1,6 @@
 /**
  * ====================================================================
- * IGRIS v7.5 - SECURE HARDWARE SENTINEL & BULLETPROOF CACHE
+ * IGRIS v8.0 - DIRECT HIGH-SPEED ENGINE (ZERO-OVERHEAD NATIVE IDB)
  * M.M ISLAMIC ENGLISH SCHOOL ERP
  * ====================================================================
  */
@@ -10,7 +10,7 @@
 
   const IGRIS_SIGNATURE = "IGRIS_CORE_SECURE_VAULT_7789";
   const DB_NAME = "AccuEngine_Storage";
-  const DB_VERSION = 14;
+  const DB_VERSION = 15; // Incremented to auto-wipe old corrupt encrypted cache
   const STORES = [
     "users",
     "students",
@@ -38,7 +38,6 @@
 
   let idbInstance = null;
   let modules = null;
-  let primaryCryptoKey = null;
 
   function openIDB() {
     if (idbInstance) return Promise.resolve(idbInstance);
@@ -47,9 +46,10 @@
       request.onupgradeneeded = (e) => {
         const db = e.target.result;
         STORES.forEach((store) => {
-          if (!db.objectStoreNames.contains(store)) {
-            db.createObjectStore(store);
+          if (db.objectStoreNames.contains(store)) {
+            db.deleteObjectStore(store); // Purana corrupt encrypted data saaf
           }
+          db.createObjectStore(store);
         });
       };
       request.onsuccess = (e) => {
@@ -60,122 +60,32 @@
     });
   }
 
-  const STATIC_SECRET_SALT = "MM_ISLAMIC_IGRIS_VAULT_KEY_2026";
-
-  async function getOrCreateCryptoKey() {
-    if (primaryCryptoKey) return primaryCryptoKey;
-    const enc = new TextEncoder();
-    const keyMaterial = await crypto.subtle.importKey(
-      "raw",
-      enc.encode(STATIC_SECRET_SALT),
-      { name: "PBKDF2" },
-      false,
-      ["deriveKey"]
-    );
-
-    primaryCryptoKey = await crypto.subtle.deriveKey(
-      {
-        name: "PBKDF2",
-        salt: enc.encode("MM_FIXED_SALT_99"),
-        iterations: 10000,
-        hash: "SHA-256"
-      },
-      keyMaterial,
-      { name: "AES-GCM", length: 256 },
-      false,
-      ["encrypt", "decrypt"]
-    );
-    return primaryCryptoKey;
-  }
-
-  function arrayBufferToBase64(buffer) {
-    let binary = "";
-    const bytes = new Uint8Array(buffer);
-    for (let i = 0; i < bytes.byteLength; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
-    return window.btoa(binary);
-  }
-
-  function base64ToArrayBuffer(base64) {
-    const binary = window.atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-    return bytes.buffer;
-  }
-
-  async function encryptPayload(plainObj) {
-    if (plainObj === null || plainObj === undefined) return null;
-    try {
-      const key = await getOrCreateCryptoKey();
-      const iv = crypto.getRandomValues(new Uint8Array(12));
-      const encoded = new TextEncoder().encode(JSON.stringify(plainObj));
-
-      const cipherBuffer = await crypto.subtle.encrypt(
-        { name: "AES-GCM", iv: iv },
-        key,
-        encoded
-      );
-
-      return {
-        __enc: true,
-        iv: arrayBufferToBase64(iv.buffer),
-        data: arrayBufferToBase64(cipherBuffer)
-      };
-    } catch (e) {
-      return plainObj;
-    }
-  }
-
-  async function decryptPayload(storedRecord) {
-    if (storedRecord === null || storedRecord === undefined) return null;
-    if (!storedRecord.__enc || !storedRecord.iv || !storedRecord.data) {
-      return storedRecord;
-    }
-
-    try {
-      const key = await getOrCreateCryptoKey();
-      const ivBuffer = base64ToArrayBuffer(storedRecord.iv);
-      const cipherBuffer = base64ToArrayBuffer(storedRecord.data);
-
-      const decrypted = await crypto.subtle.decrypt(
-        { name: "AES-GCM", iv: new Uint8Array(ivBuffer) },
-        key,
-        cipherBuffer
-      );
-      return JSON.parse(new TextDecoder().decode(decrypted));
-    } catch (e) {
-      return storedRecord;
-    }
-  }
-
+  // --- NATIVE DIRECT IDB GET ---
   async function idbGet(storeName, key) {
     try {
       const db = await openIDB();
-      const raw = await new Promise((resolve) => {
+      return new Promise((resolve) => {
         const tx = db.transaction(storeName, "readonly");
         const req = tx.objectStore(storeName).get(String(key));
         req.onsuccess = () => resolve(req.result || null);
         req.onerror = () => resolve(null);
       });
-      return await decryptPayload(raw);
     } catch (e) {
       return null;
     }
   }
 
+  // --- NATIVE DIRECT IDB SET ---
   async function idbSet(storeName, key, value) {
     try {
       const db = await openIDB();
-      const encrypted = value === null ? null : await encryptPayload(value);
       return new Promise((resolve) => {
         const tx = db.transaction(storeName, "readwrite");
-        if (encrypted === null) {
-          tx.objectStore(storeName).delete(String(key));
+        const store = tx.objectStore(storeName);
+        if (value === null || value === undefined) {
+          store.delete(String(key));
         } else {
-          tx.objectStore(storeName).put(encrypted, String(key));
+          store.put(value, String(key));
         }
         tx.oncomplete = () => resolve(true);
         tx.onerror = () => resolve(false);
@@ -185,21 +95,20 @@
     }
   }
 
+  // --- BATCH SET (Direct memory injection) ---
   async function idbSetBatch(storeName, entriesMap) {
     try {
       const db = await openIDB();
-      const encryptedEntries = {};
-      for (const [k, v] of Object.entries(entriesMap)) {
-        encryptedEntries[k] = v === null ? null : await encryptPayload(v);
-      }
-
       return new Promise((resolve) => {
         const tx = db.transaction(storeName, "readwrite");
         const store = tx.objectStore(storeName);
-        Object.entries(encryptedEntries).forEach(([k, v]) => {
-          if (v === null) store.delete(String(k));
-          else store.put(v, String(k));
-        });
+        for (const [k, v] of Object.entries(entriesMap)) {
+          if (v === null || v === undefined) {
+            store.delete(String(k));
+          } else {
+            store.put(v, String(k));
+          }
+        }
         tx.oncomplete = () => resolve(true);
         tx.onerror = () => resolve(false);
       });
@@ -208,10 +117,11 @@
     }
   }
 
+  // --- DIRECT GET ALL MAP ---
   async function idbGetAllMap(storeName) {
     try {
       const db = await openIDB();
-      const rawMap = await new Promise((resolve) => {
+      return new Promise((resolve) => {
         const tx = db.transaction(storeName, "readonly");
         const store = tx.objectStore(storeName);
         const map = {};
@@ -227,15 +137,6 @@
         };
         req.onerror = () => resolve({});
       });
-
-      const cleanMap = {};
-      for (const [k, v] of Object.entries(rawMap)) {
-        const unencrypted = await decryptPayload(v);
-        if (unencrypted !== null && unencrypted !== undefined) {
-          cleanMap[k] = unencrypted;
-        }
-      }
-      return cleanMap;
     } catch (e) {
       return {};
     }
@@ -247,9 +148,7 @@
 
     init: function (config) {
       modules = config;
-      getOrCreateCryptoKey().then(() => {
-        console.log("🛡️ [Igris v7.5] Bulletproof Storage Engine Active.");
-      });
+      console.log("⚡ [Igris v8.0] Direct Native IndexedDB Active (Zero Encryption Lag).");
     },
 
     _syncInProgress: false,
@@ -297,6 +196,7 @@
 
       this._syncInProgress = true;
       try {
+        console.log("📥 [Igris] Downloading fresh database snapshot from Firestore...");
         const [
           studentsSnap, teachersSnap, usersSnap, feesMatrixSnap, feesEntriesSnap, 
           attendanceSnap, studyMatSnap, homeworkSnap, timetableSnap, leavesSnap, 
@@ -387,8 +287,10 @@
 
         const finalVer = remoteVersion || "10001";
         localStorage.setItem("igris_local_version", finalVer);
+        console.log("✔ [Igris] All collections synchronized to native storage.");
         return true;
       } catch (err) {
+        console.error("Igris sync error:", err);
         return false;
       } finally {
         this._syncInProgress = false;
@@ -405,18 +307,16 @@
       } else if (parts.length === 2) {
         return await idbGet(root, parts[1]);
       } else {
-        // Nested path handling for attendance, muster etc.
+        const docKey = parts.slice(1).join("_");
+        const res = await idbGet(root, docKey);
+        if (res !== null && res !== undefined) return res;
         const all = await idbGetAllMap(root);
-        if (root === "attendance" && parts[1] && parts[2]) {
-           return (await idbGet("attendance", `${parts[1]}_${parts[2]}`)) || {};
-        }
-        return await idbGet(root, parts.slice(1).join("_")) || all[parts[1]] || null;
+        return all[parts[1]] || null;
       }
     },
 
     setLocal: async function (storeName, key, value) {
       if (arguments.length === 2) {
-        // Agar sirf storeName aur poora map diya hai
         await idbSetBatch(storeName, key);
       } else {
         await idbSet(storeName, key, value);
@@ -427,60 +327,34 @@
       await idbSet(storeName, key, null);
     },
 
-    hashPin: async function (pin, salt) {
-      const enc = new TextEncoder();
-      const hashBuffer = await crypto.subtle.digest("SHA-256", enc.encode(pin + ":" + salt));
-      return arrayBufferToBase64(hashBuffer);
-    },
-
     setAppLock: async function (userId, pin, enableBiometrics) {
       if (!userId || !pin || pin.length !== 4) return false;
-      const saltBuffer = crypto.getRandomValues(new Uint8Array(16));
-      const saltStr = arrayBufferToBase64(saltBuffer.buffer);
-      const hashedPin = await this.hashPin(pin, saltStr);
-
       const lockConfig = {
         enabled: true,
         userId: String(userId),
-        salt: saltStr,
-        pinHash: hashedPin,
+        pin: pin,
         biometricEnabled: !!enableBiometrics,
         updatedAt: Date.now()
       };
-
-      const db = await openIDB();
-      return new Promise((resolve) => {
-        const tx = db.transaction("secure_keys", "readwrite");
-        tx.objectStore("secure_keys").put(lockConfig, `app_lock_${userId}`);
-        tx.oncomplete = () => {
-          localStorage.setItem(`lock_active_${userId}`, "true");
-          resolve(true);
-        };
-        tx.onerror = () => resolve(false);
-      });
+      await idbSet("secure_keys", `app_lock_${userId}`, lockConfig);
+      localStorage.setItem(`lock_active_${userId}`, "true");
+      return true;
     },
 
     getAppLockConfig: async function (userId) {
       if (!userId) return null;
-      const db = await openIDB();
-      return new Promise((resolve) => {
-        const tx = db.transaction("secure_keys", "readonly");
-        const req = tx.objectStore("secure_keys").get(`app_lock_${userId}`);
-        req.onsuccess = () => resolve(req.result || null);
-        req.onerror = () => resolve(null);
-      });
+      return await idbGet("secure_keys", `app_lock_${userId}`);
     },
 
     verifyPin: async function (userId, enteredPin) {
       const cfg = await this.getAppLockConfig(userId);
       if (!cfg || !cfg.enabled) return false;
-      const testHash = await this.hashPin(enteredPin, cfg.salt);
-      return testHash === cfg.pinHash;
+      return String(cfg.pin) === String(enteredPin);
     },
 
     promptBiometrics: async function (userId) {
       if (!window.PublicKeyCredential) {
-        throw new Error("Biometrics not supported on this browser.");
+        throw new Error("Biometrics not supported on this device.");
       }
       const challenge = crypto.getRandomValues(new Uint8Array(32));
       return await navigator.credentials.get({
