@@ -1,8 +1,8 @@
 /**
  * ====================================================================
- * IGRIS v9.5 - THE SECURE HARDWARE VAULT & RESILIENT SYNC SENTINEL
+ * IGRIS v9.0 - HARDWARE CACHE SENTINEL & FAIL-SAFE DATA ENGINE
  * MM Islamic English School ERP
- * Hardware Encrypted Storage • Auto-Decryption • 0-Read Gatekeeper
+ * Zero-Network Fallback • Transparent Decryption • Resilient Sync
  * ====================================================================
  */
 
@@ -42,6 +42,9 @@
   let primaryCryptoKey = null;
   let legacyCryptoKeys = [];
 
+  // ----------------------------------------------------
+  // 1. INDEXEDDB CONNECTION
+  // ----------------------------------------------------
   function openIDB() {
     if (idbInstance) return Promise.resolve(idbInstance);
     return new Promise((resolve, reject) => {
@@ -62,6 +65,9 @@
     });
   }
 
+  // ----------------------------------------------------
+  // 2. CRYPTO KEYS ENGINE (MULTI-KEY RESOLVER)
+  // ----------------------------------------------------
   function arrayBufferToBase64(buffer) {
     let binary = "";
     const bytes = new Uint8Array(buffer);
@@ -149,6 +155,9 @@
     return cryptoKeys;
   }
 
+  // ----------------------------------------------------
+  // 3. ENCRYPTION & TRANSPARENT DECRYPTION
+  // ----------------------------------------------------
   async function encryptPayload(plainObj) {
     if (plainObj === null || plainObj === undefined) return null;
     try {
@@ -175,6 +184,7 @@
 
   async function decryptPayload(storedRecord) {
     if (storedRecord === null || storedRecord === undefined) return null;
+
     if (!storedRecord.__enc || !storedRecord.iv || !storedRecord.data) {
       return storedRecord;
     }
@@ -194,9 +204,13 @@
         return JSON.parse(jsonStr);
       } catch (err) {}
     }
+
     return null;
   }
 
+  // ----------------------------------------------------
+  // 4. INDEXEDDB OPERATIONS (AUTO-DECRYPT ON READ)
+  // ----------------------------------------------------
   async function idbGet(storeName, key) {
     try {
       const db = await openIDB();
@@ -288,7 +302,7 @@
   }
 
   // ----------------------------------------------------
-  // IGRIS MASTER CONTROLLER
+  // 5. IGRIS MASTER CONTROLLER & RESILIENT SYNC
   // ----------------------------------------------------
   const Igris = {
     isAlive: true,
@@ -297,7 +311,7 @@
     init: function (config) {
       modules = config;
       loadAllAvailableCryptoKeys().then(() => {
-        console.log("🛡️ [Igris v9.5] Hardware Vault Initialized.");
+        console.log("🛡️ [Igris v9.0] Hardware Sentinel Initialized.");
       });
     },
 
@@ -311,11 +325,15 @@
         const newVer = Date.now().toString();
         await set(ref(rtdb, "sync_triggers/version"), newVer);
         localStorage.setItem("igris_local_version", newVer);
+        console.log("⚡ [Igris] Remote version bumped:", newVer);
       } catch (e) {}
     },
 
     checkAndSyncData: async function (force = false) {
-      if (!modules) return false;
+      if (!modules) {
+        console.warn("⚠️ [Igris] Modules not initialized yet.");
+        return false;
+      }
       if (this._syncInProgress) return false;
 
       const { fsDb, db: rtdb, ref, get, set, child, getDocs, collection } = modules;
@@ -331,18 +349,23 @@
             remoteVersion = "10001";
             await set(ref(rtdb, "sync_triggers/version"), remoteVersion);
           }
-        } catch (e) {}
+        } catch (e) {
+          console.warn("Sentinel version check warning:", e);
+        }
       }
 
       const localStudents = await idbGetAllMap("students");
       const hasLocalData = Object.keys(localStudents).length > 0;
 
-      // 0-Read strict gate: agar local data pehle se hai aur koi naya version nahi hai toh NO READS
+      // Agar local data hai aur version match hai toh 0 reads
       if (!force && hasLocalData && remoteVersion && remoteVersion === localVersion) {
+        console.log("🔒 [Igris] 0 Firestore Reads: Local cache up-to-date.");
         return false;
       }
+
       if (!navigator.onLine && hasLocalData) return false;
 
+      console.log("📥 [Igris Sentinel] Downloading fresh records from cloud...");
       this._syncInProgress = true;
 
       async function safeFetchCollection(name) {
@@ -352,6 +375,7 @@
           snap.forEach(d => { map[d.id] = d.data(); });
           return { name, map };
         } catch (err) {
+          console.warn(`Collection [${name}] fetch warning:`, err.message);
           return { name, map: {} };
         }
       }
@@ -364,7 +388,7 @@
           "muster", "expenses", "daily_claims", "tests", "online_tests", "test_attempts"
         ];
 
-        // Fail-safe parallel download: koi ek collection fail bhi ho tab bhi baaqi save honge
+        // Fail-Safe: Agar koi collection fail ho tab bhi baaqi sab save hongi
         const results = await Promise.allSettled(collectionsList.map(c => safeFetchCollection(c)));
 
         for (const res of results) {
@@ -392,14 +416,19 @@
 
         const finalVer = remoteVersion || "10001";
         localStorage.setItem("igris_local_version", finalVer);
+        console.log("✔ [Igris Sync Complete] Cache version locked:", finalVer);
         return true;
       } catch (err) {
+        console.error("Critical sync error:", err);
         return false;
       } finally {
         this._syncInProgress = false;
       }
     },
 
+    // ----------------------------------------------------
+    // UNIFIED QUERY FETCH
+    // ----------------------------------------------------
     fetch: async function (path) {
       if (!path) return null;
       const parts = path.split("/");
