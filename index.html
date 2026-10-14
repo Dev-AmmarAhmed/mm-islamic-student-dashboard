@@ -1495,9 +1495,10 @@ canvas { touch-action: pan-y !important; }
       <div class="drawer-item" data-tfeat="leaves" onclick="window.runTeacherFeature('leaves', (e) => window.openLeaveMgmtTab(e, 'teacher'))">📅 Leave Applications</div>
 
       <div style="padding: 10px 18px 4px 18px; font-size:11px; font-weight:800; color:var(--text-muted); margin-top:8px;">STUDY MATERIAL (CLASS BOUND)</div>
-      <div class="drawer-item" data-tfeat="studyMat" onclick="window.runTeacherFeature('studyMat', (e) => window.openStudyMaterialTab(e, 'teacher'))">📚 Study Material & Syllabus</div>
+            <div class="drawer-item" data-tfeat="studyMat" onclick="window.runTeacherFeature('studyMat', (e) => window.openStudyMaterialTab(e, 'teacher'))">📚 Study Material & Syllabus</div>
       <div class="drawer-item" onclick="openModal('customThemeModal')" style="color: #7c3aed; font-weight: 800;">🎨 Custom Theme</div>
       <div class="drawer-item" onclick="window.openAssistanceMenu()" style="border-top: 1px dashed var(--border-color); color: #0288d1; margin-top: 8px;">ℹ️ System Assistance</div>
+      <div class="drawer-item" onclick="openModal('secureAppModal')" style="border-top: 1px dashed var(--border-color); color: #10b981; font-weight: 800; margin-top: 8px;">🔒 Secure App (PIN & Biometric)</div>
     </div>
 
 
@@ -1521,12 +1522,14 @@ canvas { touch-action: pan-y !important; }
       <div class="drawer-item" onclick="openModal('removeStudentModal')">👤 Remove Student</div>
       <div class="drawer-item" onclick="openModal('removeExpenseModal')">📊 Remove Expense</div>
       <div class="drawer-item" onclick="window.openLogsTab(event)">📜 Logs & Entries</div>
-      <div class="drawer-item" onclick="openModal('adminSendNotifModal')">📢 Send Notification</div>
+        <div class="drawer-item" onclick="openModal('adminSendNotifModal')">📢 Send Notification</div>
       <div class="drawer-item" onclick="openModal('registerStudentModal')">👤 Register Student</div>
+      <div class="drawer-item" onclick="openModal('secureAppModal')" style="border-top: 1px dashed var(--border-color); color: #10b981; font-weight: 800; margin-top: 8px;">🔒 Secure App (PIN & Biometric)</div>
     </div>
 
 
     <div class="drawer-update-bottom">
+
       <div style="font-size:11px; font-weight:800; color:var(--text-muted); margin-bottom:6px;">SYSTEM MAINTENANCE</div>
       <button id="checkForUpdatesBtn" class="btn-primary" style="margin-top:0; font-size:12px;">🔄 Check for Updates</button>
       <div id="updateStatusText" style="display:none; font-size:11px; font-weight:800; text-align:center; margin-top:8px;"></div>
@@ -4724,8 +4727,66 @@ Exact Output JSON Format Required:
           </label>
         </div>
 
-        <button class="btn-primary" style="margin-top: 18px;" onclick="closeModal('customThemeModal')">✔ Done & Apply</button>
+               <button class="btn-primary" style="margin-top: 18px;" onclick="closeModal('customThemeModal')">✔ Done & Apply</button>
       </div>
+    </div>
+  </div>
+
+  <!-- 🔒 SECURE APP SETUP MODAL -->
+  <div id="secureAppModal" class="modal-overlay" style="z-index: 100070;">
+    <div class="modal-content" style="max-width: 360px; text-align: center; padding: 22px; border-radius: 20px;">
+      <div class="modal-header" style="background: transparent; padding: 0 0 10px 0; border-bottom: 1.5px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+        <span style="color: #10b981; font-size: 16px; font-weight: 900;">🔒 Secure Application</span>
+        <span class="close-modal" onclick="closeModal('secureAppModal')">✕</span>
+      </div>
+
+      <div class="modal-body" style="padding: 14px 0 0 0; text-align: left;">
+        <p style="font-size: 11px; font-weight: 700; color: var(--text-muted); margin-bottom: 14px; line-height: 1.4;">
+          Naya 4-digit PIN set karein aur Biometrics enable karein. Yeh lock har app initialization par authenticate karega.
+        </p>
+
+        <label style="font-size: 11px; font-weight: 800;">Set 4-Digit PIN *:</label>
+        <input type="password" id="secNewPin" maxlength="4" pattern="[0-9]*" inputmode="numeric" placeholder="••••" style="text-align: center; font-size: 22px; letter-spacing: 8px; font-weight: 900; margin-top: 4px;">
+
+        <label style="margin-top: 12px; font-size: 11px; font-weight: 800;">Confirm 4-Digit PIN *:</label>
+        <input type="password" id="secConfirmPin" maxlength="4" pattern="[0-9]*" inputmode="numeric" placeholder="••••" style="text-align: center; font-size: 22px; letter-spacing: 8px; font-weight: 900; margin-top: 4px;">
+
+        <div class="dark-mode-toggle-row" style="margin-top: 16px; border-radius: 12px; border: 1px solid var(--border-color); padding: 12px 14px; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <div style="font-size: 12px; font-weight: 800; color: var(--text-color);">Enable Biometrics 🧬</div>
+            <div style="font-size: 9.5px; font-weight: 700; color: var(--text-muted);">Fingerprint / Face ID Unlock</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="secBiometricChk" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <button id="btnSaveAppLock" class="btn-primary btn-green" style="margin-top: 18px; padding: 13px;" onclick="window.saveAppLockSettings()">
+          🔒 Secure & Save Lock
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 🔐 APP INITIALIZATION LOCK SCREEN OVERLAY -->
+  <div id="appLockScreenOverlay" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--app-bg); z-index: 99999999; flex-direction: column; align-items: center; justify-content: center; padding: 24px;">
+    <div style="text-align: center; max-width: 320px; width: 100%;">
+      <div style="font-size: 48px; margin-bottom: 8px;">🔐</div>
+      <h2 style="font-size: 19px; font-weight: 900; color: var(--text-color); margin-bottom: 4px;">Application Locked</h2>
+      <p id="lockScreenUserText" style="font-size: 12px; font-weight: 700; color: var(--text-muted); margin-bottom: 22px;">Authenticate to access dashboard</p>
+
+      <input type="password" id="unlockPinInput" maxlength="4" pattern="[0-9]*" inputmode="numeric" placeholder="••••" style="width: 170px; margin: 0 auto; display: block; text-align: center; font-size: 28px; letter-spacing: 10px; font-weight: 900; padding: 10px; border: 2px solid #0288d1; border-radius: 14px; background: var(--input-bg); color: var(--text-color); outline: none;">
+
+      <div style="display: flex; gap: 10px; margin-top: 20px;">
+        <button id="btnBiometricUnlock" class="btn-primary btn-purple" style="flex: 1; margin: 0; font-size: 12px;" onclick="window.triggerBiometricUnlock()">
+          🧬 Biometric
+        </button>
+        <button class="btn-primary btn-blue" style="flex: 1; margin: 0; font-size: 12px;" onclick="window.submitPinUnlock()">
+          Unlock ➔
+        </button>
+      </div>
+      <p id="unlockErrorText" style="color: #ef4444; font-size: 12px; font-weight: 800; margin-top: 14px; display: none;">Invalid PIN. Try again.</p>
     </div>
   </div>
 
@@ -5413,7 +5474,114 @@ Exact Output JSON Format Required:
       }
     };
 
+// ==========================================
+    // 🔐 ACCUENGINE APP LOCK & BIOMETRICS ENGINE
+    // ==========================================
+    window.saveAppLockSettings = async function() {
+      const pin1 = document.getElementById("secNewPin").value.trim();
+      const pin2 = document.getElementById("secConfirmPin").value.trim();
+      const bioEnabled = document.getElementById("secBiometricChk").checked;
+      const loggedUser = localStorage.getItem("loggedUser");
 
+      if (!loggedUser) {
+        alert("Please login first.");
+        return;
+      }
+
+      if (pin1.length !== 4 || isNaN(pin1)) {
+        alert("PIN must be exactly 4 numeric digits.");
+        return;
+      }
+
+      if (pin1 !== pin2) {
+        alert("Both PINs must match perfectly.");
+        return;
+      }
+
+      const btn = document.getElementById("btnSaveAppLock");
+      btn.disabled = true;
+      btn.innerText = "Securing Vault...";
+
+      try {
+        const success = await window.AccuEngine.setAppLock(loggedUser, pin1, bioEnabled);
+        if (success) {
+          alert("✔ App Lock is now ACTIVE!\nHar app launch par PIN ya Biometrics verify karna hoga.");
+          window.closeModal("secureAppModal");
+          document.getElementById("secNewPin").value = "";
+          document.getElementById("secConfirmPin").value = "";
+        } else {
+          alert("Could not activate lock.");
+        }
+      } catch (e) {
+        alert("Security setup error: " + e.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerText = "🔒 Secure & Save Lock";
+      }
+    };
+
+    window.checkAppLockOnStartup = async function() {
+      const loggedUser = localStorage.getItem("loggedUser");
+      if (!loggedUser) return;
+
+      const isLockActive = localStorage.getItem(`lock_active_${loggedUser}`);
+      if (!isLockActive) return;
+
+      const lockConfig = await window.AccuEngine.getAppLockConfig(loggedUser);
+      if (!lockConfig || !lockConfig.enabled) return;
+
+      const overlay = document.getElementById("appLockScreenOverlay");
+      if (overlay) {
+        overlay.style.display = "flex";
+        document.getElementById("lockScreenUserText").innerText = `Account: ${loggedUser}`;
+        
+        if (lockConfig.biometricEnabled) {
+          setTimeout(() => { window.triggerBiometricUnlock(); }, 400);
+        }
+      }
+    };
+
+    window.submitPinUnlock = async function() {
+      const pinInput = document.getElementById("unlockPinInput");
+      const errEl = document.getElementById("unlockErrorText");
+      const loggedUser = localStorage.getItem("loggedUser");
+      const entered = pinInput.value.trim();
+
+      if (entered.length !== 4) return;
+
+      const isValid = await window.AccuEngine.verifyPin(loggedUser, entered);
+      if (isValid) {
+        pinInput.value = "";
+        errEl.style.display = "none";
+        document.getElementById("appLockScreenOverlay").style.display = "none";
+      } else {
+        errEl.style.display = "block";
+        errEl.innerText = "Invalid 4-digit PIN.";
+        pinInput.value = "";
+        pinInput.focus();
+      }
+    };
+
+    window.triggerBiometricUnlock = async function() {
+      const loggedUser = localStorage.getItem("loggedUser");
+      const errEl = document.getElementById("unlockErrorText");
+      try {
+        await window.AccuEngine.promptBiometrics(loggedUser);
+        errEl.style.display = "none";
+        document.getElementById("appLockScreenOverlay").style.display = "none";
+      } catch (err) {
+        console.warn("Biometric check bypassed to PIN:", err);
+        errEl.style.display = "block";
+        errEl.innerText = "Biometric check failed. Please enter your 4-digit PIN.";
+        document.getElementById("unlockPinInput").focus();
+      }
+    };
+
+    document.getElementById("unlockPinInput")?.addEventListener("input", (e) => {
+      if (e.target.value.length === 4) {
+        window.submitPinUnlock();
+      }
+    });
     
 
 
@@ -10470,11 +10638,11 @@ isAdminLbEditMode = false;
         resizeObserver.observe(pane);
     });
 
-   
-      window.initNativePushAndSW();
-         setTimeout(() => {
+         window.initNativePushAndSW();
+      window.checkAppLockOnStartup();
+      setTimeout(() => {
         const loggedUser = localStorage.getItem("loggedUser"), loggedRole = localStorage.getItem("loggedRole");
-        if(loggedUser && loggedRole) {
+     if(loggedUser && loggedRole) {
           if(typeof window.listenToNotifications === 'function') window.listenToNotifications();
           if(loggedRole === "teacher") { 
             window.loadTeacherBoardNotifications(); 
