@@ -1,7 +1,8 @@
 /**
  * ====================================================================
- * IGRIS v6.5 - TRANSPARENT HARDWARE SENTINEL (FAIL-SAFE DECRYPTION)
- * System: MM Islamic English School ERP
+ * IGRIS v7.0 - PURE LOCAL CACHE & TRANSPARENT HARDWARE SENTINEL
+ * MM Islamic English School ERP
+ * Zero-Network Fallback • Multi-Key Automatic Decryption Engine
  * ====================================================================
  */
 
@@ -9,7 +10,7 @@
   "use strict";
 
   const IGRIS_SIGNATURE = "IGRIS_CORE_SECURE_VAULT_7789";
-  const DB_NAME = "AccuEngine_Storage"; // Purana database name taaki data loose na ho
+  const DB_NAME = "AccuEngine_Storage";
   const DB_VERSION = 14;
   const STORES = [
     "users",
@@ -38,8 +39,12 @@
 
   let idbInstance = null;
   let modules = null;
-  let cachedCryptoKey = null;
+  let primaryCryptoKey = null;
+  let legacyCryptoKeys = [];
 
+  // ----------------------------------------------------
+  // 1. INDEXEDDB CONNECTION
+  // ----------------------------------------------------
   function openIDB() {
     if (idbInstance) return Promise.resolve(idbInstance);
     return new Promise((resolve, reject) => {
@@ -61,36 +66,8 @@
   }
 
   // ----------------------------------------------------
-  // AES-GCM 256-BIT WEB CRYPTO HARDWARE ENGINE
+  // 2. CRYPTO KEYS ENGINE (MULTI-KEY RESOLVER)
   // ----------------------------------------------------
-  const STATIC_SECRET_SALT = "MM_ISLAMIC_IGRIS_VAULT_KEY_2026";
-
-  async function getOrCreateCryptoKey() {
-    if (cachedCryptoKey) return cachedCryptoKey;
-    const enc = new TextEncoder();
-    const keyMaterial = await crypto.subtle.importKey(
-      "raw",
-      enc.encode(STATIC_SECRET_SALT),
-      { name: "PBKDF2" },
-      false,
-      ["deriveKey"]
-    );
-
-    cachedCryptoKey = await crypto.subtle.deriveKey(
-      {
-        name: "PBKDF2",
-        salt: enc.encode("MM_FIXED_SALT_99"),
-        iterations: 10000,
-        hash: "SHA-256"
-      },
-      keyMaterial,
-      { name: "AES-GCM", length: 256 },
-      false,
-      ["encrypt", "decrypt"]
-    );
-    return cachedCryptoKey;
-  }
-
   function arrayBufferToBase64(buffer) {
     let binary = "";
     const bytes = new Uint8Array(buffer);
@@ -109,16 +86,90 @@
     return bytes.buffer;
   }
 
+  async function loadAllAvailableCryptoKeys() {
+    if (primaryCryptoKey) return [primaryCryptoKey, ...legacyCryptoKeys];
+
+    const db = await openIDB();
+    const keyCandidates = ["accu_device_secret_vault_v1", "igris_device_secret_vault_v2", "accu_device_secret_vault_v2"];
+    const foundRawKeys = [];
+
+    await new Promise((resolve) => {
+      const tx = db.transaction("secure_keys", "readonly");
+      const store = tx.objectStore("secure_keys");
+      let completed = 0;
+
+      keyCandidates.forEach((kId) => {
+        const req = store.get(kId);
+        req.onsuccess = () => {
+          if (req.result) foundRawKeys.push(req.result);
+          completed++;
+          if (completed === keyCandidates.length) resolve();
+        };
+        req.onerror = () => {
+          completed++;
+          if (completed === keyCandidates.length) resolve();
+        };
+      });
+    });
+
+    const cryptoKeys = [];
+    for (const raw of foundRawKeys) {
+      try {
+        const k = await crypto.subtle.importKey(
+          "raw",
+          raw,
+          { name: "AES-GCM" },
+          false,
+          ["encrypt", "decrypt"]
+        );
+        cryptoKeys.push(k);
+      } catch (_) {}
+    }
+
+    if (cryptoKeys.length === 0) {
+      // Nayi key generate karke save karna
+      const newKey = await crypto.subtle.generateKey(
+        { name: "AES-GCM", length: 256 },
+        true,
+        ["encrypt", "decrypt"]
+      );
+      const exportedRaw = await crypto.subtle.exportKey("raw", newKey);
+
+      await new Promise((resolve) => {
+        const tx = db.transaction("secure_keys", "readwrite");
+        tx.objectStore("secure_keys").put(exportedRaw, "accu_device_secret_vault_v1");
+        tx.oncomplete = () => resolve();
+      });
+
+      const imported = await crypto.subtle.importKey(
+        "raw",
+        exportedRaw,
+        { name: "AES-GCM" },
+        false,
+        ["encrypt", "decrypt"]
+      );
+      cryptoKeys.push(imported);
+    }
+
+    primaryCryptoKey = cryptoKeys[0];
+    legacyCryptoKeys = cryptoKeys.slice(1);
+    return cryptoKeys;
+  }
+
+  // ----------------------------------------------------
+  // 3. TRANSPARENT ENCRYPTION & DECRYPTION ENGINE
+  // ----------------------------------------------------
   async function encryptPayload(plainObj) {
     if (plainObj === null || plainObj === undefined) return null;
     try {
-      const key = await getOrCreateCryptoKey();
+      const keys = await loadAllAvailableCryptoKeys();
+      const activeKey = keys[0];
       const iv = crypto.getRandomValues(new Uint8Array(12));
       const encoded = new TextEncoder().encode(JSON.stringify(plainObj));
 
       const cipherBuffer = await crypto.subtle.encrypt(
         { name: "AES-GCM", iv: iv },
-        key,
+        activeKey,
         encoded
       );
 
@@ -135,29 +186,37 @@
   async function decryptPayload(storedRecord) {
     if (storedRecord === null || storedRecord === undefined) return null;
 
-    // Agar data pehle se normal JSON hai (unencrypted), seedha wahi return karo
+    // 1. Agar record pehle se bina encrypt wala plain object hai toh waisa hi de do
     if (!storedRecord.__enc || !storedRecord.iv || !storedRecord.data) {
       return storedRecord;
     }
 
-    try {
-      const cryptoKey = await getOrCreateCryptoKey();
-      const ivBuffer = base64ToArrayBuffer(storedRecord.iv);
-      const cipherBuffer = base64ToArrayBuffer(storedRecord.data);
+    // 2. Agar record encrypted hai, toh use UNENCRYPT (decrypt) karo
+    const keys = await loadAllAvailableCryptoKeys();
+    const ivBuffer = base64ToArrayBuffer(storedRecord.iv);
+    const cipherBuffer = base64ToArrayBuffer(storedRecord.data);
 
-      const decrypted = await crypto.subtle.decrypt(
-        { name: "AES-GCM", iv: new Uint8Array(ivBuffer) },
-        cryptoKey,
-        cipherBuffer
-      );
-
-      return JSON.parse(new TextDecoder().decode(decrypted));
-    } catch (e) {
-      // Agar kisi wajah se decrypt na ho, plain return karo taaki dashboard crash na ho
-      return storedRecord;
+    for (const key of keys) {
+      try {
+        const decrypted = await crypto.subtle.decrypt(
+          { name: "AES-GCM", iv: new Uint8Array(ivBuffer) },
+          key,
+          cipherBuffer
+        );
+        const jsonStr = new TextDecoder().decode(decrypted);
+        return JSON.parse(jsonStr); // Plain unencrypted object successfully returned!
+      } catch (err) {
+        // Dusri chabi se try karo
+      }
     }
+
+    // Agar kisi chabi se nahi khula toh null do taaki app mein crash na ho
+    return null;
   }
 
+  // ----------------------------------------------------
+  // 4. INDEXEDDB OPERATIONS (AUTO-DECRYPT ON READ)
+  // ----------------------------------------------------
   async function idbGet(storeName, key) {
     try {
       const db = await openIDB();
@@ -235,19 +294,22 @@
         req.onerror = () => resolve({});
       });
 
-      // Har ek item ko memory me aate hi UNENCRYPT karo
-      const decryptedMap = {};
+      // Har ek item ko phone ke memory mein aate hi UNENCRYPT karo
+      const cleanMap = {};
       for (const [k, v] of Object.entries(rawMap)) {
-        decryptedMap[k] = await decryptPayload(v);
+        const unencrypted = await decryptPayload(v);
+        if (unencrypted !== null && unencrypted !== undefined) {
+          cleanMap[k] = unencrypted;
+        }
       }
-      return decryptedMap;
+      return cleanMap;
     } catch (e) {
       return {};
     }
   }
 
   // ----------------------------------------------------
-  // IGRIS CORE SHADOW SENTINEL
+  // 5. IGRIS MASTER CONTROLLER
   // ----------------------------------------------------
   const Igris = {
     isAlive: true,
@@ -255,8 +317,8 @@
 
     init: function (config) {
       modules = config;
-      getOrCreateCryptoKey().then(() => {
-        console.log("🛡️ [Igris v6.5] Hardware Vault Active with Auto-Decryption.");
+      loadAllAvailableCryptoKeys().then(() => {
+        console.log("🛡️ [Igris v7.0] Hardware Vault Active with Pure Auto-Decryption.");
       });
     },
 
@@ -293,10 +355,13 @@
         } catch (e) {}
       }
 
-      const hasLocalStudents = Object.keys(await idbGetAllMap("students")).length > 0;
+      // Check if decrypted data is already available locally
+      const localStudents = await idbGetAllMap("students");
+      const hasLocalStudents = Object.keys(localStudents).length > 0;
 
-      // Agar data local memory me decrypt ho chuka hai aur version match hai toh 0 Network Call
+      // 🛑 STRICT GATE: Agar local data decrypt hokar mil gaya hai aur version match hai -> 0 READS!
       if (!force && hasLocalStudents && remoteVersion && remoteVersion === localVersion) {
+        console.log("🎯 [Igris] 0 Firestore Reads: Loaded from local unencrypted memory.");
         return false;
       }
       if (!navigator.onLine && hasLocalStudents) {
@@ -305,6 +370,7 @@
 
       this._syncInProgress = true;
       try {
+        console.log("📥 [Igris] Syncing fresh school records into encrypted cache...");
         const [
           studentsSnap, teachersSnap, usersSnap, feesMatrixSnap, feesEntriesSnap, 
           attendanceSnap, studyMatSnap, homeworkSnap, timetableSnap, leavesSnap, 
@@ -397,17 +463,38 @@
         localStorage.setItem("igris_local_version", finalVer);
         return true;
       } catch (err) {
+        console.error("Sync error:", err);
         return false;
       } finally {
         this._syncInProgress = false;
       }
     },
 
-    // 🚀 UNIFIED FETCH (Hamesha 100% UNENCRYPTED Plain Object Return Karega)
+    // 🚀 HAR QUERY PAR 100% UNENCRYPTED PLAIN OBJECT MILEGA
     fetch: async function (path) {
       if (!path) return null;
       const parts = path.split("/");
       const root = parts[0];
+
+      if (root === "students") {
+        if (parts[1]) return await idbGet("students", parts[1]);
+        return await idbGetAllMap("students");
+      }
+
+      if (root === "teachers") {
+        if (parts[1]) return await idbGet("teachers", parts[1]);
+        return await idbGetAllMap("teachers");
+      }
+
+      if (root === "users") {
+        if (parts[1]) return await idbGet("users", parts[1]);
+        return await idbGetAllMap("users");
+      }
+
+      if (root === "fees_matrix") {
+        if (parts[1]) return await idbGet("fees_matrix", parts[1]);
+        return await idbGetAllMap("fees_matrix");
+      }
 
       if (root === "attendance") {
         if (parts[1] && parts[2]) {
