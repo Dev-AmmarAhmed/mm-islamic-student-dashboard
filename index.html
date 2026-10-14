@@ -5611,11 +5611,16 @@ Exact Output JSON Format Required:
     
     
 
-           async function safeDataFetch(refPath) {
-      // 🚀 AccuEngine Interceptor: Firestore + Permanent IndexedDB Cache
-      if (window.AccuEngine && typeof window.AccuEngine.fetch === "function") {
-        return await window.AccuEngine.fetch(refPath);
+          async function safeDataFetch(refPath) {
+      const Sentinel = window.Igris || window.AccuEngine;
+      if (Sentinel && typeof Sentinel.fetch === "function") {
+        const res = await Sentinel.fetch(refPath);
+        // Agar Sentinel ke paas unencrypted data hai toh foran return karo
+        if (res !== null && res !== undefined && (typeof res !== "object" || Object.keys(res).length > 0)) {
+          return res;
+        }
       }
+      // Agar cache bilkul khali hai toh fallback RTDB se uthao
       try {
         const snap = await get(child(ref(db), refPath));
         return snap.exists() ? snap.val() : null;
@@ -8064,16 +8069,26 @@ document.getElementById("hwTitleInput").value = "";
 
       const students = getLiveStudents().filter(s => cleanClassStr(s.class) === cleanClassStr(assignedClass));
       
-      // FIX: Data pehle fetch karo, phir HTML construct karke 1 hi baar print karo
-      const allAtt = await safeDataFetch("attendance");
+         // Direct Memory/Sentinel Fetch with Unencrypted Fallback
+      let allAtt = {};
+      const Sentinel = window.Igris || window.AccuEngine;
+      if (Sentinel && typeof Sentinel.fetch === "function") {
+        allAtt = await Sentinel.fetch("attendance") || {};
+      }
+      if (!allAtt || Object.keys(allAtt).length === 0) {
+        allAtt = await safeDataFetch("attendance") || {};
+      }
       
       const tbody = document.getElementById("todayAttendanceTableBody");
       let html = "";
       let isAnyMarked = false, isHoliday = false;
 
       students.forEach(st => {
-        const val = allAtt && allAtt[st.admn] && allAtt[st.admn][currentMonth] ? allAtt[st.admn][currentMonth][`day_${todayNum}`] : undefined;
-        if(val !== undefined) isAnyMarked = true;
+        let val = undefined;
+        if (allAtt && allAtt[st.admn] && allAtt[st.admn][currentMonth]) {
+          val = allAtt[st.admn][currentMonth][`day_${todayNum}`];
+        }
+    if(val !== undefined) isAnyMarked = true;
         if(val === "H") isHoliday = true;
 
         html += `<tr><td style="text-align:left; padding-left:10px; font-weight:700;">${st.name}</td><td><input type="checkbox" class="t-today-att-chk" data-admn="${st.admn}" ${val === true ? 'checked' : ''}></td></tr>`;
