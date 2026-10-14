@@ -44,7 +44,30 @@
     /* ====================================================================
        TEST UI PATCHES & URDU FONT CSS
        ==================================================================== */
+      /* ====================================================================
+       🔒 DRM & SCREENSHOT PRIVACY SHIELD
+       ==================================================================== */
+    .secure-capture-shield, 
+    #sStudyMatSubSection,
+    #inAppPdfModal {
+      -webkit-touch-callout: none !important;
+      -webkit-user-select: none !important;
+      -khtml-user-select: none !important;
+      -moz-user-select: none !important;
+      -ms-user-select: none !important;
+      user-select: none !important;
+    }
+
+    /* Jab screen blur ho (jaise screenshot gesture ya task-switching trigger ho) */
+    body.screen-protected #sStudyMatSubSection,
+    body.screen-protected #inAppPdfModal .modal-content {
+      filter: blur(28px) grayscale(100%) !important;
+      opacity: 0.05 !important;
+      transition: filter 0.1s ease !important;
+    }
+
     .test-q-patch {
+
       background: var(--card-bg);
       border-radius: 16px;
       padding: 16px;
@@ -4790,6 +4813,34 @@ Exact Output JSON Format Required:
     </div>
   </div>
 
+    <!-- 📄 IN-APP SECURE PDF VIEWER MODAL (WITH ANTI-SCREENSHOT SHIELD) -->
+  <div id="inAppPdfModal" class="modal-overlay" style="z-index: 100080; padding: 0; align-items: flex-end;">
+    <div class="modal-content secure-capture-shield" style="max-width: 720px; width: 100%; height: 96vh; border-radius: 22px 22px 0 0; display: flex; flex-direction: column; padding: 0; background: #0f172a; overflow: hidden;">
+      
+      <!-- Viewer Header -->
+      <div style="background: var(--header-bg); padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; color: white;">
+        <div style="display: flex; align-items: center; gap: 8px; overflow: hidden;">
+          <span style="font-size: 16px;">📄</span>
+          <span id="inAppPdfTitle" style="font-size: 13px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 240px;">PDF Viewer</span>
+        </div>
+        <button class="btn-sm-del" style="margin: 0; padding: 6px 14px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4);" onclick="window.closeInAppPdfViewer()">✕ Close</button>
+      </div>
+
+      <!-- Watermark / Security Protection Label -->
+      <div style="background: rgba(220,38,38,0.15); border-bottom: 1px solid rgba(220,38,38,0.3); padding: 4px 12px; text-align: center; font-size: 10px; font-weight: 800; color: #f87171;">
+        🔒 Protected Content • Screenshot & Download Restricted
+      </div>
+
+      <!-- PDF Frame Viewport -->
+      <div style="flex: 1; position: relative; background: #1e293b; width: 100%; height: 100%; overflow: hidden;">
+        <iframe id="inAppPdfIframe" src="" style="width: 100%; height: 100%; border: none;" allow="autoplay"></iframe>
+        <!-- Invisible Touch Shield to disable long-press save menu -->
+        <div id="inAppPdfOverlayShield" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none;"></div>
+      </div>
+
+    </div>
+  </div>
+
   <nav id="bottomNav" class="bottom-nav" style="display: none;"></nav>
 
     <!-- ====================================================================
@@ -5572,10 +5623,69 @@ Exact Output JSON Format Required:
       } catch (err) {
         console.warn("Biometric check bypassed to PIN:", err);
         errEl.style.display = "block";
-        errEl.innerText = "Biometric check failed. Please enter your 4-digit PIN.";
+        errEl.innerText = "Fingerprint check failed. Please enter 4-digit PIN.";
         document.getElementById("unlockPinInput").focus();
       }
     };
+
+    // ==========================================
+    // 📖 IN-APP SECURE PDF VIEWER CONTROLLER
+    // ==========================================
+    window.openInAppPdfViewer = function(rawUrl, title) {
+      if (!rawUrl) return;
+
+      document.getElementById("inAppPdfTitle").innerText = title || "Document Viewer";
+      const iframe = document.getElementById("inAppPdfIframe");
+
+      let viewerUrl = rawUrl;
+      // Agar Google Drive link hai toh usko in-app preview embed URL mein badalna
+      if (rawUrl.includes("drive.google.com")) {
+        viewerUrl = rawUrl.replace(/\/view(\?.*)?$/, "/preview").replace(/\/edit(\?.*)?$/, "/preview");
+        if (!viewerUrl.includes("/preview")) {
+          viewerUrl = rawUrl.replace(/\/file\/d\/([^\/]+).*/, "/file/d/$1/preview");
+        }
+      } else if (rawUrl.endsWith(".pdf")) {
+        // Direct PDF file ke liye Google Docs Embed viewer
+        viewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(rawUrl)}&embedded=true`;
+      }
+
+      iframe.src = viewerUrl;
+      window.openModal("inAppPdfModal");
+    };
+
+    window.closeInAppPdfViewer = function() {
+      const iframe = document.getElementById("inAppPdfIframe");
+      if (iframe) iframe.src = ""; // Stop video/doc stream
+      window.closeModal("inAppPdfModal");
+    };
+
+    // ==========================================
+    // 🛡️ ANTI-SCREENSHOT & BLUR DETECTION ENGINE
+    // ==========================================
+    window.addEventListener("blur", () => {
+      document.body.classList.add("screen-protected");
+    });
+
+    window.addEventListener("focus", () => {
+      document.body.classList.remove("screen-protected");
+    });
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        document.body.classList.add("screen-protected");
+      } else {
+        document.body.classList.remove("screen-protected");
+      }
+    });
+
+    // Right-Click aur Long-Press context menu block karna study material par
+    document.addEventListener("contextmenu", (e) => {
+      if (e.target.closest("#sStudyMatSubSection, #inAppPdfModal")) {
+        e.preventDefault();
+        return false;
+      }
+    });
+
 
     document.getElementById("unlockPinInput")?.addEventListener("input", (e) => {
       if (e.target.value.length === 4) {
@@ -7237,8 +7347,8 @@ isAdminLbEditMode = false;
                 <div style="font-size:13px; font-weight:800;">${mat.title}</div>
                 <div style="font-size:10px; color:var(--text-muted); margin-top:2px;">${mat.date} | ${mat.type ? mat.type.toUpperCase() : 'PDF'}</div>
               </div>
-              ${mat.file ? `<a href="${mat.file}" target="_blank" class="btn-primary btn-blue" style="width:auto; padding:6px 14px; font-size:11px; margin-top:0; text-decoration:none; flex-shrink:0;">View / Download</a>` : `<span style="font-size:11px; font-weight:800; color:#d97706;">ACTIVE TEST</span>`}
-            </div>
+                      ${mat.file ? `<button onclick="window.openInAppPdfViewer('${mat.file}', '${(mat.title || 'Document').replace(/'/g, "\\'")}')" class="btn-primary btn-blue" style="width:auto; padding:6px 14px; font-size:11px; margin-top:0; flex-shrink:0;">📖 Read Document</button>` : `<span style="font-size:11px; font-weight:800; color:#d97706;">ACTIVE TEST</span>`}
+    </div>
           `;
         });
       } 
