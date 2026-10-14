@@ -7503,19 +7503,33 @@ isAdminLbEditMode = false;
           date: getTodayFormattedDate()
         });
 
-        const hwObj = { 
+                const hwObj = { 
           id: hwId, 
+          docKey: `${classKey}_${hwId}`,
           title: `[Homework] ${title}`, 
           file: firestorePointer, 
           date: getTodayFormattedDate(), 
           class: classKey, 
-          type: 'homework' 
+          type: 'homework',
+          updatedAt: new Date().toISOString()
         };
 
-        await set(ref(db, `homework/${classKey}/${hwId}`), hwObj);
+        // 1. Save metadata to Cloud Firestore
+        await setDoc(doc(fsDb, "homework", `${classKey}_${hwId}`), hwObj, { merge: true });
 
-        alert("✔ Homework uploaded to Cloud Firestore successfully!");
-        document.getElementById("hwTitleInput").value = ""; 
+        // 2. Save to AccuEngine Local Cache
+        if (window.AccuEngine) {
+          await window.AccuEngine.setLocal("homework", `${classKey}_${hwId}`, hwObj);
+          if (typeof window.AccuEngine.bumpSyncVersion === "function") {
+            window.AccuEngine.bumpSyncVersion();
+          }
+        }
+
+        // 3. Optional fallback
+        await set(ref(db, `homework/${classKey}/${hwId}`), hwObj).catch(() => {});
+
+        alert("✔ Homework uploaded and synced successfully!");
+document.getElementById("hwTitleInput").value = ""; 
         document.getElementById("hwFileInput").value = "";
         window.closeModal("uploadHomeworkModal");
       });
@@ -7710,7 +7724,7 @@ isAdminLbEditMode = false;
     // ==========================================
     // STUDY MATERIAL DIRECT LINK SAVE LOGIC (WITH SUBJECT & CHAPTER NO)
     // ==========================================
-    addSafeListener("saveStudyMaterialBtn", "click", () => {
+     addSafeListener("saveStudyMaterialBtn", "click", () => {
       const btn = document.getElementById("saveStudyMaterialBtn");
       runWithBtnSpinner(btn, "🚀 Save Material", async () => {
         const subject = document.getElementById("matSubjectSelect") ? document.getElementById("matSubjectSelect").value.trim() : "";
@@ -7732,9 +7746,11 @@ isAdminLbEditMode = false;
 
         const matId = Date.now().toString();
         const cleanClass = cleanClassStr(targetClass);
+        const docKey = `${cleanClass}_${matId}`;
 
         const matObj = { 
             id: matId, 
+            docKey: docKey,
             subject: subject,
             chapterNo: chapterNo,
             title: title, 
@@ -7742,12 +7758,22 @@ isAdminLbEditMode = false;
             file: linkInput, 
             class: cleanClass, 
             date: getTodayFormattedDate(),
-            isHidden: false 
+            isHidden: false,
+            updatedAt: new Date().toISOString()
         };
 
-        await set(ref(db, `study_material/${cleanClass}/${matId}`), matObj);
+        // 1. Direct Cloud Firestore Save
+        await setDoc(doc(fsDb, "study_material", docKey), matObj, { merge: true });
 
-        alert("✔ Study material saved successfully.");
+        // 2. Local AccuEngine Encrypted Cache Save
+        if (window.AccuEngine) {
+          await window.AccuEngine.setLocal("study_material", docKey, matObj);
+          if (typeof window.AccuEngine.bumpSyncVersion === "function") {
+            window.AccuEngine.bumpSyncVersion();
+          }
+        }
+
+        alert("✔ Study material saved successfully!");
         if(document.getElementById("matChapterNoInput")) document.getElementById("matChapterNoInput").value = "";
         document.getElementById("matTitleInput").value = ""; 
         document.getElementById("matLinkInput").value = "";
@@ -7761,6 +7787,7 @@ isAdminLbEditMode = false;
         window.loadTeacherStudyMaterials(cleanClass);
       });
     });
+
 
     window.loadTeacherStudyMaterials = async function(targetCls) {
       const tbody = document.getElementById("manageMaterialTableBody");
@@ -7795,10 +7822,19 @@ isAdminLbEditMode = false;
 
 
                  // Delete Study Material Function
-    window.deleteStudyMaterial = async function(classKey, matKey) {
+     window.deleteStudyMaterial = async function(classKey, matKey) {
       window.showCustomConfirm("Are you sure you want to permanently delete this study material?", async () => {
         try {
-          await remove(ref(db, `study_material/${classKey}/${matKey}`));
+          const docKey = matKey.includes("_") ? matKey : `${classKey}_${matKey}`;
+          await deleteDoc(doc(fsDb, "study_material", docKey)).catch(() => {});
+          
+          if (window.AccuEngine) {
+            await window.AccuEngine.invalidate("study_material", docKey);
+            if (typeof window.AccuEngine.bumpSyncVersion === "function") {
+              window.AccuEngine.bumpSyncVersion();
+            }
+          }
+          await remove(ref(db, `study_material/${classKey}/${matKey}`)).catch(() => {});
           alert("✔ Study material deleted successfully!");
           
           const selectEl = document.getElementById("matAdminManageClassSelectTab");
@@ -7810,14 +7846,29 @@ isAdminLbEditMode = false;
       });
     };
 
-    // Naya function Toggle krne ke liye
     window.toggleStudyMaterialVisibility = async function(classKey, matKey, currentlyHidden) {
       const newState = !currentlyHidden;
-      await update(ref(db), { [`study_material/${classKey}/${matKey}/isHidden`]: newState });
+      const docKey = matKey.includes("_") ? matKey : `${classKey}_${matKey}`;
+      
+      await setDoc(doc(fsDb, "study_material", docKey), { isHidden: newState }, { merge: true }).catch(() => {});
+      
+      if (window.AccuEngine) {
+        const item = await window.AccuEngine.fetch(`study_material/${classKey}`);
+        if (item && item[matKey]) {
+          item[matKey].isHidden = newState;
+          await window.AccuEngine.setLocal("study_material", docKey, item[matKey]);
+          if (typeof window.AccuEngine.bumpSyncVersion === "function") {
+            window.AccuEngine.bumpSyncVersion();
+          }
+        }
+      }
+      await update(ref(db), { [`study_material/${classKey}/${matKey}/isHidden`]: newState }).catch(() => {});
+      
       const selectEl = document.getElementById("matAdminManageClassSelectTab");
       const targetCls = (currentRole === "admin" && selectEl) ? selectEl.value : assignedClass;
       window.loadTeacherStudyMaterials(targetCls);
     };
+
 
 
 
@@ -9397,10 +9448,20 @@ isAdminLbEditMode = false;
         const targetClass = currentRole === "admin" ? document.getElementById("subAdminClassSelect").value : assignedClass;
         const classKey = cleanClassStr(targetClass);
         
-        const subjId = Date.now().toString();
-        await set(ref(db, `subjects/${classKey}/${subjId}`), { id: subjId, name: subjectName, class: classKey, date: getTodayFormattedDate() });
+              const subjId = Date.now().toString();
+        const subDocKey = `${classKey}_${subjId}`;
+        const subPayload = { id: subjId, docKey: subDocKey, name: subjectName, class: classKey, date: getTodayFormattedDate() };
+
+        // 🚀 Firestore + AccuEngine
+        await setDoc(doc(fsDb, "subjects", subDocKey), subPayload, { merge: true });
+        if (window.AccuEngine) {
+          await window.AccuEngine.setLocal("subjects", subDocKey, subPayload);
+          window.AccuEngine.bumpSyncVersion();
+        }
+        await set(ref(db, `subjects/${classKey}/${subjId}`), subPayload).catch(() => {});
+
         alert(`✔ Subject "${subjectName}" saved successfully for Class ${assignedClass}!`);
-        document.getElementById("newSubjectNameInput").value = "";
+  document.getElementById("newSubjectNameInput").value = "";
         window.closeModal("addSubjectModal");
       });
     });
@@ -10517,12 +10578,25 @@ isAdminLbEditMode = false;
       const todayNum = new Date().getDate();
       const nowTime = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
       
+            // 🚀 Firestore + AccuEngine (Muster In/Out)
+      let monthMuster = {};
+      if (window.AccuEngine) {
+        monthMuster = await window.AccuEngine.fetch(`muster/${currentMonth}`) || {};
+      }
+      if (!monthMuster[`day_${todayNum}`]) monthMuster[`day_${todayNum}`] = {};
+      if (!monthMuster[`day_${todayNum}`][loggedUser]) monthMuster[`day_${todayNum}`][loggedUser] = {};
+      monthMuster[`day_${todayNum}`][loggedUser][type] = nowTime;
+
+      await setDoc(doc(fsDb, "muster", currentMonth), monthMuster, { merge: true });
+      if (window.AccuEngine) {
+        await window.AccuEngine.setLocal("muster", currentMonth, monthMuster);
+      }
       await update(ref(db), {
         [`muster/${currentMonth}/day_${todayNum}/${loggedUser}/${type}`]: nowTime
-      });
+      }).catch(() => {});
       
       alert(`${actionText} time saved successfully!`);
-      window.checkMusterButtonStates();
+window.checkMusterButtonStates();
 
       if(type === 'in') {
         setTimeout(() => {
@@ -10589,15 +10663,30 @@ isAdminLbEditMode = false;
       
       if(!username) { alert("Please select a teacher first."); return; }
       
-      if(confirm(`Are you sure you want to completely delete muster data for this teacher in ${month}?`)) {
-        const updates = {};
+            if(confirm(`Are you sure you want to completely delete muster data for this teacher in ${month}?`)) {
         const daysCount = getDaysInMonth(month);
+        let monthMuster = {};
+        if (window.AccuEngine) {
+          monthMuster = await window.AccuEngine.fetch(`muster/${month}`) || {};
+        }
+        for(let d=1; d<=daysCount; d++) {
+          if (monthMuster[`day_${d}`] && monthMuster[`day_${d}`][username]) {
+            delete monthMuster[`day_${d}`][username];
+          }
+        }
+        await setDoc(doc(fsDb, "muster", month), monthMuster);
+        if (window.AccuEngine) {
+          await window.AccuEngine.setLocal("muster", month, monthMuster);
+          window.AccuEngine.bumpSyncVersion();
+        }
+
+        const updates = {};
         for(let d=1; d<=daysCount; d++) {
           updates[`muster/${month}/day_${d}/${username}`] = null;
         }
-        await update(ref(db), updates);
+        await update(ref(db), updates).catch(() => {});
         alert("✔ Muster data deleted successfully!");
-        window.closeModal('deleteMusterModal');
+  window.closeModal('deleteMusterModal');
         if(document.getElementById("adminMusterTableCard").style.display === "block") {
           window.loadAdminMusterTable();
         }
@@ -11105,11 +11194,25 @@ isAdminLbEditMode = false;
                       sat: document.getElementById(`tt_${role}_sat_${i}`).value.trim()
                   });
               }
-              currentTtData = updatedData;
-              await set(ref(db, `timetable/${cleanCls}`), updatedData);
+                           currentTtData = updatedData;
+              // 🚀 1. Cloud Firestore Save
+              await setDoc(doc(fsDb, "timetable", cleanCls), {
+                class: cleanCls,
+                schedule: updatedData,
+                updatedAt: new Date().toISOString()
+              }, { merge: true });
+
+              // 🚀 2. AccuEngine Encrypted Cache Save
+              if (window.AccuEngine) {
+                await window.AccuEngine.setLocal("timetable", cleanCls, updatedData);
+                window.AccuEngine.bumpSyncVersion();
+              }
+
+              // Fallback RTDB
+              await set(ref(db, `timetable/${cleanCls}`), updatedData).catch(() => {});
               
               window.showCustomAlert(`✔ Time table updated for Class ${cleanCls}`);
-              
+ 
               isTtEditMode = false;
               document.getElementById(btnId).innerText = "✏️ Edit";
               document.getElementById(btnId).className = "btn-primary btn-purple";
@@ -11282,8 +11385,14 @@ isAdminLbEditMode = false;
                         applicantRole: "teacher"
                     };
 
-                    await set(ref(db, `teacher_leave_applications/${loggedUser}/${leaveId}`), leaveObj);
-                    window.closeModal("applyLeaveModal");
+                                      // 🚀 Firestore + AccuEngine (Teacher Leave)
+                    await setDoc(doc(fsDb, "leaves", leaveId), leaveObj, { merge: true });
+                    if (window.AccuEngine) {
+                      await window.AccuEngine.setLocal("leaves", leaveId, leaveObj);
+                      window.AccuEngine.bumpSyncVersion();
+                    }
+                    await set(ref(db, `teacher_leave_applications/${loggedUser}/${leaveId}`), leaveObj).catch(() => {});
+  window.closeModal("applyLeaveModal");
                     
                     const waitingScreen = document.getElementById("leaveWaitingOverlay");
                     if(waitingScreen) waitingScreen.style.display = "flex";
@@ -11316,8 +11425,14 @@ isAdminLbEditMode = false;
                         applicantRole: "student"
                     };
 
-                    await set(ref(db, `leave_applications/${currentStudentAdmn}/${leaveId}`), leaveObj);
-                    window.closeModal("applyLeaveModal");
+                                        // 🚀 Firestore + AccuEngine (Student Leave)
+                    await setDoc(doc(fsDb, "leaves", leaveId), leaveObj, { merge: true });
+                    if (window.AccuEngine) {
+                      await window.AccuEngine.setLocal("leaves", leaveId, leaveObj);
+                      window.AccuEngine.bumpSyncVersion();
+                    }
+                    await set(ref(db, `leave_applications/${currentStudentAdmn}/${leaveId}`), leaveObj).catch(() => {});
+window.closeModal("applyLeaveModal");
                     
                     const waitingScreen = document.getElementById("leaveWaitingOverlay");
                     if(waitingScreen) waitingScreen.style.display = "flex";
@@ -11549,17 +11664,31 @@ isAdminLbEditMode = false;
         window.openModal("leaveActionModal");
     };
 
-    window.updateLeaveStatus = async function(newStatus) {
+
+          window.updateLeaveStatus = async function(newStatus) {
         const leaveId = document.getElementById("laLeaveId").value;
         const admn = document.getElementById("laAdmn").value;
         if(!leaveId || !admn) return;
 
-        const dbPath = currentActionLeaveRole === 'teacher' 
-            ? `teacher_leave_applications/${admn}/${leaveId}/status` 
-            : `leave_applications/${admn}/${leaveId}/status`;
-
         try {
-            await update(ref(db), { [dbPath]: newStatus });
+            // 🚀 1. Update Firestore
+            await setDoc(doc(fsDb, "leaves", leaveId), { status: newStatus }, { merge: true });
+
+            // 🚀 2. Update AccuEngine Local Cache
+            if (window.AccuEngine) {
+              const currentLeave = await window.AccuEngine.fetch("leaves");
+              if (currentLeave && currentLeave[leaveId]) {
+                currentLeave[leaveId].status = newStatus;
+                await window.AccuEngine.setLocal("leaves", leaveId, currentLeave[leaveId]);
+              }
+              window.AccuEngine.bumpSyncVersion();
+            }
+
+            const dbPath = currentActionLeaveRole === 'teacher' 
+                ? `teacher_leave_applications/${admn}/${leaveId}/status` 
+                : `leave_applications/${admn}/${leaveId}/status`;
+            await update(ref(db), { [dbPath]: newStatus }).catch(() => {});
+
             await window.pushAppNotification(admn, "Leave Status Updated", `Your leave application for ${document.getElementById("laDate").innerText} is now: ${newStatus}`, "leave_update", { status: newStatus });
 
             alert(`✔ Leave Application marked as ${newStatus}!`);
@@ -11569,6 +11698,37 @@ isAdminLbEditMode = false;
             alert("Error updating status.");
         }
     };
+
+    window.deleteLeaveApp = async function() {
+        const leaveId = document.getElementById("laLeaveId").value;
+        const admn = document.getElementById("laAdmn").value;
+        if(!leaveId || !admn) return;
+
+        window.showCustomConfirm("Are you sure you want to completely delete this leave application?", async () => {
+            try {
+                // 🚀 1. Delete from Firestore
+                await deleteDoc(doc(fsDb, "leaves", leaveId)).catch(() => {});
+
+                // 🚀 2. Invalidate AccuEngine Cache
+                if (window.AccuEngine) {
+                  await window.AccuEngine.invalidate("leaves", leaveId);
+                  window.AccuEngine.bumpSyncVersion();
+                }
+
+                const dbPath = currentActionLeaveRole === 'teacher' 
+                    ? `teacher_leave_applications/${admn}/${leaveId}` 
+                    : `leave_applications/${admn}/${leaveId}`;
+                await remove(ref(db, dbPath)).catch(() => {});
+
+                alert("🗑 Leave application deleted successfully.");
+                window.closeModal("leaveActionModal");
+                window.loadAllLeaves(); 
+            } catch(e) {
+                alert("Error deleting application.");
+            }
+        });
+    };
+
 
     window.deleteLeaveApp = async function() {
         const leaveId = document.getElementById("laLeaveId").value;
@@ -11747,10 +11907,15 @@ window.syncProfileModalHeight = function() {
             checkboxes.forEach(chk => {
                 if(chk.checked) enabledObj[chk.value] = true;
             });
-            
-            await set(ref(db, `enabled_syllabus/${targetClass}`), enabledObj);
+                       // 🚀 Firestore + AccuEngine (Syllabus Config)
+            await setDoc(doc(fsDb, "syllabus_config", targetClass), { class: targetClass, subjects: enabledObj }, { merge: true });
+            if (window.AccuEngine) {
+              await window.AccuEngine.setLocal("syllabus_config", targetClass, enabledObj);
+              window.AccuEngine.bumpSyncVersion();
+            }
+            await set(ref(db, `enabled_syllabus/${targetClass}`), enabledObj).catch(() => {});
             alert("✔ Syllabus subjects updated successfully.");
-        });
+ });
     };
 
     // --- CHAPTERS MANAGEMENT (BUG-FREE ROW ADDITION) ---
@@ -11869,9 +12034,22 @@ window.syncProfileModalHeight = function() {
                 }
             });
             
-            await set(ref(db, `syllabus_chapters/${targetClass}/${targetSubject}`), chaptersData);
+                      // 🚀 Firestore + AccuEngine (Chapters)
+            const chDocKey = `${targetClass}_${targetSubject}`;
+            await setDoc(doc(fsDb, "syllabus_chapters", chDocKey), {
+              class: targetClass,
+              subject: targetSubject,
+              chapters: chaptersData,
+              updatedAt: new Date().toISOString()
+            }, { merge: true });
+            
+            if (window.AccuEngine) {
+              await window.AccuEngine.setLocal("syllabus_chapters", chDocKey, chaptersData);
+              window.AccuEngine.bumpSyncVersion();
+            }
+            await set(ref(db, `syllabus_chapters/${targetClass}/${targetSubject}`), chaptersData).catch(() => {});
             alert(`✔ Chapters saved successfully for ${targetSubject}.`);
-        });
+});
     };
 
 
@@ -11962,10 +12140,28 @@ window.syncProfileModalHeight = function() {
 
     // Auto-Save Tickbox function directly syncing to Firebase
     window.updateChapterProgress = async function(subject, chapterNo, isCompleted) {
-        try {
+        try {            // 🚀 Firestore + AccuEngine (Student Progress)
+            const progDocKey = `${currentStudentAdmn}_${subject}`;
+            let currentProg = {};
+            if (window.AccuEngine) {
+              currentProg = await window.AccuEngine.fetch(`syllabus_progress/${currentStudentAdmn}/${subject}`) || {};
+            }
+            currentProg[`ch_${chapterNo}`] = isCompleted;
+
+            await setDoc(doc(fsDb, "syllabus_progress", progDocKey), {
+              admn: currentStudentAdmn,
+              subject: subject,
+              progress: currentProg,
+              updatedAt: new Date().toISOString()
+            }, { merge: true });
+
+            if (window.AccuEngine) {
+              await window.AccuEngine.setLocal("syllabus_progress", progDocKey, currentProg);
+            }
             await update(ref(db), {
                 [`syllabus_progress/${currentStudentAdmn}/${subject}/ch_${chapterNo}`]: isCompleted
-            });
+            }).catch(() => {});
+
             
             // Reload the table silently to apply strikethrough/color effects instantly
             const student = await getStudentRecord(currentStudentAdmn);
