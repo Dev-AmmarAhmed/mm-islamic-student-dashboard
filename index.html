@@ -29,11 +29,7 @@
   <script src="./Igris/igris.js"></script>
 
    <!-- MMASSISTANT AI (FORCED FRESH CACHE) -->
- <script src="./Igris/mmassistant.js?v=8.0"></script>
-  
-  
-  
-  
+<script src="./Igris/mmassistant.js?v=4.0"></script>
 
   <!-- 🚨 IGRIS INTEGRITY VERIFICATION GATE (ANTI-BYPASS PROTOCOL) -->
   <script>
@@ -5640,7 +5636,7 @@ Exact Output JSON Format Required:
 
     
     
-    async function safeDataFetch(refPath) {
+        async function safeDataFetch(refPath) {
       const Sentinel = window.Igris || window.AccuEngine;
       if (Sentinel && typeof Sentinel.fetch === "function") {
         return await Sentinel.fetch(refPath);
@@ -5663,15 +5659,15 @@ Exact Output JSON Format Required:
     }
 
 
-          // 🛡️ IGRIS MASTER DASHBOARD & MEMORY LOADER
-      window.loadAdminDashboardData = async function(forceDownload = false) {
+           // 🛡️ IGRIS MASTER DASHBOARD & MEMORY LOADER
+    window.loadAdminDashboardData = async function(forceDownload = false) {
       const Sentinel = window.Igris || window.AccuEngine;
       if (!Sentinel) return;
 
       try {
         await window.ensureFirebaseAuth();
 
-        // 1. SABSE PEHLE: Bina kisi network call ke local cache se data turant screen par render karein
+        // 1. Local Cache Se Instant Render (Zero Delay)
         const [localSt, localTch, localFees, localUsers] = await Promise.all([
           Sentinel.fetch("students"),
           Sentinel.fetch("teachers"),
@@ -5687,26 +5683,31 @@ Exact Output JSON Format Required:
         if (localFees) window.inMemoryFeesMatrix = localFees;
         if (localUsers) cachedUsersMap = localUsers;
 
-        // UI foran render ho jayega
         if (typeof renderAdminStudentsDirectory === "function") renderAdminStudentsDirectory(true);
         if (typeof window.renderAdminHomeTeacherboardCards === "function") window.renderAdminHomeTeacherboardCards();
         if (typeof window.loadManageTeacherList === "function") window.loadManageTeacherList();
         if (typeof window.calculateAdminEntryTabAnalytics === "function") window.calculateAdminEntryTabAnalytics();
 
-        // 2. BACKGROUND CHECK: Sentinel check karega ki naya update aaya hai ya nahi.
-        // Agar naya update hoga tabhi download hoga, warna return false (0 READS)
+        // 2. Background Sync Check
         const updated = await Sentinel.checkAndSyncData(forceDownload);
         if (updated) {
           const freshSt = await Sentinel.fetch("students");
+          const freshTch = await Sentinel.fetch("teachers");
+          const freshFees = await Sentinel.fetch("fees_matrix");
+
           if (freshSt && Object.keys(freshSt).length > 0) {
             inMemoryStudentsData = freshSt;
             window.inMemoryStudentsData = freshSt;
-            if (typeof renderAdminStudentsDirectory === "function") renderAdminStudentsDirectory(true);
-            if (typeof window.calculateAdminEntryTabAnalytics === "function") window.calculateAdminEntryTabAnalytics();
           }
+          if (freshTch) window.inMemoryTeachersData = freshTch;
+          if (freshFees) window.inMemoryFeesMatrix = freshFees;
+
+          if (typeof renderAdminStudentsDirectory === "function") renderAdminStudentsDirectory(true);
+          if (typeof window.calculateAdminEntryTabAnalytics === "function") window.calculateAdminEntryTabAnalytics();
+          if (typeof window.renderAdminHomeTeacherboardCards === "function") window.renderAdminHomeTeacherboardCards();
         }
-      } catch (e) {
-        console.warn("Local memory loader error:", e);
+      } catch (err) {
+        console.warn("Dashboard loader safe fallback:", err);
       }
     };
 
@@ -6620,6 +6621,17 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
     };
 
 
+      // 🚀 LOGIN HOTE HI IGRIS SYNC TRIGGER
+      const Sentinel = window.Igris || window.AccuEngine;
+      if (Sentinel && typeof Sentinel.checkAndSyncData === "function") {
+        Sentinel.checkAndSyncData(false).then(() => {
+          if (role === "admin" && typeof window.loadAdminDashboardData === "function") {
+            window.loadAdminDashboardData();
+          } else if (role === "teacher" && typeof refreshAllTeacherData === "function") {
+            refreshAllTeacherData();
+          }
+        });
+      }
 
           // --- LIVE BRUTE FORCE TIMER SETUP ---
     let lockoutTimerInterval;
@@ -7281,28 +7293,43 @@ isAdminLbEditMode = false;
     };
 
 
-        async function refreshAllTeacherData() {
+          async function refreshAllTeacherData() {
       const Sentinel = window.Igris || window.AccuEngine;
-      let stData = {};
+      
+      // 1. Local Cache Render
       if (Sentinel && typeof Sentinel.fetch === "function") {
-        stData = await Sentinel.fetch("students") || {};
-      }
-      if (!stData || Object.keys(stData).length === 0) {
-        stData = await safeDataFetch("students") || {};
-      }
-      if (stData && Object.keys(stData).length > 0) {
-        inMemoryStudentsData = stData;
-        window.inMemoryStudentsData = stData;
+        const localSt = await Sentinel.fetch("students");
+        if (localSt && Object.keys(localSt).length > 0) {
+          inMemoryStudentsData = localSt;
+          window.inMemoryStudentsData = localSt;
+          await loadTeacherTodayAttendance();
+          loadTeacherStudentsDirectory();
+          if (typeof window.loadTeacherLeaderboard === "function") window.loadTeacherLeaderboard();
+          populateTeacherStudentDropdowns();
+        }
       }
 
-      await loadTeacherTodayAttendance();
-      loadTeacherStudentsDirectory();
-      if (typeof window.loadTeacherLeaderboard === "function") window.loadTeacherLeaderboard();
-      populateTeacherStudentDropdowns();
+      // 2. Background Sync (Naye data ke liye)
+      if (Sentinel && typeof Sentinel.checkAndSyncData === "function") {
+        const updated = await Sentinel.checkAndSyncData(false);
+        if (updated) {
+          const freshSt = await Sentinel.fetch("students");
+          if (freshSt && Object.keys(freshSt).length > 0) {
+            inMemoryStudentsData = freshSt;
+            window.inMemoryStudentsData = freshSt;
+            await loadTeacherTodayAttendance();
+            loadTeacherStudentsDirectory();
+            if (typeof window.loadTeacherLeaderboard === "function") window.loadTeacherLeaderboard();
+            populateTeacherStudentDropdowns();
+          }
+        }
+      }
+      
       if (typeof window.loadTeacherActiveOnlineTests === 'function') {
          window.loadTeacherActiveOnlineTests();
       }
     }
+
 
 
 
