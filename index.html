@@ -29,7 +29,7 @@
   <script src="./Igris/igris.js"></script>
 
    <!-- MMASSISTANT AI (FORCED FRESH CACHE) -->
-<script src="./Igris/mmassistant.js?v=10.0"></script>
+<script src="./Igris/mmassistant.js?v=7.5"></script>
 
   <!-- 🚨 IGRIS INTEGRITY VERIFICATION GATE (ANTI-BYPASS PROTOCOL) -->
   <script>
@@ -5359,17 +5359,32 @@ Exact Output JSON Format Required:
     };
 
     let currentRole = "admin";
- let assignedClass = "1";
+    let assignedClass = "1";
     let currentStudentAdmn = null;
     let lastGeneratedReceipt = null;
     let studentStarDisplayMode = "star";
     let currentStudentTotalDueAmount = 0;
     let selectedAdminClassFilter = "All";
     let isAdminLbEditMode = false;
-    let inMemoryStudentsData = {};
     let fullDbCache = {}; 
     let activeLiveTestTimer = null;
     let currentLiveTestObj = null;
+
+    // 🌐 SINGLE SOURCE OF TRUTH (MM_STORE)
+    window.MM_STORE = window.MM_STORE || {
+      students: {},
+      teachers: {},
+      fees_matrix: {},
+      users: {}
+    };
+
+    // Backward compatibility proxies
+    Object.defineProperty(window, "inMemoryStudentsData", {
+      get() { return window.MM_STORE.students; },
+      set(val) { window.MM_STORE.students = val || {}; }
+    });
+    let inMemoryStudentsData = window.MM_STORE.students;
+
 
     const ICON_PORTAL = `https://raw.githubusercontent.com/Dev-AmmarAhmed/mm-islamic-student-dashboard/d6d24f3e257c37e211f227d935af222dd37de7ca/icon%20blue.png`;
     
@@ -5448,17 +5463,31 @@ Exact Output JSON Format Required:
         } catch(e) { console.error("Cache cleanup error:", e); }
     };
 
-       // 🚀 Load Offline Persistent Data on Startup (AccuEngine Powered)
+          // 🚀 Persistent Offline Startup & Auto-Flush on Reconnect
     window.addEventListener('load', async () => {
       window.cleanExpiredTestCaches();
-      const localStudents = await safeDataFetch("students");
-      if (localStudents && Object.keys(localStudents).length > 0) {
-        inMemoryStudentsData = localStudents;
-      }
+      await window.ensureUniversalIgrisSync(false);
+
       if (!navigator.onLine) {
         window.showCustomAlert("⚡ Working in Offline Mode. Attendance & entries will auto-sync when online.");
       }
     });
+
+    // 🌐 Seamless Offline-to-Online Auto Sync Trigger
+    window.addEventListener('online', async () => {
+      console.log("🌐 Internet Restored: Flushing pending queue & syncing with cloud...");
+      const Sentinel = window.Igris || window.AccuEngine;
+      if (Sentinel && typeof Sentinel.checkAndSyncData === 'function') {
+        const didUpdate = await Sentinel.checkAndSyncData(false);
+        if (didUpdate) {
+          const currentRole = localStorage.getItem("loggedRole");
+          if (currentRole && typeof window.hydrateRoleDashboard === "function") {
+            await window.hydrateRoleDashboard(currentRole, false);
+          }
+        }
+      }
+    });
+
 
 
 
@@ -5580,10 +5609,10 @@ Exact Output JSON Format Required:
 
     
     
-        async function safeDataFetch(refPath) {
+           async function safeDataFetch(refPath) {
       const Sentinel = window.Igris || window.AccuEngine;
       
-      // 1. Sabse pehle Igris local cache check karo
+      // 1. Local Igris cache check
       if (Sentinel && typeof Sentinel.fetch === "function") {
         const cached = await Sentinel.fetch(refPath);
         if (cached && (typeof cached !== "object" || Object.keys(cached).length > 0)) {
@@ -5591,31 +5620,30 @@ Exact Output JSON Format Required:
         }
       }
 
-      // 2. Agar cache khali hai, toh seedha FIRESTORE (fsDb) se fetch karo (RTDB nahi!)
+      // 2. Firestore fallback if cache miss
       try {
         await window.ensureFirebaseAuth();
         const parts = refPath.split("/");
         const collectionName = parts[0];
 
-               if (parts.length === 1) {
-          // Poori collection fetch karo Firestore se
+        if (parts.length === 1) {
           const snap = await getDocs(collection(fsDb, collectionName));
           const map = {};
           snap.forEach(d => { map[d.id] = d.data(); });
           
-          // Igris cache mein save kar do taaki agli baar 0ms mein mile
           if (Sentinel && typeof Sentinel.setLocal === "function" && Object.keys(map).length > 0) {
             for (const [k, v] of Object.entries(map)) {
-              Sentinel.setLocal(collectionName, k, v);
+              await Sentinel.setLocal(collectionName, k, v);
             }
           }
           return map;
-        
-
         } else if (parts.length === 2) {
-          // Single document fetch karo Firestore se
           const docSnap = await getDoc(doc(fsDb, collectionName, parts[1]));
-          return docSnap.exists() ? docSnap.data() : null;
+          const docData = docSnap.exists() ? docSnap.data() : null;
+          if (docData && Sentinel && typeof Sentinel.setLocal === "function") {
+            await Sentinel.setLocal(collectionName, parts[1], docData);
+          }
+          return docData;
         }
       } catch (err) {
         console.warn("Firestore direct read error:", err);
@@ -5623,6 +5651,7 @@ Exact Output JSON Format Required:
 
       return null;
     }
+
 
 
 
@@ -5640,39 +5669,43 @@ Exact Output JSON Format Required:
     }
 
 
-           // 🛡️ IGRIS MASTER DASHBOARD & MEMORY LOADER
-     // 🛡️ UNIVERSAL IGRIS BOOTSTRAPPER (ADMIN, TEACHER & STUDENT)
+        // 🛡️ UNIVERSAL IGRIS BOOTSTRAPPER (PHASE 2 UNIFIED STORE)
     window.ensureUniversalIgrisSync = async function(force = false) {
       const Sentinel = window.Igris || window.AccuEngine;
-      if (!Sentinel || typeof Sentinel.checkAndSyncData !== "function") return;
+      if (!Sentinel || typeof Sentinel.checkAndSyncData !== "function") return false;
 
       try {
         if (typeof window.ensureFirebaseAuth === "function") {
           await window.ensureFirebaseAuth();
         }
 
-        // Check if data is already in memory or needs download
-        const didSync = await Sentinel.checkAndSyncData(force);
+        // Remote version vs local cache sync check
+        await Sentinel.checkAndSyncData(force);
         
-        // Load into global window memory
-        const [stData, tchData, feesData] = await Promise.all([
-          Sentinel.fetch("students"),
-          Sentinel.fetch("teachers"),
-          Sentinel.fetch("fees_matrix")
+        // Fetch all core collections from local IndexedDB cache
+        const [stMap, tchMap, feesMap, usersMap] = await Promise.all([
+          Sentinel.fetch("students") || {},
+          Sentinel.fetch("teachers") || {},
+          Sentinel.fetch("fees_matrix") || {},
+          Sentinel.fetch("users") || {}
         ]);
 
-        if (stData && Object.keys(stData).length > 0) {
-          window.inMemoryStudentsData = stData;
-          inMemoryStudentsData = stData;
-          console.log(`✔ [Universal Igris] ${Object.keys(stData).length} Students active in memory.`);
-        }
-        if (tchData) {
-          window.inMemoryTeachersData = tchData;
-        }
-        if (feesData) {
-          window.inMemoryFeesMatrix = feesData;
+        // If cache had 0 students but user is online, trigger single force sync
+        if ((!stMap || Object.keys(stMap).length === 0) && navigator.onLine) {
+          console.log("⚠️ [Universal Igris] Cache was empty. Hydrating from Firestore...");
+          await Sentinel.checkAndSyncData(true);
+          const freshSt = await Sentinel.fetch("students") || {};
+          window.MM_STORE.students = freshSt;
+        } else {
+          window.MM_STORE.students = stMap || {};
         }
 
+        window.MM_STORE.teachers = tchMap || {};
+        window.MM_STORE.fees_matrix = feesMap || {};
+        window.MM_STORE.users = usersMap || {};
+        cachedUsersMap = window.MM_STORE.users;
+
+        console.log(`✔ [Phase 2 Store] ${Object.keys(window.MM_STORE.students).length} Students loaded in unified memory.`);
         return true;
       } catch (err) {
         console.error("❌ Universal Sync failed:", err);
@@ -5680,13 +5713,33 @@ Exact Output JSON Format Required:
       }
     };
 
-          // 🛡️ ADMIN DASHBOARD MASTER LOADER (IGRIS CONNECTED)
-    window.loadAdminDashboardData = async function(force = false) {
+
+             // 🛡️ UNIVERSAL ROLE HYDRATOR (PHASE 3 MASTER CONTROLLER)
+    window.hydrateRoleDashboard = async function(role, force = false) {
+      // Step 1: Memory & Cache Sync (Pure Offline First)
       await window.ensureUniversalIgrisSync(force);
-      if (typeof renderAdminStudentsDirectory === "function") renderAdminStudentsDirectory(true);
-      if (typeof window.renderAdminHomeTeacherboardCards === "function") window.renderAdminHomeTeacherboardCards();
-      if (typeof window.calculateAdminEntryTabAnalytics === "function") window.calculateAdminEntryTabAnalytics();
+
+      // Step 2: Role-Specific UI Rendering (Instant from MM_STORE)
+      if (role === "admin") {
+        if (typeof renderAdminStudentsDirectory === "function") renderAdminStudentsDirectory(true);
+        if (typeof window.renderAdminHomeTeacherboardCards === "function") window.renderAdminHomeTeacherboardCards();
+        if (typeof window.calculateAdminEntryTabAnalytics === "function") window.calculateAdminEntryTabAnalytics();
+        if (typeof window.loadManageTeacherList === "function") window.loadManageTeacherList();
+      } else if (role === "teacher") {
+        if (typeof loadTeacherTodayAttendance === "function") await loadTeacherTodayAttendance();
+        if (typeof loadTeacherStudentsDirectory === "function") loadTeacherStudentsDirectory();
+        if (typeof window.renderTeacherboardCardsTable === "function") await window.renderTeacherboardCardsTable();
+        if (typeof window.checkTeacherDailyClaimStatus === "function") await window.checkTeacherDailyClaimStatus();
+        if (typeof window.loadTeacherActiveOnlineTests === "function") window.loadTeacherActiveOnlineTests();
+      } else if (role === "student") {
+        if (typeof refreshStudentDashboard === "function") await refreshStudentDashboard();
+      }
     };
+
+    window.loadAdminDashboardData = async function(force = false) {
+      await window.hydrateRoleDashboard("admin", force);
+    };
+
 
 
 
@@ -6474,18 +6527,16 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       });
     });
 
-          function getLiveStudents() {
+               function getLiveStudents() {
       try { 
-        const data = (inMemoryStudentsData && Object.keys(inMemoryStudentsData).length > 0)
-          ? inMemoryStudentsData
-          : (window.inMemoryStudentsData || {});
+        const data = window.MM_STORE.students || {};
         if (Array.isArray(data)) return data.filter(Boolean);
         return Object.values(data).filter(item => item && typeof item === 'object'); 
       } catch(e) { return []; }
     }
 
-
     async function getStudentRecord(admnId) {
+
       if (!admnId) return null;
       let students = getLiveStudents();
       let found = students.find(s => String(s.admn) === String(admnId));
@@ -6782,12 +6833,18 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
 
 
 
-     window.changeTeacherActiveClass = function(newClass) {
-      assignedClass = newClass;
-      document.getElementById("classBadgeContainer").innerText = `Class: ${newClass}`;
-      if (typeof window.refreshTeacherDashboardData === 'function') window.refreshTeacherDashboardData();
-      refreshAllTeacherData();
+        window.changeTeacherActiveClass = async function(newClass) {
+      assignedClass = cleanClassStr(newClass);
+      const badge = document.getElementById("classBadgeContainer");
+      if (badge) badge.innerText = `Class: ${assignedClass}`;
+
+      // Instant UI reset & fast re-hydrate
+      const tbody = document.getElementById("todayAttendanceTableBody");
+      if (tbody) tbody.innerHTML = `<tr><td colspan="2" style="text-align:center; padding:10px;">Loading Class ${assignedClass} students...</td></tr>`;
+
+      await window.hydrateRoleDashboard("teacher", false);
     };
+
 
                       function renderDashboardForRole(role, aClass, sAdmn) {
       currentRole = role;
@@ -6901,16 +6958,13 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
           activeSelect.value = assignedClass;
         }
 
-        window.switchTab('teacherTabHome', bottomNav.children[0]);
+                window.switchTab('teacherTabHome', bottomNav.children[0]);
 
-        // 🚀 Pehle Sync COMPLETE hoga, USKE BAAD hi UI populate hogi (Zero Race Condition)
+        // 🚀 Zero Race Condition Hydration
         (async () => {
-          await window.ensureUniversalIgrisSync(false);
-          await refreshAllTeacherData();
-          if (typeof window.refreshTeacherDashboardData === 'function') {
-            await window.refreshTeacherDashboardData();
-          }
+          await window.hydrateRoleDashboard("teacher", false);
         })();
+
 
       } else {
         document.body.classList.remove("teacher-mode", "student-mode");
@@ -6931,12 +6985,11 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
           <div class="nav-item" onclick="switchTab('adminTabCard', this, event)"><div class="nav-icon">💳</div>Card</div>
           <div class="nav-item" onclick="switchTab('adminTabExpns', this, event)"><div class="nav-icon">📊</div>Expns</div>
         `;
-        renderAdminStudentsDirectory();
-        window.switchTab('adminTabHome', bottomNav.children[0]);
-        // 🚀 Firestore se Admin Dashboard ka live data load karo
-        if (typeof window.loadAdminDashboardData === "function") {
-          window.loadAdminDashboardData();
-        }
+              window.switchTab('adminTabHome', bottomNav.children[0]);
+        (async () => {
+          await window.hydrateRoleDashboard("admin", false);
+        })();
+
       }
 
     }
@@ -9024,14 +9077,19 @@ document.getElementById("hwTitleInput").value = "";
           updates[`email_lookup/${window.encodeEmailKey(email)}`] = String(newAdmn);
         }
 
-        // 🚀 1. Immediate Local Cache Update (UI instantly update hogi offline me)
-        if (window.AccuEngine) {
-          await window.AccuEngine.setLocal("students", newAdmn, updatedStudentObj);
+             // 🚀 1. Immediate Local Cache & Global Store Update
+        window.MM_STORE.students[newAdmn] = updatedStudentObj;
+        if (String(oldAdmn) !== String(newAdmn)) {
+          delete window.MM_STORE.students[oldAdmn];
+        }
+
+        const Sentinel = window.Igris || window.AccuEngine;
+        if (Sentinel && typeof Sentinel.setLocal === "function") {
+          await Sentinel.setLocal("students", newAdmn, updatedStudentObj);
           if (String(oldAdmn) !== String(newAdmn)) {
-            await window.AccuEngine.invalidate("students", oldAdmn);
+            await Sentinel.invalidate("students", oldAdmn);
           }
         }
-        inMemoryStudentsData[newAdmn] = updatedStudentObj;
 
                 const syncPayload = {
           admn: newAdmn,
@@ -9064,7 +9122,11 @@ document.getElementById("hwTitleInput").value = "";
         }
 
 
-        if(currentRole === "teacher") await refreshAllTeacherData(); else renderAdminStudentsDirectory();
+               if(currentRole === "teacher") {
+          await refreshAllTeacherData();
+        } else {
+          renderAdminStudentsDirectory();
+        }
         window.closeModal("studentProfileModal");
 
       });
@@ -10157,23 +10219,45 @@ document.getElementById("hwTitleInput").value = "";
       }
     };
 
-    window.loadTeacherActiveOnlineTests = function() {
+        window.loadTeacherActiveOnlineTests = async function() {
       const container = document.getElementById("tActiveOnlineTestsContainer");
-      if(!container) return;
+      if (!container) return;
+
+      const classKey = cleanClassStr(assignedClass);
+      const allTests = await safeDataFetch("online_tests") || {};
       
-      onValue(ref(db, `online_tests/${cleanClassStr(assignedClass)}`), (snap) => {
-        container.innerHTML = "";
-        if (!snap.exists()) { container.innerHTML = `<div style="font-size:11px; color:var(--text-muted); padding: 10px; background: rgba(0,0,0,0.02); border-radius: 8px;">No active tests found.</div>`; return; }
-        
-        let html = "";
-        const tests = snap.val();
-        for (let testId in tests) {
-          const t = tests[testId];
-          html += `<div style="display:flex; justify-content:space-between; align-items:center; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; margin-bottom: 8px; background: var(--card-bg); box-shadow: 0 2px 8px rgba(0,0,0,0.02);"><div><div style="font-size:13px; font-weight:800; color:var(--text-color);">${t.title || t.testName || "Online Test"}</div><div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Sub: ${t.subject} | Time: ${t.timeMinutes} Min</div></div><button class="btn-sm-del" style="background:#dc2626; color:white; padding:6px 12px; font-size:11px; border-radius:8px; cursor:pointer;" onclick="window.removeOnlineTest('${testId}')">🗑️ Remove</button></div>`;
-        }
-        container.innerHTML = html;
-      });
+      // Class filter: check nested or root map
+      let classTests = allTests[classKey] || {};
+      if (Object.keys(classTests).length === 0) {
+        Object.entries(allTests).forEach(([k, v]) => {
+          if (v && cleanClassStr(v.class) === classKey) {
+            classTests[k] = v;
+          }
+        });
+      }
+
+      container.innerHTML = "";
+      const testEntries = Object.entries(classTests);
+      if (testEntries.length === 0) {
+        container.innerHTML = `<div style="font-size:11px; color:var(--text-muted); padding: 10px; background: rgba(0,0,0,0.02); border-radius: 8px;">No active tests found for Class ${assignedClass}.</div>`;
+        return;
+      }
+
+      let html = "";
+      for (const [testId, t] of testEntries) {
+        if (!t) continue;
+        html += `
+          <div style="display:flex; justify-content:space-between; align-items:center; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; margin-bottom: 8px; background: var(--card-bg); box-shadow: 0 2px 8px rgba(0,0,0,0.02);">
+            <div>
+              <div style="font-size:13px; font-weight:800; color:var(--text-color);">${t.title || t.testName || "Online Test"}</div>
+              <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Sub: ${t.subject || '-'} | Time: ${t.timeMinutes || 15} Min</div>
+            </div>
+            <button class="btn-sm-del" style="background:#dc2626; color:white; padding:6px 12px; font-size:11px; border-radius:8px; cursor:pointer;" onclick="window.removeOnlineTest('${testId}')">🗑️ Remove</button>
+          </div>`;
+      }
+      container.innerHTML = html;
     };
+
 
     window.loadTeacherTestHistory = async function() {
       const tbody = document.getElementById("tTestHistoryTableBody");
@@ -10510,19 +10594,39 @@ document.getElementById("hwTitleInput").value = "";
       tList.forEach((t, idx) => { tbody.innerHTML += `<tr><td><b>${idx + 1}</b></td><td style="text-align:left; padding-left:10px; font-weight:700;">${t.name}</td><td>Class ${t.assignedClass || '-'}</td><td><span class="pts-chip" style="background:#7c3aed;">${t.points || 0} PTS</span></td></tr>`; });
     };
 
-    window.loadTeacherBoardNotifications = function() {
+      window.loadTeacherBoardNotifications = async function() {
       const container = document.getElementById("teacherBoardContainer");
-      if(!container) return;
-      onValue(ref(db, "teacher_points_logs"), (snap) => {
-        container.innerHTML = "";
-        if(!snap.exists()) { container.innerHTML = `<div style="font-size:12px; color:var(--text-muted); text-align:center; padding:12px;">No point updates yet.</div>`; return; }
-        const logsArr = Object.values(snap.val()).reverse().slice(0, 10);
-        logsArr.forEach(log => {
-          const isPositive = log.points >= 0;
-          container.innerHTML += `<div style="padding:12px 14px; border-radius:14px; background: ${isPositive ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)'}; border: 1px solid ${isPositive ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}; display:flex; justify-content:space-between; align-items:center;"><div><div style="font-size:13px; font-weight:800; color:var(--text-color);">👩‍🏫 ${log.teacherName} <span style="font-size:11px; font-weight:700; color:var(--text-muted);">(Class ${log.assignedClass})</span></div><div style="font-size:11px; font-weight:700; color:var(--text-muted); margin-top:2px;">📌 ${log.reason}</div><div style="font-size:10px; color:var(--text-muted); margin-top:4px;">🕒 ${log.date}</div></div><div style="text-align:right;"><div style="font-size:16px; font-weight:900; color:${isPositive ? '#16a34a' : '#dc2626'};">${isPositive ? '+' : ''}${log.points} PTS</div><div style="font-size:10px; font-weight:800; color:var(--text-muted);">Total: ${log.totalPoints}</div></div></div>`;
-        });
+      if (!container) return;
+
+      const logsObj = await safeDataFetch("teacher_points_logs") || {};
+      container.innerHTML = "";
+      const logsArr = Object.values(logsObj).reverse().slice(0, 10);
+
+      if (logsArr.length === 0) {
+        container.innerHTML = `<div style="font-size:12px; color:var(--text-muted); text-align:center; padding:12px;">No point updates yet.</div>`;
+        return;
+      }
+
+      let html = "";
+      logsArr.forEach(log => {
+        if (!log) return;
+        const isPositive = (log.points || 0) >= 0;
+        html += `
+          <div style="padding:12px 14px; border-radius:14px; background: ${isPositive ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)'}; border: 1px solid ${isPositive ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}; display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <div style="font-size:13px; font-weight:800; color:var(--text-color);">👩‍🏫 ${log.teacherName || 'Mentor'} <span style="font-size:11px; font-weight:700; color:var(--text-muted);">(Class ${log.assignedClass || '-'})</span></div>
+              <div style="font-size:11px; font-weight:700; color:var(--text-muted); margin-top:2px;">📌 ${log.reason || 'Point Activity'}</div>
+              <div style="font-size:10px; color:var(--text-muted); margin-top:4px;">🕒 ${log.date || '-'}</div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-size:16px; font-weight:900; color:${isPositive ? '#16a34a' : '#dc2626'};">${isPositive ? '+' : ''}${log.points || 0} PTS</div>
+              <div style="font-size:10px; font-weight:800; color:var(--text-muted);">Total: ${log.totalPoints || 0}</div>
+            </div>
+          </div>`;
       });
+      container.innerHTML = html;
     };
+
 
             window.openEditTeacherModal = async function(username) {
       const tObj = await safeDataFetch(`teachers/${username}`) || {};
@@ -11923,26 +12027,7 @@ window.closeModal("applyLeaveModal");
   
 
 
-    window.deleteLeaveApp = async function() {
-        const leaveId = document.getElementById("laLeaveId").value;
-        const admn = document.getElementById("laAdmn").value;
-        if(!leaveId || !admn) return;
-
-        const dbPath = currentActionLeaveRole === 'teacher' 
-            ? `teacher_leave_applications/${admn}/${leaveId}` 
-            : `leave_applications/${admn}/${leaveId}`;
-
-        window.showCustomConfirm("Are you sure you want to completely delete this leave application?", async () => {
-            try {
-                await remove(ref(db, dbPath));
-                alert("🗑️️ Leave application deleted successfully.");
-                window.closeModal("leaveActionModal");
-                window.loadAllLeaves(); 
-            } catch(e) {
-                alert("Error deleting application.");
-            }
-        });
-    };
+   
 
 
     // ==========================================
