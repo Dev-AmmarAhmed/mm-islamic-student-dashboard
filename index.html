@@ -1721,14 +1721,15 @@ canvas { touch-action: pan-y !important; }
       </button>
     </div>
 
-            <!-- SECURED BY ACCUENGINE PROFESSIONAL BADGE -->
-    <div style="position: absolute; bottom: 38px; left: 0; right: 0; display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 11px; font-weight: 700; letter-spacing: 0.6px; color: var(--text-muted); user-select: none; z-index: 50;">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0288d1" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <!-- SECURED BY ACCUENGINE PROFESSIONAL BADGE -->
+    <div style="position: absolute; bottom: 38px; left: 0; right: 0; display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 11px; font-weight: 700; letter-spacing: 0.6px; color: var(--text-muted); user-select: none; z-index: 999; pointer-events: auto !important;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0288d1" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="pointer-events: none;">
         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
         <path d="m9 12 2 2 4-4"></path>
       </svg>
-      <span>Secured by <b onclick="openModal('accuEngineInfoModal')" style="color: #0288d1; font-weight: 900; letter-spacing: 0.8px; cursor: pointer; text-decoration: underline;">AccuEngine</b></span>
+      <span>Secured by <b role="button" tabindex="0" onclick="window.openModal('accuEngineInfoModal')" style="color: #0288d1; font-weight: 900; letter-spacing: 0.8px; cursor: pointer; text-decoration: underline; pointer-events: auto !important; display: inline-block; padding: 2px 4px;">AccuEngine</b></span>
     </div>
+
 
 
   </section>
@@ -4842,48 +4843,107 @@ Exact Output JSON Format Required:
     </div>
   </div>
 
-  <!-- 🛡️ ACCUENGINE INFO MODAL -->
-  <div id="accuEngineInfoModal" class="modal-overlay" style="z-index: 100095;">
-    <div class="modal-content" style="max-width: 360px; padding: 22px; border-radius: 20px; text-align: center;">
-      <div style="font-size: 42px; margin-bottom: 8px;">🛡️</div>
-      <h3 style="font-size: 18px; font-weight: 900; color: #0288d1; margin-bottom: 4px;">AccuEngine Security</h3>
-      <p style="font-size: 11px; font-weight: 800; color: #16a34a; margin-bottom: 16px;">Verified & Active Protection</p>
 
-      <div style="text-align: left; background: rgba(0,0,0,0.03); border: 1px solid var(--border-color); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;">
+  <!-- 🛡️ ACCUENGINE INFORMATION MODAL -->
+  <div id="accuEngineInfoModal" class="modal-overlay" style="z-index: 100095;">
+    <div class="modal-content" style="max-width: 380px; padding: 24px; border-radius: 22px; text-align: center;">
+      <div style="font-size: 42px; margin-bottom: 8px;">🛡️</div>
+      <h3 style="font-size: 19px; font-weight: 900; color: #0288d1; margin-bottom: 2px;">AccuEngine Architecture</h3>
+      <p style="font-size: 11px; font-weight: 800; color: #16a34a; margin-bottom: 16px;">Active Client-Side Security Layer</p>
+
+      <div style="text-align: left; background: rgba(0,0,0,0.03); border: 1px solid var(--border-color); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 14px; margin-bottom: 16px;">
         <div style="display: flex; gap: 10px; align-items: flex-start;">
           <span style="font-size: 18px;">🔒</span>
           <div>
             <div style="font-size: 12px; font-weight: 800; color: var(--text-color);">Encrypted Data Vault</div>
-            <div style="font-size: 11px; font-weight: 600; color: var(--text-muted); margin-top: 2px;">School ka saara data (bachon ke marks, fees, personal details) phone ke andar locked aur safe rehta hai.</div>
+            <div style="font-size: 11px; font-weight: 600; color: var(--text-muted); margin-top: 2px; line-height: 1.4;">All student records, fee logs, and sensitive identity files are stored on this device using client-side hardware-level encryption.</div>
           </div>
         </div>
 
         <div style="display: flex; gap: 10px; align-items: flex-start;">
           <span style="font-size: 18px;">⚡</span>
           <div>
-            <div style="font-size: 12px; font-weight: 800; color: var(--text-color);">Super Fast & Offline Ready</div>
-            <div style="font-size: 11px; font-weight: 600; color: var(--text-muted); margin-top: 2px;">Bina slow hue app instant khulti hai aur network na hone par bhi data secure rehta hai.</div>
+            <div style="font-size: 12px; font-weight: 800; color: var(--text-color);">High-Speed Offline Delta Sync</div>
+            <div style="font-size: 11px; font-weight: 600; color: var(--text-muted); margin-top: 2px; line-height: 1.4;">Zero network latency. Operates seamlessly without internet connection and synchronizes automatically upon reconnecting.</div>
           </div>
         </div>
 
         <div style="display: flex; gap: 10px; align-items: flex-start;">
           <span style="font-size: 18px;">🔑</span>
           <div>
-            <div style="font-size: 12px; font-weight: 800; color: var(--text-color);">Device Fingerprint & PIN</div>
-            <div style="font-size: 11px; font-weight: 600; color: var(--text-muted); margin-top: 2px;">Aapke dashboard ko sirf aap apne fingerprint ya 4-digit PIN se hi khol sakte hain.</div>
+            <div style="font-size: 12px; font-weight: 800; color: var(--text-color);">Biometric & PIN Authentication</div>
+            <div style="font-size: 11px; font-weight: 600; color: var(--text-muted); margin-top: 2px; line-height: 1.4;">Unauthorized device access is restricted with biometric fingerprint verification and custom 4-digit cryptographic PIN locks.</div>
           </div>
         </div>
       </div>
 
-      <div style="padding: 10px; border-radius: 10px; background: rgba(2, 136, 209, 0.08); border: 1px dashed #0288d1; margin-bottom: 16px;">
+      <div style="padding: 10px 14px; border-radius: 10px; background: rgba(2, 136, 209, 0.08); border: 1px dashed #0288d1; margin-bottom: 16px;">
         <p style="font-size: 11px; font-weight: 800; color: #0288d1; margin: 0; line-height: 1.4;">
-          AccuEngine is managed and Maintained by MM Islamic School
+          AccuEngine is managed and maintained by MM Islamic English School.
         </p>
       </div>
 
-      <button class="btn-primary btn-blue" style="margin-top: 0; padding: 11px;" onclick="closeModal('accuEngineInfoModal')">
-        OK, Got it!
+      <button class="btn-primary btn-blue" style="margin-top: 0; padding: 12px; font-size: 13px;" onclick="closeModal('accuEngineInfoModal')">
+        Close
       </button>
+    </div>
+  </div>
+
+  <!-- 🔒 SECURE APP SETUP MODAL -->
+  <div id="secureAppModal" class="modal-overlay" style="z-index: 100070;">
+    <div class="modal-content" style="max-width: 360px; text-align: center; padding: 22px; border-radius: 20px;">
+      <div class="modal-header" style="background: transparent; padding: 0 0 10px 0; border-bottom: 1.5px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+        <span style="color: #10b981; font-size: 16px; font-weight: 900;">🔒 Secure Application</span>
+        <span class="close-modal" onclick="closeModal('secureAppModal')">✕</span>
+      </div>
+
+      <div class="modal-body" style="padding: 14px 0 0 0; text-align: left;">
+        <p style="font-size: 11px; font-weight: 700; color: var(--text-muted); margin-bottom: 14px; line-height: 1.4;">
+          Set a master 4-digit PIN and enable Biometrics to authenticate access on every application launch.
+        </p>
+
+        <label style="font-size: 11px; font-weight: 800;">Set 4-Digit PIN *:</label>
+        <input type="password" id="secNewPin" maxlength="4" pattern="[0-9]*" inputmode="numeric" placeholder="••••" style="text-align: center; font-size: 22px; letter-spacing: 8px; font-weight: 900; margin-top: 4px;">
+
+        <label style="margin-top: 12px; font-size: 11px; font-weight: 800;">Confirm 4-Digit PIN *:</label>
+        <input type="password" id="secConfirmPin" maxlength="4" pattern="[0-9]*" inputmode="numeric" placeholder="••••" style="text-align: center; font-size: 22px; letter-spacing: 8px; font-weight: 900; margin-top: 4px;">
+
+        <div class="dark-mode-toggle-row" style="margin-top: 16px; border-radius: 12px; border: 1px solid var(--border-color); padding: 12px 14px; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <div style="font-size: 12px; font-weight: 800; color: var(--text-color);">Enable Biometrics 🧬</div>
+            <div style="font-size: 9.5px; font-weight: 700; color: var(--text-muted);">Fingerprint / Face ID Unlock</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="secBiometricChk" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <button id="btnSaveAppLock" class="btn-primary btn-green" style="margin-top: 18px; padding: 13px;" onclick="window.saveAppLockSettings()">
+          🔒 Secure & Save Lock
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 🔐 APP INITIALIZATION LOCK SCREEN OVERLAY -->
+  <div id="appLockScreenOverlay" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--app-bg); z-index: 99999999; flex-direction: column; align-items: center; justify-content: center; padding: 24px;">
+    <div style="text-align: center; max-width: 320px; width: 100%;">
+      <div style="font-size: 48px; margin-bottom: 8px;">🔐</div>
+      <h2 style="font-size: 19px; font-weight: 900; color: #0288d1; margin-bottom: 4px;">Secured by AccuEngine</h2>
+      <p id="lockScreenUserText" style="font-size: 12px; font-weight: 700; color: var(--text-muted); margin-bottom: 22px;">Authenticate to access dashboard</p>
+
+      <input type="password" id="unlockPinInput" maxlength="4" pattern="[0-9]*" inputmode="numeric" placeholder="••••" style="width: 170px; margin: 0 auto; display: block; text-align: center; font-size: 28px; letter-spacing: 10px; font-weight: 900; padding: 10px; border: 2px solid #0288d1; border-radius: 14px; background: var(--input-bg); color: var(--text-color); outline: none;">
+
+      <div style="display: flex; gap: 10px; margin-top: 20px;">
+        <button id="btnBiometricUnlock" class="btn-primary btn-purple" style="flex: 1; margin: 0; font-size: 12px;" onclick="window.triggerBiometricUnlock()">
+          🧬 Biometric
+        </button>
+        <button class="btn-primary btn-blue" style="flex: 1; margin: 0; font-size: 12px;" onclick="window.submitPinUnlock()">
+          Unlock ➔
+        </button>
+      </div>
+      <p id="unlockErrorText" style="color: #ef4444; font-size: 12px; font-weight: 800; margin-top: 14px; display: none;">Invalid 4-digit PIN. Please try again.</p>
     </div>
   </div>
 
@@ -5599,23 +5659,24 @@ Exact Output JSON Format Required:
       btn.disabled = true;
       btn.innerText = "Securing Vault...";
 
-      try {
+            try {
         const success = await window.AccuEngine.setAppLock(loggedUser, pin1, bioEnabled);
         if (success) {
-          alert("✔ App Lock is now ACTIVE!\nHar app launch par PIN ya Biometrics verify karna hoga.");
+          alert("✔ Security Lock Activated!\nYou will be required to authenticate with your PIN or Biometrics on every application launch.");
           window.closeModal("secureAppModal");
           document.getElementById("secNewPin").value = "";
           document.getElementById("secConfirmPin").value = "";
         } else {
-          alert("Could not activate lock.");
+          alert("Unable to activate security lock. Please try again.");
         }
       } catch (e) {
-        alert("Security setup error: " + e.message);
+        alert("Security configuration error: " + e.message);
       } finally {
         btn.disabled = false;
         btn.innerText = "🔒 Secure & Save Lock";
       }
     };
+
 
     window.checkAppLockOnStartup = async function() {
       const loggedUser = localStorage.getItem("loggedUser");
@@ -5666,12 +5727,13 @@ Exact Output JSON Format Required:
         await window.AccuEngine.promptBiometrics(loggedUser);
         errEl.style.display = "none";
         document.getElementById("appLockScreenOverlay").style.display = "none";
-      } catch (err) {
+           } catch (err) {
         console.warn("Biometric check bypassed to PIN:", err);
         errEl.style.display = "block";
-        errEl.innerText = "Fingerprint check failed. Please enter 4-digit PIN.";
+        errEl.innerText = "Biometric authentication failed. Please enter your 4-digit PIN.";
         document.getElementById("unlockPinInput").focus();
       }
+
     };
 
     // ==========================================
