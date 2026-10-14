@@ -1,6 +1,6 @@
 /**
  * ====================================================================
- * MMASSISTANT AI (PURE LLAMA-3 70B/8B HIGH-IQ ENGINE)
+ * MMASSISTANT AI (MULTI-TURN MEMORY + ACCURATE DATA GROUNDING)
  * M.M ISLAMIC ENGLISH SCHOOL ERP
  * ====================================================================
  */
@@ -22,6 +22,7 @@
 
   const STORAGE_KEY = "mm_assistant_chat_history_v1";
 
+  // 2D AI Sparkle SVG
   const AI_SPARKLE_SVG = `
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M12 2C12 7.52285 7.52285 12 2 12C7.52285 12 12 16.4771 12 22C12 16.4771 16.4771 12 22 12C16.4771 12 12 7.52285 12 2Z" fill="url(#sparkleGrad)" />
@@ -163,7 +164,10 @@
     box.scrollTop = box.scrollHeight;
   }
 
-  async function buildContextSlice(userQuery) {
+  // ----------------------------------------------------
+  // INTELLIGENT CONTEXT BUILDER (MULTI-STUDENT & RECENT MEMORY)
+  // ----------------------------------------------------
+  async function buildContextSlice(userQuery, recentHistoryText) {
     const Sentinel = window.Igris || window.AccuEngine;
     if (!Sentinel) return "{}";
 
@@ -172,6 +176,8 @@
       const teachersMap = (await Sentinel.fetch("teachers")) || {};
       const students = Object.values(studentsMap).filter(Boolean);
       const teachers = Object.values(teachersMap).filter(Boolean);
+
+      const combinedText = (userQuery + " " + recentHistoryText).toLowerCase().replace(/[^a-z0-9\s]/g, "");
 
       const context = {
         total_students: students.length,
@@ -182,23 +188,33 @@
           .map((t) => `${t.name} (Class ${t.assignedClass}): ${t.points || 0} pts`)
       };
 
-      const q = userQuery.toLowerCase().replace(/[^a-z0-9\s]/g, "");
-
+      // 🔍 Multi-match student finder (Matches current query OR recent chat history)
+      const matchedList = [];
       for (const st of students) {
         const sName = (st.name || "").toLowerCase();
-        if (sName && (q.includes(sName) || sName.split(" ").some(part => part.length > 2 && q.includes(part)))) {
-          context.matched_student = {
+        if (!sName) continue;
+        const parts = sName.split(" ").filter(p => p.length >= 3);
+        const isMatched = combinedText.includes(sName) || parts.some(p => combinedText.includes(p));
+
+        if (isMatched) {
+          matchedList.push({
             name: st.name,
             class: st.class,
             roll_or_admn: st.admn
-          };
-          const currentMonth = ["January","February","March","April","May","June","July","August","September","October","November","December"][new Date().getMonth()];
-          context.matched_student_attendance = (await Sentinel.fetch(`attendance/${st.admn}/${currentMonth}`)) || {};
-          break;
+          });
+          if (matchedList.length >= 6) break;
         }
       }
 
-      if (/(fee|unpaid|pending|paid|due|rupaye|paisa)/i.test(q)) {
+      if (matchedList.length > 0) {
+        context.found_students = matchedList;
+        // First matched student's attendance slice
+        const currentMonth = ["January","February","March","April","May","June","July","August","September","October","November","December"][new Date().getMonth()];
+        context.primary_student_attendance = (await Sentinel.fetch(`attendance/${matchedList[0].roll_or_admn}/${currentMonth}`)) || {};
+      }
+
+      // Fees inquiry check
+      if (/(fee|unpaid|pending|paid|due|rupaye|paisa)/i.test(combinedText)) {
         const feesMap = (await Sentinel.fetch("fees_matrix")) || {};
         const currentMonth = "September";
         let unpaid = 0, paid = 0, dues = 0;
@@ -226,7 +242,7 @@
   }
 
   // ----------------------------------------------------
-  // INTELLIGENT MODEL SELECTOR (Strict 70B / 8B priority)
+  // DYNAMIC LIVE MODEL SELECTOR
   // ----------------------------------------------------
   let memoizedLiveModel = null;
 
@@ -242,7 +258,6 @@
     const json = await res.json();
     const modelIds = (json.data || []).map(m => m.id);
 
-    // High IQ Models preference order (no 1B/3B junk)
     const preferred = [
       "llama-3.3-70b-versatile",
       "llama-3.1-70b-versatile",
@@ -262,23 +277,38 @@
   }
 
   // ----------------------------------------------------
-  // CLEAN INFERENCE (NATURAL CONVERSATION MODE)
+  // MULTI-TURN INFERENCE CALL (CHAT HISTORY PRESERVED)
   // ----------------------------------------------------
   async function callGroqDirect(userPrompt, verifiedContext) {
     const apiKey = getSecureKey();
     const activeModel = await getLiveActiveModel(apiKey);
 
     const systemPrompt = `You are MMAssistant, an intelligent and polite assistant for M.M Islamic English School.
+You are talking to the SCHOOL ADMINISTRATOR (Admin). The user is NOT a student.
 
-School Data:
+Current School Database Context:
 ${verifiedContext}
 
-Instructions:
-- Answer directly, politely, and naturally in clean Roman Urdu or English.
-- Keep answers concise (1-3 sentences).
-- Do NOT repeat instructions, guidelines, or technical words like "verified context" or "operating rules".
-- When confirming a student: "Ji haan, [Name] Class [Class] mein registered hain."
-- For leaderboards or fees: Give direct numbers or names cleanly.`;
+CRITICAL RULES:
+1. Always remember previous conversation context. If the user asks a follow-up question like "Konsi class me?", check which student was mentioned previously and answer their class from the Database Context.
+2. NEVER say "Aap 3rd class me hain" or "Aap 4th class me hain" — the user is the Admin/Principal!
+3. If asked about a student: State their exact full name and their class immediately.
+   Example: "School mein Ab Rahman Rizwan naam ka 1 student hai, jo Class 4 mein padhta hai."
+4. If multiple students match, list all of them with their respective classes.
+5. Answer in natural, concise Roman Urdu or English in 1-2 sentences. Never hallucinate or guess.`;
+
+    // Last 4 conversation turns include karein taaki context bana rahe
+    const rawHistory = getHistory();
+    const recentMessages = rawHistory.slice(-5).map(m => ({
+      role: m.role === "user" ? "user" : "assistant",
+      content: m.text
+    }));
+
+    const messagesPayload = [
+      { role: "system", content: systemPrompt },
+      ...recentMessages,
+      { role: "user", content: userPrompt }
+    ];
 
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
@@ -288,11 +318,8 @@ Instructions:
       },
       body: JSON.stringify({
         model: activeModel,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
-        ],
-        temperature: 0.2,
+        messages: messagesPayload,
+        temperature: 0.1, // Low temperature to stop hallucinations
         max_tokens: 300
       })
     });
@@ -345,7 +372,8 @@ Instructions:
       btn.innerText = "Thinking...";
 
       try {
-        const contextSlice = await buildContextSlice(text);
+        const recentHist = getHistory().slice(-4).map(m => m.text).join(" ");
+        const contextSlice = await buildContextSlice(text, recentHist);
         const aiReply = await callGroqDirect(text, contextSlice);
         saveMessage("assistant", aiReply);
         renderHistory();
