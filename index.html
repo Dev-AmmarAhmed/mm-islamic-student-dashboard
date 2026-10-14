@@ -1721,14 +1721,15 @@ canvas { touch-action: pan-y !important; }
       </button>
     </div>
 
-      <!-- SECURED BY ACCUENGINE PROFESSIONAL BADGE -->
-    <div style="position: absolute; bottom: 38px; left: 0; right: 0; display: flex; align-items: center; justify-content: center; gap: 7px; opacity: 0.85; font-size: 11px; font-weight: 700; letter-spacing: 0.6px; color: var(--text-muted); user-select: none; pointer-events: none;">
+            <!-- SECURED BY ACCUENGINE PROFESSIONAL BADGE -->
+    <div style="position: absolute; bottom: 38px; left: 0; right: 0; display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 11px; font-weight: 700; letter-spacing: 0.6px; color: var(--text-muted); user-select: none; z-index: 50;">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0288d1" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
         <path d="m9 12 2 2 4-4"></path>
       </svg>
-      <span>Secured by <b style="color: #0288d1; font-weight: 900; letter-spacing: 0.8px;">AccuEngine</b></span>
+      <span>Secured by <b onclick="openModal('accuEngineInfoModal')" style="color: #0288d1; font-weight: 900; letter-spacing: 0.8px; cursor: pointer; text-decoration: underline;">AccuEngine</b></span>
     </div>
+
 
   </section>
 
@@ -4795,8 +4796,8 @@ Exact Output JSON Format Required:
   <!-- 🔐 APP INITIALIZATION LOCK SCREEN OVERLAY -->
   <div id="appLockScreenOverlay" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--app-bg); z-index: 99999999; flex-direction: column; align-items: center; justify-content: center; padding: 24px;">
     <div style="text-align: center; max-width: 320px; width: 100%;">
-      <div style="font-size: 48px; margin-bottom: 8px;">🔐</div>
-      <h2 style="font-size: 19px; font-weight: 900; color: var(--text-color); margin-bottom: 4px;">Application Locked</h2>
+           <div style="font-size: 48px; margin-bottom: 8px;">🔐</div>
+      <h2 style="font-size: 19px; font-weight: 900; color: #0288d1; margin-bottom: 4px;">Secured by AccuEngine</h2>
       <p id="lockScreenUserText" style="font-size: 12px; font-weight: 700; color: var(--text-muted); margin-bottom: 22px;">Authenticate to access dashboard</p>
 
       <input type="password" id="unlockPinInput" maxlength="4" pattern="[0-9]*" inputmode="numeric" placeholder="••••" style="width: 170px; margin: 0 auto; display: block; text-align: center; font-size: 28px; letter-spacing: 10px; font-weight: 900; padding: 10px; border: 2px solid #0288d1; border-radius: 14px; background: var(--input-bg); color: var(--text-color); outline: none;">
@@ -4838,6 +4839,51 @@ Exact Output JSON Format Required:
         <div id="inAppPdfOverlayShield" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none;"></div>
       </div>
 
+    </div>
+  </div>
+
+  <!-- 🛡️ ACCUENGINE INFO MODAL -->
+  <div id="accuEngineInfoModal" class="modal-overlay" style="z-index: 100095;">
+    <div class="modal-content" style="max-width: 360px; padding: 22px; border-radius: 20px; text-align: center;">
+      <div style="font-size: 42px; margin-bottom: 8px;">🛡️</div>
+      <h3 style="font-size: 18px; font-weight: 900; color: #0288d1; margin-bottom: 4px;">AccuEngine Security</h3>
+      <p style="font-size: 11px; font-weight: 800; color: #16a34a; margin-bottom: 16px;">Verified & Active Protection</p>
+
+      <div style="text-align: left; background: rgba(0,0,0,0.03); border: 1px solid var(--border-color); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;">
+        <div style="display: flex; gap: 10px; align-items: flex-start;">
+          <span style="font-size: 18px;">🔒</span>
+          <div>
+            <div style="font-size: 12px; font-weight: 800; color: var(--text-color);">Encrypted Data Vault</div>
+            <div style="font-size: 11px; font-weight: 600; color: var(--text-muted); margin-top: 2px;">School ka saara data (bachon ke marks, fees, personal details) phone ke andar locked aur safe rehta hai.</div>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 10px; align-items: flex-start;">
+          <span style="font-size: 18px;">⚡</span>
+          <div>
+            <div style="font-size: 12px; font-weight: 800; color: var(--text-color);">Super Fast & Offline Ready</div>
+            <div style="font-size: 11px; font-weight: 600; color: var(--text-muted); margin-top: 2px;">Bina slow hue app instant khulti hai aur network na hone par bhi data secure rehta hai.</div>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 10px; align-items: flex-start;">
+          <span style="font-size: 18px;">🔑</span>
+          <div>
+            <div style="font-size: 12px; font-weight: 800; color: var(--text-color);">Device Fingerprint & PIN</div>
+            <div style="font-size: 11px; font-weight: 600; color: var(--text-muted); margin-top: 2px;">Aapke dashboard ko sirf aap apne fingerprint ya 4-digit PIN se hi khol sakte hain.</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="padding: 10px; border-radius: 10px; background: rgba(2, 136, 209, 0.08); border: 1px dashed #0288d1; margin-bottom: 16px;">
+        <p style="font-size: 11px; font-weight: 800; color: #0288d1; margin: 0; line-height: 1.4;">
+          AccuEngine is managed and Maintained by MM Islamic School
+        </p>
+      </div>
+
+      <button class="btn-primary btn-blue" style="margin-top: 0; padding: 11px;" onclick="closeModal('accuEngineInfoModal')">
+        OK, Got it!
+      </button>
     </div>
   </div>
 
