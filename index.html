@@ -5301,7 +5301,7 @@ Exact Output JSON Format Required:
     const auth = getAuth(app);
     const fsDb = getFirestore(app);
 
-          // 🚀 Phase 2: AccuEngine Bridge Connect (Offline Outbox Ready)
+                  // 🚀 Phase 2: AccuEngine Bridge Connect (Offline Outbox Ready)
     if (window.AccuEngine) {
       window.AccuEngine.init({
         fsDb: fsDb,
@@ -5312,6 +5312,7 @@ Exact Output JSON Format Required:
         collection: collection,
         getDocs: getDocs,
         ref: ref,
+        set: set,
         get: get,
         child: child,
         update: update,
@@ -11076,23 +11077,20 @@ window.checkMusterButtonStates();
         resizeObserver.observe(pane);
     });
 
-         window.initNativePushAndSW();
+                    window.initNativePushAndSW();
       window.checkAppLockOnStartup();
       setTimeout(() => {
         const loggedUser = localStorage.getItem("loggedUser"), loggedRole = localStorage.getItem("loggedRole");
-     if(loggedUser && loggedRole) {
+        if(loggedUser && loggedRole) {
           if(typeof window.listenToNotifications === 'function') window.listenToNotifications();
           if(loggedRole === "teacher") { 
             window.loadTeacherBoardNotifications(); 
             window.checkTeacherDailyClaimStatus(); 
           }
           if(loggedRole === "admin") { 
-            if(typeof window.loadAdminDashboardData === "function") {
-              window.loadAdminDashboardData();
-            } else {
-              window.calculateAdminEntryTabAnalytics(); 
-              window.renderAdminHomeTeacherboardCards(); 
-            }
+            // Duplicate download call eliminated. UI will update from memory.
+            window.calculateAdminEntryTabAnalytics(); 
+            window.renderAdminHomeTeacherboardCards(); 
           }
         }
       }, 300);
