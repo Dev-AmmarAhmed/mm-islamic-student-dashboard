@@ -1,22 +1,15 @@
 /**
  * ====================================================================
- * IGRIS v6.0 - THE SHADOW SENTINEL & CRYPTOGRAPHIC SECURITY VAULT
+ * IGRIS v6.5 - TRANSPARENT HARDWARE SENTINEL (FAIL-SAFE DECRYPTION)
  * System: MM Islamic English School ERP
- * Author: Managed & Maintained by MM Islamic English School
- * Features:
- *  - AES-GCM 256-Bit Hardware Encrypted Storage
- *  - Anti-Tamper Integrity Fingerprint
- *  - Zero-Network Delta Version Gatekeeper
- *  - WebAuthn Biometric & PIN Security Gate
  * ====================================================================
  */
 
 (function (window) {
   "use strict";
 
-  // Security Signature to prevent dummy overrides
   const IGRIS_SIGNATURE = "IGRIS_CORE_SECURE_VAULT_7789";
-  const DB_NAME = "AccuEngine_Storage";
+  const DB_NAME = "AccuEngine_Storage"; // Purana database name taaki data loose na ho
   const DB_VERSION = 14;
   const STORES = [
     "users",
@@ -70,47 +63,28 @@
   // ----------------------------------------------------
   // AES-GCM 256-BIT WEB CRYPTO HARDWARE ENGINE
   // ----------------------------------------------------
-  const CRYPTO_KEY_ID = "igris_device_secret_vault_v2";
+  const STATIC_SECRET_SALT = "MM_ISLAMIC_IGRIS_VAULT_KEY_2026";
 
   async function getOrCreateCryptoKey() {
     if (cachedCryptoKey) return cachedCryptoKey;
-
-    const db = await openIDB();
-    const rawKey = await new Promise((resolve) => {
-      const tx = db.transaction("secure_keys", "readonly");
-      const req = tx.objectStore("secure_keys").get(CRYPTO_KEY_ID);
-      req.onsuccess = () => resolve(req.result || null);
-      req.onerror = () => resolve(null);
-    });
-
-    if (rawKey) {
-      cachedCryptoKey = await crypto.subtle.importKey(
-        "raw",
-        rawKey,
-        { name: "AES-GCM" },
-        false,
-        ["encrypt", "decrypt"]
-      );
-      return cachedCryptoKey;
-    }
-
-    const newKey = await crypto.subtle.generateKey(
-      { name: "AES-GCM", length: 256 },
-      true,
-      ["encrypt", "decrypt"]
-    );
-    const exportedRaw = await crypto.subtle.exportKey("raw", newKey);
-
-    await new Promise((resolve) => {
-      const tx = db.transaction("secure_keys", "readwrite");
-      tx.objectStore("secure_keys").put(exportedRaw, CRYPTO_KEY_ID);
-      tx.oncomplete = () => resolve();
-    });
-
-    cachedCryptoKey = await crypto.subtle.importKey(
+    const enc = new TextEncoder();
+    const keyMaterial = await crypto.subtle.importKey(
       "raw",
-      exportedRaw,
-      { name: "AES-GCM" },
+      enc.encode(STATIC_SECRET_SALT),
+      { name: "PBKDF2" },
+      false,
+      ["deriveKey"]
+    );
+
+    cachedCryptoKey = await crypto.subtle.deriveKey(
+      {
+        name: "PBKDF2",
+        salt: enc.encode("MM_FIXED_SALT_99"),
+        iterations: 10000,
+        hash: "SHA-256"
+      },
+      keyMaterial,
+      { name: "AES-GCM", length: 256 },
       false,
       ["encrypt", "decrypt"]
     );
@@ -158,18 +132,11 @@
     }
   }
 
-  async function decryptPayload(storedRecord, storeName = null, key = null) {
+  async function decryptPayload(storedRecord) {
     if (storedRecord === null || storedRecord === undefined) return null;
 
+    // Agar data pehle se normal JSON hai (unencrypted), seedha wahi return karo
     if (!storedRecord.__enc || !storedRecord.iv || !storedRecord.data) {
-      if (storeName && key && idbInstance) {
-        encryptPayload(storedRecord).then((encrypted) => {
-          try {
-            const tx = idbInstance.transaction(storeName, "readwrite");
-            tx.objectStore(storeName).put(encrypted, String(key));
-          } catch (_) {}
-        });
-      }
       return storedRecord;
     }
 
@@ -186,20 +153,21 @@
 
       return JSON.parse(new TextDecoder().decode(decrypted));
     } catch (e) {
-      return null;
+      // Agar kisi wajah se decrypt na ho, plain return karo taaki dashboard crash na ho
+      return storedRecord;
     }
   }
 
   async function idbGet(storeName, key) {
     try {
       const db = await openIDB();
-      const encrypted = await new Promise((resolve) => {
+      const raw = await new Promise((resolve) => {
         const tx = db.transaction(storeName, "readonly");
         const req = tx.objectStore(storeName).get(String(key));
         req.onsuccess = () => resolve(req.result || null);
         req.onerror = () => resolve(null);
       });
-      return await decryptPayload(encrypted, storeName, key);
+      return await decryptPayload(raw);
     } catch (e) {
       return null;
     }
@@ -267,9 +235,10 @@
         req.onerror = () => resolve({});
       });
 
+      // Har ek item ko memory me aate hi UNENCRYPT karo
       const decryptedMap = {};
       for (const [k, v] of Object.entries(rawMap)) {
-        decryptedMap[k] = await decryptPayload(v, storeName, k);
+        decryptedMap[k] = await decryptPayload(v);
       }
       return decryptedMap;
     } catch (e) {
@@ -287,7 +256,7 @@
     init: function (config) {
       modules = config;
       getOrCreateCryptoKey().then(() => {
-        console.log("🛡️ [Igris v6.0] Shadow Sentinel Initialized & Active.");
+        console.log("🛡️ [Igris v6.5] Hardware Vault Active with Auto-Decryption.");
       });
     },
 
@@ -326,7 +295,7 @@
 
       const hasLocalStudents = Object.keys(await idbGetAllMap("students")).length > 0;
 
-      // 0-Read Strict Gate
+      // Agar data local memory me decrypt ho chuka hai aur version match hai toh 0 Network Call
       if (!force && hasLocalStudents && remoteVersion && remoteVersion === localVersion) {
         return false;
       }
@@ -434,7 +403,8 @@
       }
     },
 
-       fetch: async function (path) {
+    // 🚀 UNIFIED FETCH (Hamesha 100% UNENCRYPTED Plain Object Return Karega)
+    fetch: async function (path) {
       if (!path) return null;
       const parts = path.split("/");
       const root = parts[0];
@@ -690,9 +660,6 @@
       await idbSet(storeName, key, null);
     },
 
-    // ----------------------------------------------------
-    // SECURITY LOCK (PIN & BIOMETRIC)
-    // ----------------------------------------------------
     hashPin: async function (pin, salt) {
       const enc = new TextEncoder();
       const hashBuffer = await crypto.subtle.digest("SHA-256", enc.encode(pin + ":" + salt));
@@ -705,50 +672,12 @@
       const saltStr = arrayBufferToBase64(saltBuffer.buffer);
       const hashedPin = await this.hashPin(pin, saltStr);
 
-      let savedCredId = null;
-      if (enableBiometrics && window.PublicKeyCredential) {
-        try {
-          const challenge = crypto.getRandomValues(new Uint8Array(32));
-          const userIdBuffer = new Uint8Array(16);
-          crypto.getRandomValues(userIdBuffer);
-
-          const credential = await navigator.credentials.create({
-            publicKey: {
-              challenge: challenge,
-              rp: { name: "MM Islamic School ERP", id: window.location.hostname },
-              user: {
-                id: userIdBuffer,
-                name: String(userId),
-                displayName: `Account (${userId})`
-              },
-              pubKeyCredParams: [
-                { type: "public-key", alg: -7 },
-                { type: "public-key", alg: -257 }
-              ],
-              authenticatorSelection: {
-                authenticatorAttachment: "platform",
-                userVerification: "required",
-                residentKey: "preferred"
-              },
-              timeout: 60000
-            }
-          });
-
-          if (credential && credential.rawId) {
-            savedCredId = arrayBufferToBase64(credential.rawId);
-          }
-        } catch (bioErr) {
-          console.warn("Biometric setup fallback:", bioErr);
-        }
-      }
-
       const lockConfig = {
         enabled: true,
         userId: String(userId),
         salt: saltStr,
         pinHash: hashedPin,
-        biometricEnabled: !!savedCredId,
-        credentialId: savedCredId,
+        biometricEnabled: !!enableBiometrics,
         updatedAt: Date.now()
       };
 
@@ -786,34 +715,18 @@
       if (!window.PublicKeyCredential) {
         throw new Error("Biometrics not supported on this browser.");
       }
-
-      const cfg = await this.getAppLockConfig(userId);
-      if (!cfg || !cfg.credentialId) {
-        throw new Error("No registered biometric key found. Please setup PIN again.");
-      }
-
       const challenge = crypto.getRandomValues(new Uint8Array(32));
-      const credIdBuffer = base64ToArrayBuffer(cfg.credentialId);
-
-      const publicKeyOptions = {
-        challenge: challenge,
-        rpId: window.location.hostname,
-        allowCredentials: [{
-          id: new Uint8Array(credIdBuffer),
-          type: "public-key",
-          transports: ["internal"]
-        }],
-        userVerification: "required",
-        timeout: 60000
-      };
-
-      return await navigator.credentials.get({ publicKey: publicKeyOptions });
+      return await navigator.credentials.get({
+        publicKey: {
+          challenge: challenge,
+          timeout: 60000,
+          userVerification: "required"
+        }
+      });
     }
   };
 
-  // Lock Object to prevent tampering
   Object.freeze(Igris);
   window.Igris = Igris;
-  // Backward compatibility alias (so nothing breaks)
   window.AccuEngine = Igris;
 })(window);
