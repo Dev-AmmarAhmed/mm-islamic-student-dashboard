@@ -15,7 +15,7 @@
   "use strict";
 
   const DB_NAME = "AccuEngine_Storage";
-  const DB_VERSION = 12;
+    const DB_VERSION = 13;
   const STORES = [
     "users",
     "students",
@@ -32,12 +32,15 @@
     "syllabus_chapters",
     "syllabus_progress",
     "muster",
+    "expenses",
+    "daily_claims",
     "tests",
     "online_tests",
     "test_attempts",
     "sync_queue",
     "secure_keys"
   ];
+
 
 
   let idbInstance = null;
@@ -334,10 +337,11 @@
       console.log("📥 [AccuEngine] Fetching cloud data and encrypting into device storage...");
 
       try {        
-                const [
+                      const [
           studentsSnap, teachersSnap, usersSnap, feesMatrixSnap, feesEntriesSnap, 
           attendanceSnap, studyMatSnap, homeworkSnap, timetableSnap, leavesSnap, 
-          subjectsSnap, sylConfigSnap, sylChaptersSnap, sylProgressSnap, musterSnap
+          subjectsSnap, sylConfigSnap, sylChaptersSnap, sylProgressSnap, musterSnap,
+          expensesSnap, dailyClaimsSnap, testsSnap, onlineTestsSnap, testAttemptsSnap
         ] = await Promise.all([
           getDocs(collection(fsDb, "students")),
           getDocs(collection(fsDb, "teachers")),
@@ -353,8 +357,14 @@
           getDocs(collection(fsDb, "syllabus_config")),
           getDocs(collection(fsDb, "syllabus_chapters")),
           getDocs(collection(fsDb, "syllabus_progress")),
-          getDocs(collection(fsDb, "muster"))
+          getDocs(collection(fsDb, "muster")),
+          getDocs(collection(fsDb, "expenses")),
+          getDocs(collection(fsDb, "daily_claims")),
+          getDocs(collection(fsDb, "tests")),
+          getDocs(collection(fsDb, "online_tests")),
+          getDocs(collection(fsDb, "test_attempts"))
         ]);
+
 
 
 
@@ -434,10 +444,35 @@
         sylProgressSnap.forEach((d) => { progMap[d.id] = d.data().progress || d.data(); });
         await idbSetBatch("syllabus_progress", progMap);
 
-        // 15. Teachers' Muster
+               // 15. Teachers' Muster
         const musMap = {};
         musterSnap.forEach((d) => { musMap[d.id] = d.data(); });
         await idbSetBatch("muster", musMap);
+
+        // 16. Expenses
+        const expMap = {};
+        expensesSnap.forEach((d) => { expMap[d.id] = d.data(); });
+        await idbSetBatch("expenses", expMap);
+
+        // 17. Daily Claims
+        const claimMap = {};
+        dailyClaimsSnap.forEach((d) => { claimMap[d.id] = d.data().claims || d.data(); });
+        await idbSetBatch("daily_claims", claimMap);
+
+        // 18. Offline Tests
+        const testMap = {};
+        testsSnap.forEach((d) => { testMap[d.id] = d.data(); });
+        await idbSetBatch("tests", testMap);
+
+        // 19. Online Tests
+        const onlTestMap = {};
+        onlineTestsSnap.forEach((d) => { onlTestMap[d.id] = d.data(); });
+        await idbSetBatch("online_tests", onlTestMap);
+
+        // 20. Test Attempts
+        const attpMap = {};
+        testAttemptsSnap.forEach((d) => { attpMap[d.id] = d.data(); });
+        await idbSetBatch("test_attempts", attpMap);
 
         const finalVer = remoteVersion || Date.now().toString();
         localStorage.setItem("accu_local_version", finalVer);
@@ -661,10 +696,9 @@
         return nested;
       }
 
-      // Muster Resolver
+           // Muster Resolver
       if (root === "muster") {
         if (parts[1] && parts[2] && parts[3]) {
-          // muster/Month/day_X/teacherUser
           const mDoc = await idbGet("muster", parts[1]) || {};
           const dayObj = mDoc[parts[2]] || {};
           return dayObj[parts[3]] || null;
@@ -673,6 +707,94 @@
         }
         return await idbGetAllMap("muster");
       }
+
+      // Expenses Resolver (Month-wise)
+      if (root === "expenses") {
+        const allExp = await idbGetAllMap("expenses");
+        if (parts[1]) {
+          const targetMonth = String(parts[1]).trim().toLowerCase();
+          const monthExpenses = {};
+          Object.entries(allExp).forEach(([k, v]) => {
+            if (v && v.month && String(v.month).trim().toLowerCase() === targetMonth) {
+              monthExpenses[v.id || k] = v;
+            } else if (k.startsWith(`${parts[1]}_`)) {
+              monthExpenses[v.id || k] = v;
+            }
+          });
+          return monthExpenses;
+        }
+        return allExp;
+      }
+
+      // Daily Claims Resolver (Student & Teacher)
+      if (root === "daily_claims" || root === "teacher_daily_claims") {
+        if (parts[1] && parts[2]) {
+          // daily_claims/ID/2026_10_14
+          const userClaims = await idbGet("daily_claims", parts[1]) || {};
+          return userClaims[parts[2]] === true;
+        } else if (parts[1]) {
+          return await idbGet("daily_claims", parts[1]) || {};
+        }
+        return await idbGetAllMap("daily_claims");
+      }
+
+      // Offline Tests Resolver
+      if (root === "tests") {
+        const allTests = await idbGetAllMap("tests");
+        if (parts[1]) {
+          const targetAdmn = String(parts[1]).trim();
+          const studentTests = {};
+          Object.entries(allTests).forEach(([k, v]) => {
+            if (v && String(v.admn).trim() === targetAdmn) studentTests[k] = v;
+          });
+          return studentTests;
+        }
+        return allTests;
+      }
+
+      // Online Tests Resolver
+      if (root === "online_tests") {
+        const allOnl = await idbGetAllMap("online_tests");
+        if (parts[1] && parts[2]) {
+          return await idbGet("online_tests", parts[2]) || await idbGet("online_tests", `${parts[1]}_${parts[2]}`);
+        } else if (parts[1]) {
+          const targetCls = String(parts[1]).replace(/class\s*/i, "").trim();
+          const classTests = {};
+          Object.entries(allOnl).forEach(([k, v]) => {
+            if (v && String(v.class).replace(/class\s*/i, "").trim() === targetCls) {
+              classTests[v.id || k] = v;
+            }
+          });
+          return classTests;
+        }
+        return allOnl;
+      }
+
+      // Test Attempts Resolver (test_attempts & student_test_attempts)
+      if (root === "test_attempts" || root === "student_test_attempts") {
+        const allAtt = await idbGetAllMap("test_attempts");
+        if (root === "test_attempts" && parts[1]) {
+          const targetTestId = String(parts[1]).trim();
+          const res = {};
+          Object.entries(allAtt).forEach(([k, v]) => {
+            if (v && String(v.testId).trim() === targetTestId) {
+              res[v.admn] = v;
+            }
+          });
+          return res;
+        } else if (root === "student_test_attempts" && parts[1]) {
+          const targetAdmn = String(parts[1]).trim();
+          const res = {};
+          Object.entries(allAtt).forEach(([k, v]) => {
+            if (v && String(v.admn).trim() === targetAdmn) {
+              res[v.testId] = v;
+            }
+          });
+          return res;
+        }
+        return allAtt;
+      }
+
 
       // Standard Stores (students, teachers, users, fees_matrix)
       if (parts[1]) {
