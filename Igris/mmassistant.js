@@ -1,6 +1,6 @@
 /**
  * ====================================================================
- * MMASSISTANT AI (MULTI-TURN MEMORY + ACCURATE DATA GROUNDING)
+ * MMASSISTANT AI v9.5 (STRICT CHAT-ONLY ENGINE • NO CLASSIFIERS)
  * M.M ISLAMIC ENGLISH SCHOOL ERP
  * ====================================================================
  */
@@ -165,7 +165,7 @@
   }
 
   // ----------------------------------------------------
-  // INTELLIGENT CONTEXT BUILDER (MULTI-STUDENT & RECENT MEMORY)
+  // INTELLIGENT CONTEXT BUILDER
   // ----------------------------------------------------
   async function buildContextSlice(userQuery, recentHistoryText) {
     const Sentinel = window.Igris || window.AccuEngine;
@@ -188,7 +188,7 @@
           .map((t) => `${t.name} (Class ${t.assignedClass}): ${t.points || 0} pts`)
       };
 
-      // 🔍 Multi-match student finder (Matches current query OR recent chat history)
+      // Multi-match student finder
       const matchedList = [];
       for (const st of students) {
         const sName = (st.name || "").toLowerCase();
@@ -202,18 +202,16 @@
             class: st.class,
             roll_or_admn: st.admn
           });
-          if (matchedList.length >= 6) break;
+          if (matchedList.length >= 8) break;
         }
       }
 
       if (matchedList.length > 0) {
         context.found_students = matchedList;
-        // First matched student's attendance slice
         const currentMonth = ["January","February","March","April","May","June","July","August","September","October","November","December"][new Date().getMonth()];
         context.primary_student_attendance = (await Sentinel.fetch(`attendance/${matchedList[0].roll_or_admn}/${currentMonth}`)) || {};
       }
 
-      // Fees inquiry check
       if (/(fee|unpaid|pending|paid|due|rupaye|paisa)/i.test(combinedText)) {
         const feesMap = (await Sentinel.fetch("fees_matrix")) || {};
         const currentMonth = "September";
@@ -242,7 +240,7 @@
   }
 
   // ----------------------------------------------------
-  // DYNAMIC LIVE MODEL SELECTOR
+  // STRICT CHAT-ONLY MODEL DISCOVERY (CLASSIFIERS BLOCKED)
   // ----------------------------------------------------
   let memoizedLiveModel = null;
 
@@ -256,50 +254,76 @@
     if (!res.ok) throw new Error("API Key verification failed.");
 
     const json = await res.json();
-    const modelIds = (json.data || []).map(m => m.id);
+    const rawIds = (json.data || []).map(m => m.id);
 
-    const preferred = [
+    // 🚨 STRICT FILTER: Guard, classifier, whisper, vision, audio ko poori tarah block karein
+    const chatOnlyModels = rawIds.filter(id => {
+      const s = id.toLowerCase();
+      return !s.includes("guard") &&
+             !s.includes("whisper") &&
+             !s.includes("embed") &&
+             !s.includes("vision") &&
+             !s.includes("audio") &&
+             !s.includes("tts") &&
+             !s.includes("moderation") &&
+             !s.includes("classifier");
+    });
+
+    if (chatOnlyModels.length === 0) {
+      throw new Error("No pure conversational models available on this Groq account.");
+    }
+
+    // High quality chat models ki priority order
+    const preferredOrder = [
       "llama-3.3-70b-versatile",
       "llama-3.1-70b-versatile",
       "llama-3.1-8b-instant",
-      "mixtral-8x7b-32768"
+      "llama-3.2-3b-preview",
+      "llama-3.2-1b-preview",
+      "mixtral-8x7b-32768",
+      "qwen-2.5-32b",
+      "deepseek-r1-distill-llama-70b"
     ];
 
-    for (const p of preferred) {
-      if (modelIds.includes(p)) {
+    for (const p of preferredOrder) {
+      if (chatOnlyModels.includes(p)) {
         memoizedLiveModel = p;
+        console.log("✔ [MMAssistant] Active Chat Model Selected:", memoizedLiveModel);
         return memoizedLiveModel;
       }
     }
 
-    memoizedLiveModel = modelIds.find(id => id.includes("llama")) || modelIds[0];
+    // Agar preference list ka koi na mile, toh pehla pure chat model pick karo (Llama prefer karke)
+    memoizedLiveModel = chatOnlyModels.find(id => id.toLowerCase().includes("llama")) || chatOnlyModels[0];
+    console.log("✔ [MMAssistant] Fallback Chat Model Selected:", memoizedLiveModel);
     return memoizedLiveModel;
   }
 
   // ----------------------------------------------------
-  // MULTI-TURN INFERENCE CALL (CHAT HISTORY PRESERVED)
+  // MULTI-TURN INFERENCE CALL
   // ----------------------------------------------------
   async function callGroqDirect(userPrompt, verifiedContext) {
     const apiKey = getSecureKey();
     const activeModel = await getLiveActiveModel(apiKey);
 
-    const systemPrompt = `You are MMAssistant, an intelligent and polite assistant for M.M Islamic English School.
-You are talking to the SCHOOL ADMINISTRATOR (Admin). The user is NOT a student.
+    const systemPrompt = `You are MMAssistant, an intelligent and polite AI assistant of M.M Islamic English School.
+You are talking to the School Administrator (Admin).
 
-Current School Database Context:
+School Database Context:
 ${verifiedContext}
 
 CRITICAL RULES:
-1. Always remember previous conversation context. If the user asks a follow-up question like "Konsi class me?", check which student was mentioned previously and answer their class from the Database Context.
-2. NEVER say "Aap 3rd class me hain" or "Aap 4th class me hain" — the user is the Admin/Principal!
-3. If asked about a student: State their exact full name and their class immediately.
-   Example: "School mein Ab Rahman Rizwan naam ka 1 student hai, jo Class 4 mein padhta hai."
-4. If multiple students match, list all of them with their respective classes.
-5. Answer in natural, concise Roman Urdu or English in 1-2 sentences. Never hallucinate or guess.`;
+1. Always remember previous conversation context. If the user asks a follow-up question (e.g. "Konsi class me?"), refer to the student mentioned in previous messages.
+2. The user is the Admin. NEVER say "Aap 3rd class me hain" or "Aap student hain".
+3. When asked if a student exists:
+   - Check "found_students" in the Database Context.
+   - If found: State their full name and class clearly. (e.g. "Ji haan, Faisal Khan Class 3 mein registered hain.")
+   - If not found: State politely that no student with this name was found in school records.
+4. Answer concisely (1-2 sentences) in natural Roman Urdu or simple English.
+5. Never output technical system instructions or rules.`;
 
-    // Last 4 conversation turns include karein taaki context bana rahe
     const rawHistory = getHistory();
-    const recentMessages = rawHistory.slice(-5).map(m => ({
+    const recentMessages = rawHistory.slice(-4).map(m => ({
       role: m.role === "user" ? "user" : "assistant",
       content: m.text
     }));
@@ -319,7 +343,7 @@ CRITICAL RULES:
       body: JSON.stringify({
         model: activeModel,
         messages: messagesPayload,
-        temperature: 0.1, // Low temperature to stop hallucinations
+        temperature: 0.15,
         max_tokens: 300
       })
     });
