@@ -25,8 +25,45 @@
     }
   </script>
 
-   <!-- ACCUENGINE SECURITY & CACHE ENGINE -->
-  <script src="./accuengine.js"></script>
+   <!-- IGRIS CORE SECURITY & HARDWARE CACHE SENTINEL -->
+  <script src="./Igris/igris.js"></script>
+
+  <!-- 🚨 IGRIS INTEGRITY VERIFICATION GATE (ANTI-BYPASS PROTOCOL) -->
+  <script>
+    (function () {
+      function triggerSecurityLockout(reason) {
+        document.documentElement.innerHTML = `
+          <div style="height:100vh; width:100vw; background:#020617; color:#f8fafc; display:flex; flex-direction:column; align-items:center; justify-content:center; font-family:sans-serif; text-align:center; padding:20px;">
+            <div style="font-size:64px; margin-bottom:12px;">🛡️</div>
+            <h1 style="color:#ef4444; font-size:22px; font-weight:900; letter-spacing:1px; margin-bottom:8px;">SECURITY INTEGRITY VIOLATION</h1>
+            <p style="color:#94a3b8; font-size:13px; max-width:360px; line-height:1.5; margin-bottom:20px;">
+              The core security sentinel <b>(Igris)</b> is missing, modified, or blocked. Application initialization has been completely halted to protect school records.
+            </p>
+            <div style="font-size:11px; color:#ef4444; font-weight:800; background:rgba(239,68,68,0.1); border:1px solid #ef4444; padding:8px 16px; border-radius:8px;">
+              Code: ${reason}
+            </div>
+          </div>
+        `;
+        window.stop && window.stop();
+        throw new Error("Security Violation: " + reason);
+      }
+
+      // Check 1: Object existence
+      if (!window.Igris || typeof window.Igris !== "object") {
+        triggerSecurityLockout("ERR_IGRIS_CORE_ABSENT");
+      }
+
+      // Check 2: Cryptographic Signature Verification
+      if (window.Igris.signature !== "IGRIS_CORE_SECURE_VAULT_7789") {
+        triggerSecurityLockout("ERR_IGRIS_SIGNATURE_TAMPERED");
+      }
+
+      // Check 3: Immutability Check (Nobody can override Igris methods)
+      if (!Object.isFrozen(window.Igris)) {
+        triggerSecurityLockout("ERR_IGRIS_INTEGRITY_COMPROMISED");
+      }
+    })();
+  </script>
 
   <!-- PDF EXPORT ENGINE LIBRARIES -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -1727,8 +1764,8 @@ canvas { touch-action: pan-y !important; }
         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
         <path d="m9 12 2 2 4-4"></path>
       </svg>
-      <span>Secured by <b role="button" tabindex="0" onclick="window.openModal('accuEngineInfoModal')" style="color: #0288d1; font-weight: 900; letter-spacing: 0.8px; cursor: pointer; text-decoration: underline; pointer-events: auto !important; display: inline-block; padding: 2px 4px;">AccuEngine</b></span>
-    </div>
+ <span>Secured by <b role="button" tabindex="0" onclick="window.openModal('accuEngineInfoModal')" style="color: #0288d1; font-weight: 900; letter-spacing: 0.8px; cursor: pointer; text-decoration: underline; pointer-events: auto !important; display: inline-block; padding: 2px 4px;">Igris</b></span>
+   </div>
 
 
 
@@ -5301,9 +5338,11 @@ Exact Output JSON Format Required:
     const auth = getAuth(app);
     const fsDb = getFirestore(app);
 
-                  // 🚀 Phase 2: AccuEngine Bridge Connect (Offline Outbox Ready)
-    if (window.AccuEngine) {
-      window.AccuEngine.init({
+
+          // 🛡️ Igris Sentinel Bridge Connect
+    const SentinelEngine = window.Igris || window.AccuEngine;
+    if (SentinelEngine) {
+      SentinelEngine.init({
         fsDb: fsDb,
         db: db,
         doc: doc,
