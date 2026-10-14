@@ -1,14 +1,21 @@
 /**
- * AccuEngine v5.0 - Military-Grade AES-GCM Client Encrypted Cache
- * MM Islamic English School ERP
- * Transparent Client-Side Encryption with Auto-Migration for Legacy Data
+ * ====================================================================
+ * ACCUENGINE v5.5 - SECURE CACHE, CRYPTO VAULT & BIOMETRIC GATEWAY
+ * System: MM Islamic English School ERP
+ * Features:
+ *  - Client-Side AES-GCM 256-Bit Hardware Encryption
+ *  - Auto-Migration for Legacy Plaintext Cache
+ *  - Zero-Network Version-Controlled Delta Sync
+ *  - SHA-256 Hashed 4-Digit Startup PIN Gate
+ *  - WebAuthn Biometric Authentication (Fingerprint / Face ID)
+ * ====================================================================
  */
 
 (function (window) {
   "use strict";
 
   const DB_NAME = "AccuEngine_Storage";
-  const DB_VERSION = 9;
+  const DB_VERSION = 10;
   const STORES = [
     "users",
     "students",
@@ -28,7 +35,7 @@
   let cachedCryptoKey = null;
 
   // ----------------------------------------------------
-  // 1. INDEXEDDB CONNECTION
+  // 1. INDEXEDDB CONNECTION ENGINE
   // ----------------------------------------------------
   function openIDB() {
     if (idbInstance) return Promise.resolve(idbInstance);
@@ -77,7 +84,7 @@
       return cachedCryptoKey;
     }
 
-    // Nayi 256-bit AES-GCM key generate karna
+    // Nayi 256-bit AES-GCM hardware key banana
     const newKey = await crypto.subtle.generateKey(
       { name: "AES-GCM", length: 256 },
       true,
@@ -123,7 +130,7 @@
     if (plainObj === null || plainObj === undefined) return null;
     try {
       const key = await getOrCreateCryptoKey();
-      const iv = crypto.getRandomValues(new Uint8Array(12)); // 96-bit standard IV
+      const iv = crypto.getRandomValues(new Uint8Array(12)); // 96-bit AES-GCM IV
       const encoded = new TextEncoder().encode(JSON.stringify(plainObj));
 
       const cipherBuffer = await crypto.subtle.encrypt(
@@ -138,7 +145,7 @@
         data: arrayBufferToBase64(cipherBuffer)
       };
     } catch (e) {
-      console.warn("Encryption failed, falling back to raw payload:", e);
+      console.warn("AccuEngine encryption fallback:", e);
       return plainObj;
     }
   }
@@ -146,10 +153,9 @@
   async function decryptPayload(storedRecord, storeName = null, key = null) {
     if (storedRecord === null || storedRecord === undefined) return null;
 
-    // Check agar record pehle se unencrypted legacy format mein hai (Auto Migration trigger)
+    // Auto-migration: Purana unencrypted record milne par background encrypt karna
     if (!storedRecord.__enc || !storedRecord.iv || !storedRecord.data) {
       if (storeName && key && idbInstance) {
-        // Silently encrypt and save in background
         encryptPayload(storedRecord).then((encrypted) => {
           try {
             const tx = idbInstance.transaction(storeName, "readwrite");
@@ -174,13 +180,13 @@
       const jsonStr = new TextDecoder().decode(decrypted);
       return JSON.parse(jsonStr);
     } catch (e) {
-      console.warn("Decryption failed:", e);
+      console.warn("AccuEngine decryption error:", e);
       return null;
     }
   }
 
   // ----------------------------------------------------
-  // 3. TRANSPARENT CRUD OPERATIONS (ENCRYPT ON WRITE, DECRYPT ON READ)
+  // 3. SECURE ENCRYPTED STORAGE OPERATIONS
   // ----------------------------------------------------
   async function idbGet(storeName, key) {
     try {
@@ -270,16 +276,17 @@
   }
 
   // ----------------------------------------------------
-  // 4. MASTER ACCUENGINE CONTROLLER
+  // 4. MAIN ACCUENGINE CONTROLLER
   // ----------------------------------------------------
   const AccuEngine = {
     init: function (config) {
       modules = config;
       getOrCreateCryptoKey().then(() => {
-        console.log("🔒 [AccuEngine v5.0] AES-GCM Encrypted Cache Active.");
+        console.log("🔒 [AccuEngine v5.5] AES-GCM Encrypted Cache Vault Active.");
       });
     },
 
+    // Version update karna jab bhi koi data likha jaye
     bumpSyncVersion: async function () {
       if (!navigator.onLine || !modules) return;
       try {
@@ -290,6 +297,7 @@
       } catch (e) {}
     },
 
+    // Cloud se bulk download aur local encryption
     checkAndSyncData: async function (force = false) {
       if (!modules) return false;
       const { fsDb, db: rtdb, ref, get, child, getDocs, collection } = modules;
@@ -307,6 +315,7 @@
       const hasLocalStudents = Object.keys(await idbGetAllMap("students")).length > 0;
       const hasLocalAttendance = Object.keys(await idbGetAllMap("attendance")).length > 0;
 
+      // Agar data local memory mein hai aur version match hai -> zero network calls
       if (!force && hasLocalStudents && hasLocalAttendance && remoteVersion && remoteVersion === localVersion) {
         console.log("🎯 [AccuEngine] 0-Network Sync: Decrypting fresh data directly from hardware cache.");
         return false;
@@ -324,22 +333,22 @@
           getDocs(collection(fsDb, "attendance"))
         ]);
 
-        // 1. Students Encrypted Batch
+        // 1. Students
         const studentsMap = {};
         studentsSnap.forEach((d) => { studentsMap[d.id] = d.data(); });
         await idbSetBatch("students", studentsMap);
 
-        // 2. Teachers Encrypted Batch
+        // 2. Teachers
         const teachersMap = {};
         teachersSnap.forEach((d) => { teachersMap[d.id] = d.data(); });
         await idbSetBatch("teachers", teachersMap);
 
-        // 3. Users Encrypted Batch
+        // 3. Users
         const usersMap = {};
         usersSnap.forEach((d) => { usersMap[d.id] = d.data(); });
         await idbSetBatch("users", usersMap);
 
-        // 4. Fees Matrix Encrypted Batch
+        // 4. Fees Matrix
         const feesMap = {};
         feesMatrixSnap.forEach((d) => {
           const dt = d.data();
@@ -347,12 +356,12 @@
         });
         await idbSetBatch("fees_matrix", feesMap);
 
-        // 5. Fees Entries Encrypted Batch
+        // 5. Fees Entries
         const entriesMap = {};
         feesEntriesSnap.forEach((d) => { entriesMap[d.id] = d.data(); });
         await idbSetBatch("fees_entries", entriesMap);
 
-        // 6. Attendance Encrypted Batch
+        // 6. Attendance
         const attMap = {};
         attendanceSnap.forEach((d) => {
           const dt = d.data();
@@ -371,7 +380,7 @@
       }
     },
 
-    // 🚀 READ DATA (Auto Decrypted on the fly)
+    // Fast Data Getter
     fetch: async function (path) {
       if (!path) return null;
       const parts = path.split("/");
@@ -445,6 +454,120 @@
 
     invalidate: async function (storeName, key) {
       await idbSet(storeName, key, null);
+    },
+
+    // ----------------------------------------------------
+    // 5. SECURITY VAULT: PIN HASHING & WEBAUTHN BIOMETRICS
+    // ----------------------------------------------------
+    hashPin: async function (pin, salt) {
+      const enc = new TextEncoder();
+      const hashBuffer = await crypto.subtle.digest("SHA-256", enc.encode(pin + ":" + salt));
+      return arrayBufferToBase64(hashBuffer);
+    },
+
+    setAppLock: async function (userId, pin, enableBiometrics) {
+      if (!userId || !pin || pin.length !== 4) return false;
+      const saltBuffer = crypto.getRandomValues(new Uint8Array(16));
+      const saltStr = arrayBufferToBase64(saltBuffer.buffer);
+      const hashedPin = await this.hashPin(pin, saltStr);
+
+      const lockConfig = {
+        enabled: true,
+        userId: String(userId),
+        salt: saltStr,
+        pinHash: hashedPin,
+        biometricEnabled: !!enableBiometrics,
+        credentialId: null,
+        updatedAt: Date.now()
+      };
+
+      // Biometric Registration trigger agar enabled hai
+      if (enableBiometrics && window.PublicKeyCredential) {
+        try {
+          const challenge = crypto.getRandomValues(new Uint8Array(32));
+          const userIdBuffer = new TextEncoder().encode(String(userId));
+          const credential = await navigator.credentials.create({
+            publicKey: {
+              challenge: challenge,
+              rp: { name: "MM Islamic School ERP" },
+              user: {
+                id: userIdBuffer,
+                name: String(userId),
+                displayName: `User ${userId}`
+              },
+              pubKeyCredParams: [
+                { type: "public-key", alg: -7 },  // ES256
+                { type: "public-key", alg: -257 } // RS256
+              ],
+              authenticatorSelection: {
+                authenticatorAttachment: "platform",
+                userVerification: "required"
+              },
+              timeout: 60000
+            }
+          });
+
+          if (credential && credential.id) {
+            lockConfig.credentialId = credential.id;
+          }
+        } catch (bioErr) {
+          console.warn("Biometric setup warning:", bioErr.message);
+          // PIN lock tab bhi set rahega
+        }
+      }
+
+      const db = await openIDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction("secure_keys", "readwrite");
+        tx.objectStore("secure_keys").put(lockConfig, `app_lock_${userId}`);
+        tx.oncomplete = () => {
+          localStorage.setItem(`lock_active_${userId}`, "true");
+          resolve(true);
+        };
+        tx.onerror = () => resolve(false);
+      });
+    },
+
+    getAppLockConfig: async function (userId) {
+      if (!userId) return null;
+      const db = await openIDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction("secure_keys", "readonly");
+        const req = tx.objectStore("secure_keys").get(`app_lock_${userId}`);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => resolve(null);
+      });
+    },
+
+    verifyPin: async function (userId, enteredPin) {
+      const cfg = await this.getAppLockConfig(userId);
+      if (!cfg || !cfg.enabled) return false;
+      const testHash = await this.hashPin(enteredPin, cfg.salt);
+      return testHash === cfg.pinHash;
+    },
+
+    promptBiometrics: async function (userId) {
+      if (!window.PublicKeyCredential) {
+        throw new Error("Biometrics is not supported on this browser.");
+      }
+
+      const cfg = await this.getAppLockConfig(userId);
+      const challenge = crypto.getRandomValues(new Uint8Array(32));
+
+      const publicKeyOptions = {
+        challenge: challenge,
+        timeout: 60000,
+        userVerification: "required"
+      };
+
+      if (cfg && cfg.credentialId) {
+        publicKeyOptions.allowCredentials = [{
+          id: base64ToArrayBuffer(window.btoa(cfg.credentialId)),
+          type: "public-key"
+        }];
+      }
+
+      return await navigator.credentials.get({ publicKey: publicKeyOptions });
     }
   };
 
