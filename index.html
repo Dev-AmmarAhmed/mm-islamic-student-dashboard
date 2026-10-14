@@ -6620,25 +6620,22 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
 
 
 
-          window.completePortalLoginSession = async function(resolvedUserId, uData) {
+         window.completePortalLoginSession = async function(resolvedUserId, uData) {
       const previousUser = localStorage.getItem("loggedUser");
-      if (previousUser !== resolvedUserId) {
+      if (previousUser && previousUser !== resolvedUserId) {
         const theme = localStorage.getItem("appTheme");
         const darkMode = localStorage.getItem("darkMode");
         const moreAnim = localStorage.getItem("moreAnimations");
         const neonEff = localStorage.getItem("neonEffect");
-        localStorage.clear();
+        sessionStorage.clear();
         if(theme) localStorage.setItem("appTheme", theme);
         if(darkMode) localStorage.setItem("darkMode", darkMode);
         if(moreAnim) localStorage.setItem("moreAnimations", moreAnim);
         if(neonEff) localStorage.setItem("neonEffect", neonEff);
-        if ('caches' in window) {
-          caches.keys().then(names => { for (let name of names) caches.delete(name); });
-        }
       }
 
       localStorage.setItem("loggedUser", resolvedUserId);
-      localStorage.setItem("sessionToken", btoa(uData.password + resolvedUserId)); 
+      localStorage.setItem("sessionToken", btoa((uData.password || "MM") + resolvedUserId)); 
       localStorage.setItem("loggedRole", uData.role);
       if(uData.assignedClass) localStorage.setItem("assignedClass", uData.assignedClass);
       if(uData.admn) localStorage.setItem("studentAdmn", uData.admn);
@@ -6647,13 +6644,13 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
         window.initNativePushAndSW();
       }
 
-      // 🛡️ Login hote hi Firestore se seedha Igris cache populate karein
-      const Sentinel = window.Igris || window.AccuEngine;
-      if (Sentinel && typeof Sentinel.checkAndSyncData === "function") {
-        await Sentinel.checkAndSyncData(false);
-      }
-
+      // 1. Pehle dashboard screen render karo bina kisi delay ke
       renderDashboardForRole(uData.role, uData.assignedClass, uData.admn);
+
+      // 2. Ab background me sync chalne do
+      if (typeof window.hydrateRoleDashboard === "function") {
+        await window.hydrateRoleDashboard(uData.role, false);
+      }
     };
 
 
@@ -6730,17 +6727,23 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
           targetUserId = resolved;
         }
 
-              // Firestore se user data check karna
-        const uData = await getFirestoreUser(targetUserId);
-        if(uData && uData.password === p) {
-          // Success - Sab attempts clear karo
+                 // Firestore se user data check karna
+        let uData = await getFirestoreUser(targetUserId);
+        
+        // Agar Firestore network delay de, toh local users cache se check karo (Offline Login)
+        if (!uData && window.MM_STORE && window.MM_STORE.users && window.MM_STORE.users[targetUserId]) {
+          uData = window.MM_STORE.users[targetUserId];
+        }
+
+        if(uData && String(uData.password) === String(p)) {
           localStorage.removeItem("loginFails");
           localStorage.removeItem("lockoutUntil");
           errorEl.style.display = "none";
-          window.completePortalLoginSession(targetUserId, uData);
+          await window.completePortalLoginSession(targetUserId, uData);
         } else {
           handleFailedLogin(errorEl);
         }
+
 
       });
     });
@@ -6929,7 +6932,8 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
         refreshStudentDashboard();
         window.switchTab('studentTabHome', bottomNav.children[0]);
 
-                    } else if(role === "teacher") {
+      
+      } else if(role === "teacher") {
         document.body.classList.remove("student-mode");
         document.body.classList.add("teacher-mode");
         document.getElementById("portalRoleSubHeader").innerText = "TEACHERS DASHBOARD PRO";
@@ -6958,13 +6962,7 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
           activeSelect.value = assignedClass;
         }
 
-                window.switchTab('teacherTabHome', bottomNav.children[0]);
-
-        // 🚀 Zero Race Condition Hydration
-        (async () => {
-          await window.hydrateRoleDashboard("teacher", false);
-        })();
-
+        window.switchTab('teacherTabHome', bottomNav.children[0]);
 
       } else {
         document.body.classList.remove("teacher-mode", "student-mode");
@@ -6976,7 +6974,7 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
         document.querySelectorAll(".student-only").forEach(e => e.style.display = "none");
         document.querySelectorAll(".admin-only").forEach(e => e.style.display = "block");
 
-                bottomNav.innerHTML = `
+        bottomNav.innerHTML = `
           <div class="nav-item active" onclick="switchTab('adminTabHome', this, event)"><div class="nav-icon">🏠</div>Home</div>
           <div class="nav-item" onclick="switchTab('adminTabStudents', this, event)"><div class="nav-icon">👤</div>Students</div>
           <div class="nav-item" onclick="switchTab('adminTabEntry', this, event)"><div class="nav-icon">📝</div>Entry</div>
@@ -6985,11 +6983,8 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
           <div class="nav-item" onclick="switchTab('adminTabCard', this, event)"><div class="nav-icon">💳</div>Card</div>
           <div class="nav-item" onclick="switchTab('adminTabExpns', this, event)"><div class="nav-icon">📊</div>Expns</div>
         `;
-              window.switchTab('adminTabHome', bottomNav.children[0]);
-        (async () => {
-          await window.hydrateRoleDashboard("admin", false);
-        })();
 
+        window.switchTab('adminTabHome', bottomNav.children[0]);
       }
 
     }
