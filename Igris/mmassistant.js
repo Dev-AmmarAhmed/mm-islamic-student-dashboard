@@ -1,6 +1,6 @@
 /**
  * ====================================================================
- * MMASSISTANT AI (STANDALONE ZERO-SERVER ENGINE)
+ * MMASSISTANT AI (ZERO-GUESS DYNAMIC LIVE ENGINE)
  * M.M ISLAMIC ENGLISH SCHOOL ERP
  * ====================================================================
  */
@@ -8,7 +8,6 @@
 (function (window) {
   "use strict";
 
-  // Obfuscated key parts (Bots and GitHub scanners cannot detect this pattern)
   const _k1 = "Z3NrX1U0Z2xpQzZrbHE5TDRTdzFlcVQ0";
   const _k2 = "V0dkeWIzRllzMWNXS2d4R3NFZUNqMFFK";
   const _k3 = "a2gzclJKdnU=";
@@ -21,8 +20,6 @@
     }
   }
 
-  const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
-  const PRIMARY_MODEL = "llama-3.1-8b-instant";
   const STORAGE_KEY = "mm_assistant_chat_history_v1";
 
   // 2D AI Sparkle SVG
@@ -250,10 +247,48 @@
     }
   }
 
+  // ----------------------------------------------------
+  // 🎯 DYNAMIC LIVE MODEL DISCOVERY (NO MORE GUESSING)
+  // ----------------------------------------------------
+  let memoizedLiveModel = null;
+
+  async function getLiveActiveModel(apiKey) {
+    if (memoizedLiveModel) return memoizedLiveModel;
+
+    const res = await fetch("https://api.groq.com/openai/v1/models", {
+      headers: { "Authorization": "Bearer " + apiKey }
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error("API Key Verification Failed: " + (err.error?.message || "Invalid Key"));
+    }
+
+    const json = await res.json();
+    const models = (json.data || []).map(m => m.id);
+
+    // Filter out audio/whisper/embedding models — sirf chat LLMs select karein
+    const chatModels = models.filter(m => !m.includes("whisper") && !m.includes("embed") && !m.includes("guard"));
+
+    if (chatModels.length === 0) {
+      throw new Error("No active chat models found on this Groq account.");
+    }
+
+    // Pehle Llama dhoondo, agar na ho toh pehla active chat model
+    memoizedLiveModel = chatModels.find(m => m.includes("llama")) || chatModels[0];
+    console.log("✔ Auto-Selected Active Model from Groq:", memoizedLiveModel);
+    return memoizedLiveModel;
+  }
+
   async function callGroqDirect(userPrompt, verifiedContext) {
     const role = localStorage.getItem("loggedRole") || "admin";
     const user = localStorage.getItem("loggedUser") || "Admin";
+    const apiKey = getSecureKey();
 
+    // 1. Live Model Discovery
+    const activeModel = await getLiveActiveModel(apiKey);
+
+    // 2. Chat Completion Call
     const systemPrompt = `
 You are MMAssistant, the authentic, supportive, and intelligent AI collaborator of M.M ISLAMIC ENGLISH SCHOOL.
 Current User Role: ${role} (${user})
@@ -273,26 +308,25 @@ OPERATING RULES:
    - Be concise, friendly, and respectful.
 `;
 
-    const payload = {
-      model: PRIMARY_MODEL,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-      temperature: 0.25,
-      max_tokens: 650
-    };
-
-    const response = await fetch(GROQ_ENDPOINT, {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": "Bearer " + getSecureKey()
+        "Authorization": "Bearer " + apiKey
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({
+        model: activeModel,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        temperature: 0.25,
+        max_tokens: 650
+      })
     });
 
     if (!response.ok) {
+      memoizedLiveModel = null; // Agar fail ho toh cache reset karein
       const errData = await response.json().catch(() => ({}));
       throw new Error(errData.error?.message || `HTTP ${response.status}`);
     }
