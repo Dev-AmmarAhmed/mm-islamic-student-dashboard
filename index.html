@@ -4815,33 +4815,46 @@ Exact Output JSON Format Required:
     </div>
   </div>
 
-    <!-- 📄 IN-APP SECURE PDF VIEWER MODAL (WITH ANTI-SCREENSHOT SHIELD) -->
+   <!-- 📄 IN-APP SECURE PDF VIEWER MODAL (ZOOMABLE & EXTERNAL-LINK BLOCKED) -->
   <div id="inAppPdfModal" class="modal-overlay" style="z-index: 100080; padding: 0; align-items: flex-end;">
-    <div class="modal-content secure-capture-shield" style="max-width: 720px; width: 100%; height: 96vh; border-radius: 22px 22px 0 0; display: flex; flex-direction: column; padding: 0; background: #0f172a; overflow: hidden;">
+    <div class="modal-content secure-capture-shield" style="max-width: 760px; width: 100%; height: 96vh; border-radius: 22px 22px 0 0; display: flex; flex-direction: column; padding: 0; background: #0f172a; overflow: hidden; position: relative;">
       
       <!-- Viewer Header -->
-      <div style="background: var(--header-bg); padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; color: white;">
+      <div style="background: var(--header-bg); padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; color: white; z-index: 50;">
         <div style="display: flex; align-items: center; gap: 8px; overflow: hidden;">
           <span style="font-size: 16px;">📄</span>
-          <span id="inAppPdfTitle" style="font-size: 13px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 240px;">PDF Viewer</span>
+          <span id="inAppPdfTitle" style="font-size: 13px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px;">PDF Viewer</span>
         </div>
-        <button class="btn-sm-del" style="margin: 0; padding: 6px 14px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4);" onclick="window.closeInAppPdfViewer()">✕ Close</button>
+
+        <!-- Zoom Controls + Close -->
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <button type="button" onclick="window.zoomPdfViewer(0.2)" class="btn-primary btn-blue" style="width: auto; padding: 5px 11px; font-size: 13px; margin: 0; border-radius: 8px;">➕</button>
+          <button type="button" onclick="window.zoomPdfViewer(-0.2)" class="btn-primary btn-blue" style="width: auto; padding: 5px 11px; font-size: 13px; margin: 0; border-radius: 8px;">➖</button>
+          <button type="button" onclick="window.resetPdfZoom()" class="btn-primary" style="width: auto; padding: 5px 9px; font-size: 11px; margin: 0; background: #475569; border-radius: 8px;">100%</button>
+          <button class="btn-sm-del" style="margin: 0; padding: 6px 12px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4);" onclick="window.closeInAppPdfViewer()">✕</button>
+        </div>
       </div>
 
-      <!-- Watermark / Security Protection Label -->
-      <div style="background: rgba(220,38,38,0.15); border-bottom: 1px solid rgba(220,38,38,0.3); padding: 4px 12px; text-align: center; font-size: 10px; font-weight: 800; color: #f87171;">
-        🔒 Protected Content • Screenshot & Download Restricted
+      <!-- Watermark / Security Protection Ribbon -->
+      <div style="background: rgba(220,38,38,0.18); border-bottom: 1px solid rgba(220,38,38,0.3); padding: 4px 12px; text-align: center; font-size: 10px; font-weight: 800; color: #fca5a5; z-index: 50;">
+        🔒 Protected Material • External Redirection & Extraction Blocked
       </div>
 
-      <!-- PDF Frame Viewport -->
-      <div style="flex: 1; position: relative; background: #1e293b; width: 100%; height: 100%; overflow: hidden;">
-        <iframe id="inAppPdfIframe" src="" style="width: 100%; height: 100%; border: none;" allow="autoplay"></iframe>
-        <!-- Invisible Touch Shield to disable long-press save menu -->
-        <div id="inAppPdfOverlayShield" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none;"></div>
+      <!-- PDF Frame Viewport with Zoom Wrapper -->
+      <div id="pdfViewportArea" style="flex: 1; position: relative; background: #1e293b; width: 100%; height: 100%; overflow: auto; -webkit-overflow-scrolling: touch;">
+        
+        <div id="pdfZoomContainer" style="width: 100%; height: 100%; transform-origin: top center; transition: transform 0.2s ease;">
+          <iframe id="inAppPdfIframe" src="" style="width: 100%; height: 100%; border: none; display: block;" allow="autoplay"></iframe>
+        </div>
+
+        <!-- 🚫 TOP-RIGHT EXTERNAL REDIRECT BLOCKER -->
+        <!-- Yeh invisibly Google Drive ke pop-out icon ke upar baith kar tap ko block kar deta hai -->
+        <div id="pdfDriveIconBlocker" style="position: absolute; top: 0; right: 0; width: 62px; height: 58px; background: transparent; z-index: 9999; cursor: not-allowed;" onclick="event.preventDefault(); event.stopPropagation();"></div>
       </div>
 
     </div>
   </div>
+
 
 
     <!-- 🛡️ ACCUENGINE SECURITY INFORMATION MODAL -->
@@ -5737,24 +5750,25 @@ Exact Output JSON Format Required:
 
     };
 
+     // ==========================================
+    // 📖 IN-APP SECURE PDF VIEWER WITH ZOOM & POP-OUT BLOCK
     // ==========================================
-    // 📖 IN-APP SECURE PDF VIEWER CONTROLLER
-    // ==========================================
+    let currentPdfScale = 1.0;
+
     window.openInAppPdfViewer = function(rawUrl, title) {
       if (!rawUrl) return;
 
       document.getElementById("inAppPdfTitle").innerText = title || "Document Viewer";
       const iframe = document.getElementById("inAppPdfIframe");
+      window.resetPdfZoom();
 
       let viewerUrl = rawUrl;
-      // Agar Google Drive link hai toh usko in-app preview embed URL mein badalna
       if (rawUrl.includes("drive.google.com")) {
         viewerUrl = rawUrl.replace(/\/view(\?.*)?$/, "/preview").replace(/\/edit(\?.*)?$/, "/preview");
         if (!viewerUrl.includes("/preview")) {
           viewerUrl = rawUrl.replace(/\/file\/d\/([^\/]+).*/, "/file/d/$1/preview");
         }
       } else if (rawUrl.endsWith(".pdf")) {
-        // Direct PDF file ke liye Google Docs Embed viewer
         viewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(rawUrl)}&embedded=true`;
       }
 
@@ -5764,9 +5778,31 @@ Exact Output JSON Format Required:
 
     window.closeInAppPdfViewer = function() {
       const iframe = document.getElementById("inAppPdfIframe");
-      if (iframe) iframe.src = ""; // Stop video/doc stream
+      if (iframe) iframe.src = "";
+      window.resetPdfZoom();
       window.closeModal("inAppPdfModal");
     };
+
+    window.zoomPdfViewer = function(step) {
+      currentPdfScale = Math.min(Math.max(currentPdfScale + step, 0.8), 2.5);
+      const container = document.getElementById("pdfZoomContainer");
+      if (container) {
+        container.style.transform = `scale(${currentPdfScale})`;
+        container.style.width = currentPdfScale > 1 ? `${currentPdfScale * 100}%` : "100%";
+        container.style.height = currentPdfScale > 1 ? `${currentPdfScale * 100}%` : "100%";
+      }
+    };
+
+    window.resetPdfZoom = function() {
+      currentPdfScale = 1.0;
+      const container = document.getElementById("pdfZoomContainer");
+      if (container) {
+        container.style.transform = "scale(1)";
+        container.style.width = "100%";
+        container.style.height = "100%";
+      }
+    };
+
 
     // ==========================================
     // 🛡️ ANTI-SCREENSHOT & BLUR DETECTION ENGINE
@@ -7250,36 +7286,34 @@ isAdminLbEditMode = false;
         const pointsToAward = (today.getDay() === 0 || today.getDay() === 6) ? 80 : 50;
         const newPts = (student.points || 0) + pointsToAward;
 
-        student.points = newPts;
+             student.points = newPts;
         inMemoryStudentsData[student.admn] = student;
         triggerStarBurstAnimation();
         document.getElementById("sClaimDailyPointsBtn").style.display = "none";
         document.getElementById("sDailyClaimedBadge").style.display = "block";
         await updateHeaderStarBadge();
 
+        // 🚀 Firestore + AccuEngine (Student Claims & Points)
+        let sClaims = {};
+        if (window.AccuEngine) {
+          sClaims = await window.AccuEngine.fetch(`daily_claims/${student.admn}`) || {};
+        }
+        sClaims[todayKey] = true;
 
+        await setDoc(doc(fsDb, "daily_claims", String(student.admn)), { claims: sClaims }, { merge: true });
+        await setDoc(doc(fsDb, "students", String(student.admn)), { points: newPts }, { merge: true });
 
-                await update(ref(db), {
+        if (window.AccuEngine) {
+          await window.AccuEngine.setLocal("daily_claims", student.admn, sClaims);
+          await window.AccuEngine.setLocal("students", student.admn, student);
+          window.AccuEngine.bumpSyncVersion();
+        }
+
+        await update(ref(db), {
           [`daily_claims/${student.admn}/${todayKey}`]: true,
           [`students/${student.admn}/points`]: newPts
-        });
+        }).catch(() => {});
 
-        // 🚀 Firestore sync taake unlimited loop na bane
-        try {
-          await setDoc(doc(fsDb, "daily_claims", String(student.admn)), {
-            claims: { [todayKey]: true }
-          }, { merge: true });
-
-          await setDoc(doc(fsDb, "students", String(student.admn)), {
-            points: newPts
-          }, { merge: true });
-
-          if (window.AccuEngine) {
-            await window.AccuEngine.invalidate("students", student.admn);
-          }
-        } catch (fsErr) {
-          console.warn("Claim sync warning:", fsErr);
-        }
 
 
         // Force memory update strictly before refresh
@@ -7895,13 +7929,23 @@ document.getElementById("hwTitleInput").value = "";
       });
     });
 
-    window.deleteIndividualTestRecord = async function(admn, testKey) {
+
+          window.deleteIndividualTestRecord = async function(admn, testKey) {
       if(confirm("Are you sure you want to delete this test record?")) {
-        await remove(ref(db, `tests/${admn}/${testKey}`));
-        alert("Test record deleted successfully.");
+        const docKey = testKey.includes("_") ? testKey : `${admn}_${testKey}`;
+        // 🚀 Firestore + AccuEngine
+        await deleteDoc(doc(fsDb, "tests", docKey)).catch(() => {});
+        if (window.AccuEngine) {
+          await window.AccuEngine.invalidate("tests", docKey);
+          window.AccuEngine.bumpSyncVersion();
+        }
+        await remove(ref(db, `tests/${admn}/${testKey}`)).catch(() => {});
+
+        alert("✔ Test record deleted successfully.");
         document.getElementById("loadStudentTestRecordsBtn").click();
       }
     };
+
 
     addSafeListener("bulkContinueBtn", "click", () => {
       const testName = document.getElementById("bulkTestNameInput").value.trim();
@@ -8734,11 +8778,30 @@ document.getElementById("hwTitleInput").value = "";
         const month = document.getElementById("expGenMonthSelect").value || getAutoMonthName();
 
         if(!type || !amount) { alert("Please fill all expense details."); return; }
-        const expId = Date.now().toString();
+               const expId = Date.now().toString();
         const detail = type === "Teacher Salary" ? teacherName : (desc || "Others Expense");
-        await set(ref(db, `expenses/${month}/${expId}`), { id: expId, date: getTodayFormattedDate(), type: type, detail: detail, amount: amount });
-        alert("Expense entry saved successfully.");
-      });
+        const expDocKey = `${month}_${expId}`;
+        const expPayload = {
+          id: expId,
+          docKey: expDocKey,
+          date: getTodayFormattedDate(),
+          month: month,
+          type: type,
+          detail: detail,
+          amount: amount,
+          updatedAt: new Date().toISOString()
+        };
+
+        // 🚀 Firestore + AccuEngine
+        await setDoc(doc(fsDb, "expenses", expDocKey), expPayload, { merge: true });
+        if (window.AccuEngine) {
+          await window.AccuEngine.setLocal("expenses", expDocKey, expPayload);
+          window.AccuEngine.bumpSyncVersion();
+        }
+        await set(ref(db, `expenses/${month}/${expId}`), expPayload).catch(() => {});
+
+        alert("✔ Expense entry saved successfully.");
+});
     });
 
     addSafeListener("generateExpenseSheetBtn", "click", () => {
@@ -8772,13 +8835,22 @@ document.getElementById("hwTitleInput").value = "";
       });
     });
 
-    window.deleteExpenseEntry = async function(month, expKey) {
+        window.deleteExpenseEntry = async function(month, expKey) {
       if(confirm("Are you sure you want to remove this expense entry?")) {
-        await remove(ref(db, `expenses/${month}/${expKey}`));
-        alert("Expense entry removed successfully.");
+        const docKey = expKey.includes("_") ? expKey : `${month}_${expKey}`;
+        // 🚀 Firestore + AccuEngine
+        await deleteDoc(doc(fsDb, "expenses", docKey)).catch(() => {});
+        if (window.AccuEngine) {
+          await window.AccuEngine.invalidate("expenses", docKey);
+          window.AccuEngine.bumpSyncVersion();
+        }
+        await remove(ref(db, `expenses/${month}/${expKey}`)).catch(() => {});
+
+        alert("✔ Expense entry removed successfully.");
         document.getElementById("loadRmExpenseSheetBtn").click();
       }
     };
+
 
     addSafeListener("loadRmFeeBtn", "click", () => {
       const admn = document.getElementById("rmFeeSelectedAdmn").value;
@@ -9772,19 +9844,58 @@ document.getElementById("hwTitleInput").value = "";
         };
         localStorage.setItem(`test_cache_${currentLiveTestObj.id}_${currentStudentAdmn}`, JSON.stringify(cacheData));
 
-                const testTitle = currentLiveTestObj.title || currentLiveTestObj.testName || "Online Test";
-        const attemptObj = { testId: currentLiveTestObj.id, title: testTitle, obtained: obtainedMarks, total: totalMarks, percentage: percentage, date: getTodayFormattedDate() };
-        const testRecordObj = { name: `[Online] ${testTitle}`, total: totalMarks, obtained: obtainedMarks, percentage: percentage, awardedPoints: awardedPoints, date: getTodayFormattedDate() };
-
+              const testTitle = currentLiveTestObj.title || currentLiveTestObj.testName || "Online Test";
+        const attemptKey = `${currentLiveTestObj.id}_${currentStudentAdmn}`;
+        const offlineRecordId = `${currentStudentAdmn}_${Date.now()}`;
         
+        const attemptObj = {
+          id: attemptKey,
+          testId: currentLiveTestObj.id,
+          admn: currentStudentAdmn,
+          title: testTitle,
+          obtained: obtainedMarks,
+          total: totalMarks,
+          percentage: percentage,
+          date: getTodayFormattedDate(),
+          updatedAt: new Date().toISOString()
+        };
+
+        const testRecordObj = {
+          id: offlineRecordId,
+          admn: currentStudentAdmn,
+          name: `[Online] ${testTitle}`,
+          total: totalMarks,
+          obtained: obtainedMarks,
+          percentage: percentage,
+          awardedPoints: awardedPoints,
+          date: getTodayFormattedDate()
+        };
+
         const student = await getStudentRecord(currentStudentAdmn);
+        const newPts = (student ? (student.points || 0) : 0) + awardedPoints;
+
+        // 🚀 Firestore + AccuEngine (Attempts, Tests & Points)
+        await setDoc(doc(fsDb, "test_attempts", attemptKey), attemptObj, { merge: true });
+        await setDoc(doc(fsDb, "tests", offlineRecordId), testRecordObj, { merge: true });
+        await setDoc(doc(fsDb, "students", String(currentStudentAdmn)), { points: newPts }, { merge: true });
+
+        if (window.AccuEngine) {
+          await window.AccuEngine.setLocal("test_attempts", attemptKey, attemptObj);
+          await window.AccuEngine.setLocal("tests", offlineRecordId, testRecordObj);
+          if (student) {
+            student.points = newPts;
+            await window.AccuEngine.setLocal("students", currentStudentAdmn, student);
+          }
+          window.AccuEngine.bumpSyncVersion();
+        }
+
         const updates = {};
         updates[`student_test_attempts/${currentStudentAdmn}/${currentLiveTestObj.id}`] = attemptObj;
         updates[`test_attempts/${currentLiveTestObj.id}/${currentStudentAdmn}`] = attemptObj;
         updates[`tests/${currentStudentAdmn}/${Date.now()}`] = testRecordObj;
-        updates[`students/${currentStudentAdmn}/points`] = (student ? (student.points || 0) : 0) + awardedPoints;
+        updates[`students/${currentStudentAdmn}/points`] = newPts;
+        await update(ref(db), updates).catch(() => {});
 
-        await update(ref(db), updates);
         
         // Notification triggered strictly once
         await window.pushAppNotification(currentStudentAdmn, "Test Submitted ✅", `You scored ${obtainedMarks}/${totalMarks} in ${currentLiveTestObj.title}.`, "test_submitted");
@@ -10200,14 +10311,33 @@ document.getElementById("hwTitleInput").value = "";
 
                setTimeout(async () => {
           flyEl.remove();
-          const teacherData = await safeDataFetch(`teachers/${loggedUser}`) || {};
+                 const teacherData = await safeDataFetch(`teachers/${loggedUser}`) || {};
           const newPts = (teacherData.points || 0) + 50;
-          
-          await update(ref(db), { [`teachers/${loggedUser}/points`]: newPts, [`teacher_daily_claims/${loggedUser}/${todayKey}`]: true });
-          
+
+          // 🚀 Firestore + AccuEngine (Teacher Claims & Points)
+          let tClaims = {};
+          if (window.AccuEngine) {
+            tClaims = await window.AccuEngine.fetch(`daily_claims/${loggedUser}`) || {};
+          }
+          tClaims[todayKey] = true;
+
+          await setDoc(doc(fsDb, "daily_claims", String(loggedUser)), { claims: tClaims }, { merge: true });
+          await setDoc(doc(fsDb, "teachers", String(loggedUser)), { points: newPts }, { merge: true });
+
+          if (window.AccuEngine) {
+            await window.AccuEngine.setLocal("daily_claims", loggedUser, tClaims);
+            if (teacherData) {
+              teacherData.points = newPts;
+              await window.AccuEngine.setLocal("teachers", loggedUser, teacherData);
+            }
+            window.AccuEngine.bumpSyncVersion();
+          }
+
+          await update(ref(db), { [`teachers/${loggedUser}/points`]: newPts, [`teacher_daily_claims/${loggedUser}/${todayKey}`]: true }).catch(() => {});
+
           btn.style.display = "none";
           if (document.getElementById("tDailyClaimedBadge")) document.getElementById("tDailyClaimedBadge").style.display = "block";
-          
+
           // Force immediate DOM update for Teacherboard card
           const myTbCard = document.getElementById(`tbCard_${loggedUser}`);
           if (myTbCard) {
