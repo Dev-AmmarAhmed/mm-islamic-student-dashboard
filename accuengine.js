@@ -16,13 +16,15 @@
 
   const DB_NAME = "AccuEngine_Storage";
   const DB_VERSION = 10;
-  const STORES = [
+   const STORES = [
     "users",
     "students",
     "teachers",
     "fees_matrix",
     "fees_entries",
     "attendance",
+    "study_material",
+    "homework",
     "tests",
     "online_tests",
     "test_attempts",
@@ -323,15 +325,18 @@
 
       console.log("📥 [AccuEngine] Fetching cloud data and encrypting into device storage...");
 
-      try {
-        const [studentsSnap, teachersSnap, usersSnap, feesMatrixSnap, feesEntriesSnap, attendanceSnap] = await Promise.all([
+      try {        
+        const [studentsSnap, teachersSnap, usersSnap, feesMatrixSnap, feesEntriesSnap, attendanceSnap, studyMatSnap, homeworkSnap] = await Promise.all([
           getDocs(collection(fsDb, "students")),
           getDocs(collection(fsDb, "teachers")),
           getDocs(collection(fsDb, "users")),
           getDocs(collection(fsDb, "fees_matrix")),
           getDocs(collection(fsDb, "fees_entries")),
-          getDocs(collection(fsDb, "attendance"))
+          getDocs(collection(fsDb, "attendance")),
+          getDocs(collection(fsDb, "study_material")),
+          getDocs(collection(fsDb, "homework"))
         ]);
+
 
         // 1. Students
         const studentsMap = {};
@@ -361,13 +366,23 @@
         feesEntriesSnap.forEach((d) => { entriesMap[d.id] = d.data(); });
         await idbSetBatch("fees_entries", entriesMap);
 
-        // 6. Attendance
+               // 6. Attendance Encrypted Batch
         const attMap = {};
         attendanceSnap.forEach((d) => {
           const dt = d.data();
           attMap[d.id] = dt.days || dt;
         });
         await idbSetBatch("attendance", attMap);
+
+        // 7. Study Material Encrypted Batch
+        const matMap = {};
+        studyMatSnap.forEach((d) => { matMap[d.id] = d.data(); });
+        await idbSetBatch("study_material", matMap);
+
+        // 8. Homework Encrypted Batch
+        const hwMap = {};
+        homeworkSnap.forEach((d) => { hwMap[d.id] = d.data(); });
+        await idbSetBatch("homework", hwMap);
 
         const finalVer = remoteVersion || Date.now().toString();
         localStorage.setItem("accu_local_version", finalVer);
@@ -441,11 +456,45 @@
       }
 
       // Standard Stores (students, teachers, users, fees_matrix)
+            // Study Material Resolver (Class-bound)
+      if (root === "study_material") {
+        const all = await idbGetAllMap("study_material");
+        if (parts[1]) {
+          const res = {};
+          const targetCls = String(parts[1]).replace(/class\s*/i, "").trim();
+          Object.entries(all).forEach(([k, v]) => {
+            if (v && String(v.class).replace(/class\s*/i, "").trim() === targetCls) {
+              res[v.id || k] = v;
+            }
+          });
+          return res;
+        }
+        return all;
+      }
+
+      // Homework Resolver (Class-bound)
+      if (root === "homework") {
+        const all = await idbGetAllMap("homework");
+        if (parts[1]) {
+          const res = {};
+          const targetCls = String(parts[1]).replace(/class\s*/i, "").trim();
+          Object.entries(all).forEach(([k, v]) => {
+            if (v && String(v.class).replace(/class\s*/i, "").trim() === targetCls) {
+              res[v.id || k] = v;
+            }
+          });
+          return res;
+        }
+        return all;
+      }
+
+      // Standard Stores (students, teachers, users, fees_matrix)
       if (parts[1]) {
         return await idbGet(root, parts[1]);
       } else {
         return await idbGetAllMap(root);
       }
+
     },
 
     setLocal: async function (storeName, key, value) {
