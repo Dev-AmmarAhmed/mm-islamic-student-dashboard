@@ -4820,63 +4820,7 @@ Exact Output JSON Format Required:
     </div>
   </div>
 
-  <!-- 🔒 SECURE APP SETUP MODAL -->
-  <div id="secureAppModal" class="modal-overlay" style="z-index: 100070;">
-    <div class="modal-content" style="max-width: 360px; text-align: center; padding: 22px; border-radius: 20px;">
-      <div class="modal-header" style="background: transparent; padding: 0 0 10px 0; border-bottom: 1.5px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
-        <span style="color: #10b981; font-size: 16px; font-weight: 900;">🔒 Secure Application</span>
-        <span class="close-modal" onclick="closeModal('secureAppModal')">✕</span>
-      </div>
 
-      <div class="modal-body" style="padding: 14px 0 0 0; text-align: left;">
-        <p style="font-size: 11px; font-weight: 700; color: var(--text-muted); margin-bottom: 14px; line-height: 1.4;">
-          Naya 4-digit PIN set karein aur Biometrics enable karein. Yeh lock har app initialization par authenticate karega.
-        </p>
-
-        <label style="font-size: 11px; font-weight: 800;">Set 4-Digit PIN *:</label>
-        <input type="password" id="secNewPin" maxlength="4" pattern="[0-9]*" inputmode="numeric" placeholder="••••" style="text-align: center; font-size: 22px; letter-spacing: 8px; font-weight: 900; margin-top: 4px;">
-
-        <label style="margin-top: 12px; font-size: 11px; font-weight: 800;">Confirm 4-Digit PIN *:</label>
-        <input type="password" id="secConfirmPin" maxlength="4" pattern="[0-9]*" inputmode="numeric" placeholder="••••" style="text-align: center; font-size: 22px; letter-spacing: 8px; font-weight: 900; margin-top: 4px;">
-
-        <div class="dark-mode-toggle-row" style="margin-top: 16px; border-radius: 12px; border: 1px solid var(--border-color); padding: 12px 14px; display: flex; justify-content: space-between; align-items: center;">
-          <div>
-            <div style="font-size: 12px; font-weight: 800; color: var(--text-color);">Enable Biometrics 🧬</div>
-            <div style="font-size: 9.5px; font-weight: 700; color: var(--text-muted);">Fingerprint / Face ID Unlock</div>
-          </div>
-          <label class="switch">
-            <input type="checkbox" id="secBiometricChk" checked>
-            <span class="slider"></span>
-          </label>
-        </div>
-
-        <button id="btnSaveAppLock" class="btn-primary btn-green" style="margin-top: 18px; padding: 13px;" onclick="window.saveAppLockSettings()">
-          🔒 Secure & Save Lock
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 🔐 APP INITIALIZATION LOCK SCREEN OVERLAY -->
-  <div id="appLockScreenOverlay" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--app-bg); z-index: 99999999; flex-direction: column; align-items: center; justify-content: center; padding: 24px;">
-    <div style="text-align: center; max-width: 320px; width: 100%;">
-           <div style="font-size: 48px; margin-bottom: 8px;">🔐</div>
-      <h2 style="font-size: 19px; font-weight: 900; color: #0288d1; margin-bottom: 4px;">Secured by AccuEngine</h2>
-      <p id="lockScreenUserText" style="font-size: 12px; font-weight: 700; color: var(--text-muted); margin-bottom: 22px;">Authenticate to access dashboard</p>
-
-      <input type="password" id="unlockPinInput" maxlength="4" pattern="[0-9]*" inputmode="numeric" placeholder="••••" style="width: 170px; margin: 0 auto; display: block; text-align: center; font-size: 28px; letter-spacing: 10px; font-weight: 900; padding: 10px; border: 2px solid #0288d1; border-radius: 14px; background: var(--input-bg); color: var(--text-color); outline: none;">
-
-      <div style="display: flex; gap: 10px; margin-top: 20px;">
-        <button id="btnBiometricUnlock" class="btn-primary btn-purple" style="flex: 1; margin: 0; font-size: 12px;" onclick="window.triggerBiometricUnlock()">
-          🧬 Biometric
-        </button>
-        <button class="btn-primary btn-blue" style="flex: 1; margin: 0; font-size: 12px;" onclick="window.submitPinUnlock()">
-          Unlock ➔
-        </button>
-      </div>
-      <p id="unlockErrorText" style="color: #ef4444; font-size: 12px; font-weight: 800; margin-top: 14px; display: none;">Invalid PIN. Try again.</p>
-    </div>
-  </div>
 
    <!-- 📄 IN-APP SECURE PDF VIEWER MODAL (ZOOMABLE & EXTERNAL-LINK BLOCKED) -->
   <div id="inAppPdfModal" class="modal-overlay" style="z-index: 100080; padding: 0; align-items: flex-end;">
@@ -5653,7 +5597,7 @@ Exact Output JSON Format Required:
         const parts = refPath.split("/");
         const collectionName = parts[0];
 
-        if (parts.length === 1) {
+               if (parts.length === 1) {
           // Poori collection fetch karo Firestore se
           const snap = await getDocs(collection(fsDb, collectionName));
           const map = {};
@@ -5661,9 +5605,13 @@ Exact Output JSON Format Required:
           
           // Igris cache mein save kar do taaki agli baar 0ms mein mile
           if (Sentinel && typeof Sentinel.setLocal === "function" && Object.keys(map).length > 0) {
-            Sentinel.setLocal(collectionName, map);
+            for (const [k, v] of Object.entries(map)) {
+              Sentinel.setLocal(collectionName, k, v);
+            }
           }
           return map;
+        
+
         } else if (parts.length === 2) {
           // Single document fetch karo Firestore se
           const docSnap = await getDoc(doc(fsDb, collectionName, parts[1]));
@@ -11972,35 +11920,7 @@ window.closeModal("applyLeaveModal");
         }
     };
 
-    window.deleteLeaveApp = async function() {
-        const leaveId = document.getElementById("laLeaveId").value;
-        const admn = document.getElementById("laAdmn").value;
-        if(!leaveId || !admn) return;
-
-        window.showCustomConfirm("Are you sure you want to completely delete this leave application?", async () => {
-            try {
-                // 🚀 1. Delete from Firestore
-                await deleteDoc(doc(fsDb, "leaves", leaveId)).catch(() => {});
-
-                // 🚀 2. Invalidate AccuEngine Cache
-                if (window.AccuEngine) {
-                  await window.AccuEngine.invalidate("leaves", leaveId);
-                  window.AccuEngine.bumpSyncVersion();
-                }
-
-                const dbPath = currentActionLeaveRole === 'teacher' 
-                    ? `teacher_leave_applications/${admn}/${leaveId}` 
-                    : `leave_applications/${admn}/${leaveId}`;
-                await remove(ref(db, dbPath)).catch(() => {});
-
-                alert("🗑 Leave application deleted successfully.");
-                window.closeModal("leaveActionModal");
-                window.loadAllLeaves(); 
-            } catch(e) {
-                alert("Error deleting application.");
-            }
-        });
-    };
+  
 
 
     window.deleteLeaveApp = async function() {
