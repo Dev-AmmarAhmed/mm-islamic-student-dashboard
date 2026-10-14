@@ -5610,22 +5610,14 @@ Exact Output JSON Format Required:
 
     
     
-
-          async function safeDataFetch(refPath) {
+    async function safeDataFetch(refPath) {
       const Sentinel = window.Igris || window.AccuEngine;
       if (Sentinel && typeof Sentinel.fetch === "function") {
-        const res = await Sentinel.fetch(refPath);
-        // Agar Sentinel ke paas unencrypted data hai toh foran return karo
-        if (res !== null && res !== undefined && (typeof res !== "object" || Object.keys(res).length > 0)) {
-          return res;
-        }
+        return await Sentinel.fetch(refPath);
       }
-      // Agar cache bilkul khali hai toh fallback RTDB se uthao
-      try {
-        const snap = await get(child(ref(db), refPath));
-        return snap.exists() ? snap.val() : null;
-      } catch(err) { return null; }
+      return null;
     }
+
 
 
         // Firestore se single user fetch karne ka helper
