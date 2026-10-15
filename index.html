@@ -6967,16 +6967,18 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
         `;
         if (typeof window.syncTeacherFeatureLocksRealtime === "function") window.syncTeacherFeatureLocksRealtime();
 
-        const activeSelect = document.getElementById("teacherActiveSelect");
-        if(activeSelect) {
-          activeSelect.innerHTML = "";
-          tClasses.forEach(c => { activeSelect.innerHTML += `<option value="${c}">Class ${c}</option>`; });
-          activeSelect.value = assignedClass;
-        }
+            const activeSelect = document.getElementById("teacherActiveSelect");
+    if(activeSelect) {
+      activeSelect.innerHTML = "";
+      tClasses.forEach(c => { activeSelect.innerHTML += `<option value="${c}">Class ${c}</option>`; });
+      activeSelect.value = assignedClass;
+    }
 
-        window.switchTab('teacherTabHome', bottomNav.children[0]);
+    refreshAllTeacherData();
+    window.switchTab('teacherTabHome', bottomNav.children[0]);
 
-      } else {
+  } else {
+
         document.body.classList.remove("teacher-mode", "student-mode");
         document.getElementById("portalRoleSubHeader").innerText = "ADMINISTRATOR DASHBOARD PRO";
         document.getElementById("classBadgeContainer").style.display = "none";
@@ -7239,7 +7241,12 @@ isAdminLbEditMode = false;
 
       if(tabId === 'adminTabExpns') { document.getElementById("expCurrentDateDisplay").value = getTodayFormattedDate(); loadTeachersInExpenseDropdown(); }
       if(tabId === "studentTabTest") loadStudentDueTests();
+      if(tabId === 'teacherTabAttend') loadTeacherTodayAttendance();
+      if(tabId === 'teacherTabStudents') loadTeacherStudentsDirectory();
+      if(tabId === 'teacherTabPerform') { if(typeof window.loadTeacherLeaderboard === "function") window.loadTeacherLeaderboard(); populateTeacherStudentDropdowns(); }
+      if(tabId === 'adminTabStudents') renderAdminStudentsDirectory();
     };
+
 
     // 🚀 HARDWARE / PHONE BACK GESTURE HANDLER
     window.addEventListener("popstate", (e) => {
