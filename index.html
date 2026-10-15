@@ -5501,16 +5501,28 @@ Exact Output JSON Format Required:
       window.renderAdminInteractiveTestTable("ALL");
     };
 
-    window.renderAdminInteractiveTestTable = async function(selectedClass) {
-      const thead = document.getElementById("adminInteractiveTestHead");
-      const tbody = document.getElementById("adminInteractiveTestBody");
-      if(!thead || !tbody) return;
+     window.renderAdminInteractiveTestTable = async function(selectedClass) {
+ const thead = document.getElementById("adminInteractiveTestHead");
+ const tbody = document.getElementById("adminInteractiveTestBody");
+ if(!thead || !tbody) return;
 
-      tbody.innerHTML = `<tr><td colspan="7" style="padding: 14px; text-align: center;">⏳ Loading tests data...</td></tr>`;
+ tbody.innerHTML = `<tr><td colspan="7" style="padding: 14px; text-align: center;">⏳ Loading tests data from Realtime Database...</td></tr>`;
 
-      const allTests = await safeDataFetch("online_tests") || {};
-      const allStudents = getLiveStudents();
-      const allAttempts = await safeDataFetch("test_attempts") || {};
+ let allTests = {};
+ let allAttempts = {};
+
+ try {
+   const [testsSnap, attemptsSnap] = await Promise.all([
+     get(ref(db, "online_tests")),
+     get(ref(db, "test_attempts"))
+   ]);
+   if(testsSnap.exists()) allTests = testsSnap.val();
+   if(attemptsSnap.exists()) allAttempts = attemptsSnap.val();
+ } catch(e) {
+   console.warn("RTDB admin tests load error:", e);
+ }
+
+ const allStudents = getLiveStudents();
 
       let testsList = [];
 
@@ -5580,30 +5592,38 @@ Exact Output JSON Format Required:
         const safeTestId = t.testId;
         const safeClass = t.class;
 
-        if(selectedClass === "ALL") {
-          tbody.innerHTML += `
-            <tr>
-              <td><b>${idx + 1}</b></td>
-              <td style="text-align: left; padding-left: 8px; font-weight: 800; color: #0288d1; cursor: pointer; text-decoration: underline;" onclick="window.openAdminTestHistoryModal('${safeClass}', '${safeTestId}')">${t.title || t.testName || 'Test'}</td>
-              <td><span class="class-badge" style="background:#0288d1; font-size:10px;">${t.class}</span></td>
-              <td>${t.subject || '-'}</td>
-              <td><b>${t.numQuestions || (t.questions ? t.questions.length : 0)}</b></td>
-              <td><b style="color: #16a34a;">${attemptedCount}</b></td>
-              <td><b style="color: #dc2626;">${notAttemptedCount}</b></td>
-            </tr>
-          `;
-        } else {
-          tbody.innerHTML += `
-            <tr>
-              <td><b>${idx + 1}</b></td>
-              <td style="text-align: left; padding-left: 8px; font-weight: 800; color: #0288d1; cursor: pointer; text-decoration: underline;" onclick="window.openAdminTestHistoryModal('${safeClass}', '${safeTestId}')">${t.title || t.testName || 'Test'}</td>
-              <td>${t.subject || '-'}</td>
-              <td><b>${t.numQuestions || (t.questions ? t.questions.length : 0)}</b></td>
-              <td><b style="color: #16a34a;">${attemptedCount}</b></td>
-              <td><b style="color: #dc2626;">${notAttemptedCount}</b></td>
-            </tr>
-          `;
-        }
+        const now = new Date().getTime();
+ const expiryTime = t.expiry ? new Date(t.expiry).getTime() : NaN;
+ const isExpired = !isNaN(expiryTime) && now > expiryTime;
+ const expBadge = isExpired 
+   ? `<span style="background: rgba(239, 68, 68, 0.15); color: #dc2626; border: 1px solid #ef4444; padding: 2px 6px; border-radius: 6px; font-size: 9px; font-weight: 800; margin-left: 6px;">Expired</span>`
+   : `<span style="background: rgba(34, 197, 94, 0.15); color: #16a34a; border: 1px solid #16a34a; padding: 2px 6px; border-radius: 6px; font-size: 9px; font-weight: 800; margin-left: 6px;">Active</span>`;
+
+ if(selectedClass === "ALL") {
+ tbody.innerHTML += `
+ <tr>
+ <td><b>${idx + 1}</b></td>
+ <td style="text-align: left; padding-left: 8px; font-weight: 800; color: #0288d1; cursor: pointer; text-decoration: underline;" onclick="window.openAdminTestHistoryModal('${safeClass}', '${safeTestId}')">${t.title || t.testName || 'Test'} ${expBadge}</td>
+ <td><span class="class-badge" style="background:#0288d1; font-size:10px;">${t.class}</span></td>
+ <td>${t.subject || '-'}</td>
+ <td><b>${t.numQuestions || (t.questions ? t.questions.length : 0)}</b></td>
+ <td><b style="color: #16a34a;">${attemptedCount}</b></td>
+ <td><b style="color: #dc2626;">${notAttemptedCount}</b></td>
+ </tr>
+ `;
+ } else {
+ tbody.innerHTML += `
+ <tr>
+ <td><b>${idx + 1}</b></td>
+ <td style="text-align: left; padding-left: 8px; font-weight: 800; color: #0288d1; cursor: pointer; text-decoration: underline;" onclick="window.openAdminTestHistoryModal('${safeClass}', '${safeTestId}')">${t.title || t.testName || 'Test'} ${expBadge}</td>
+ <td>${t.subject || '-'}</td>
+ <td><b>${t.numQuestions || (t.questions ? t.questions.length : 0)}</b></td>
+ <td><b style="color: #16a34a;">${attemptedCount}</b></td>
+ <td><b style="color: #dc2626;">${notAttemptedCount}</b></td>
+ </tr>
+ `;
+ }
+
       });
     };
 
@@ -10021,35 +10041,12 @@ document.getElementById("hwTitleInput").value = "";
           createdDate: getTodayFormattedDate() 
         };
 
-        // 🚀 1. Immediate Local Cache Update
-        if (window.AccuEngine) {
-          await window.AccuEngine.setLocal("online_tests", testId, testPayloadData);
-        }
-
-        const onlineTestSyncPayload = {
-          testId: testId,
-          testData: testPayloadData
-        };
-
-        // 🚀 2. Online vs Offline Sync Handling
-        if (navigator.onLine) {
-          try {
-            await set(ref(db, `online_tests/${cleanClass}/${testId}`), testPayloadData);
-            await setDoc(doc(fsDb, "online_tests", String(testId)), testPayloadData, { merge: true });
-            alert(`✔ Online Test "${name}" published successfully for Class ${assignedClass}!`);
-                   } catch (e) {
-            if (window.AccuEngine) {
-              await window.AccuEngine.queueOfflineAction("online_test", onlineTestSyncPayload);
-              window.AccuEngine.triggerBackgroundSync();
-            }
-            alert("⚡ Online Test saved locally. Will be published to the server once online.");
-          }
-        } else {
-          if (window.AccuEngine) {
-            await window.AccuEngine.queueOfflineAction("online_test", onlineTestSyncPayload);
-            window.AccuEngine.triggerBackgroundSync();
-          }
-          alert("⚡ Offline Mode: Test created locally! Will sync to the server once online.");
+        // 🚀 Pura Online Test direct Realtime Database me save hoga
+        try {
+          await set(ref(db, `online_tests/${cleanClass}/${testId}`), testPayloadData);
+          window.showCustomAlert(`✔ Online Test "${name}" published successfully for Class ${assignedClass}!`);
+        } catch (err) {
+          window.showCustomAlert("Error publishing test to Realtime Database: " + err.message);
         }
 
         if (typeof window.loadTeacherActiveOnlineTests === "function") {
@@ -10063,48 +10060,88 @@ document.getElementById("hwTitleInput").value = "";
     });
 
 
-
-
-        async function loadStudentDueTests() {
+          // 🎓 Student Due Tests: Direct RTDB se load & Expired tests bacho ke liye completely hide honge
+    async function loadStudentDueTests() {
       const container = document.getElementById("sDueOnlineTestsContainer");
       if(!container) return;
+      container.innerHTML = `<p style="font-size:12px; color:var(--text-muted);">Loading due tests...</p>`;
+
       const classKey = cleanClassStr(assignedClass);
-      const testsData = await safeDataFetch(`online_tests/${classKey}`);
-      const myAttempted = await safeDataFetch(`student_test_attempts/${currentStudentAdmn}`) || {};
+      let testsData = {};
+      let myAttempted = {};
+
+      try {
+        const [testsSnap, attemptsSnap] = await Promise.all([
+          get(ref(db, `online_tests/${classKey}`)),
+          get(ref(db, `student_test_attempts/${currentStudentAdmn}`))
+        ]);
+        if(testsSnap.exists()) testsData = testsSnap.val();
+        if(attemptsSnap.exists()) myAttempted = attemptsSnap.val();
+      } catch (e) {
+        console.warn("RTDB tests load error:", e);
+      }
+
       container.innerHTML = "";
 
       if(testsData && typeof testsData === 'object' && Object.keys(testsData).length > 0) {
         let count = 0;
         const now = new Date().getTime();
+
         Object.values(testsData).forEach(test => {
           if(test && test.id) {
             const isCompleted = myAttempted[test.id] ? true : false;
-            const expiryTime = new Date(test.expiry).getTime();
-            
-            if(!(!isNaN(expiryTime) && now > expiryTime)) {
-              count++;
-              
-                         container.innerHTML += `<div class="card ${isCompleted ? 'test-card-completed' : 'test-card-pending'}" style="padding:14px; margin-bottom:10px; border-radius:14px;"><div style="display:flex; justify-content:space-between; align-items:center;"><div><div style="font-size:14px; font-weight:800; color:${isCompleted ? '#16a34a' : '#d97706'};">${test.title}</div><div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Subject: ${test.subject} | Questions: ${test.numQuestions} | Marks: ${test.totalMarks} | Time: ${test.timeMinutes} Mins</div></div><div>${isCompleted ? `<div style="text-align:right;"><span style="font-size:11px; font-weight:800; color:#16a34a; background:rgba(34,197,94,0.15); padding:6px 12px; border-radius:8px; display:inline-block;">✔ Completed (${myAttempted[test.id].obtained}/${test.totalMarks})</span></div>` : `<button class="btn-primary btn-green" style="margin-top:0; width:auto; padding:6px 14px; font-size:11px;" onclick="window.startStudentLiveTest('${test.id}')">▶ Start Test</button>`}</div></div></div>`;
+            const expiryTime = test.expiry ? new Date(test.expiry).getTime() : NaN;
+            const isExpired = !isNaN(expiryTime) && now > expiryTime;
 
+            // 🚫 Agar test expire ho gaya hai, to student ko BILKUL show nahi hoga
+            if(!isExpired) {
+              count++;
+              container.innerHTML += `
+                <div class="card ${isCompleted ? 'test-card-completed' : 'test-card-pending'}" style="padding:14px; margin-bottom:10px; border-radius:14px;">
+                  <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                      <div style="font-size:14px; font-weight:800; color:${isCompleted ? '#16a34a' : '#d97706'};">${test.title}</div>
+                      <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Subject: ${test.subject} | Questions: ${test.numQuestions} | Marks: ${test.totalMarks} | Time: ${test.timeMinutes} Mins</div>
+                    </div>
+                    <div>
+                      ${isCompleted ? `<div style="text-align:right;"><span style="font-size:11px; font-weight:800; color:#16a34a; background:rgba(34,197,94,0.15); padding:6px 12px; border-radius:8px; display:inline-block;">✔ Completed (${myAttempted[test.id].obtained}/${test.totalMarks})</span></div>` : `<button class="btn-primary btn-green" style="margin-top:0; width:auto; padding:6px 14px; font-size:11px;" onclick="window.startStudentLiveTest('${test.id}')">▶ Start Test</button>`}
+                    </div>
+                  </div>
+                </div>`;
             }
           }
         });
         if(count === 0) container.innerHTML = `<p style="font-size:12px; color:var(--text-muted);">No active due online tests right now.</p>`;
-      } else { container.innerHTML = `<p style="font-size:12px; color:var(--text-muted);">No active due online tests right now.</p>`; }
+      } else { 
+        container.innerHTML = `<p style="font-size:12px; color:var(--text-muted);">No active due online tests right now.</p>`; 
+      }
     }
 
-
-    
-
-        window.isUrdu = function(text) {
+    window.isUrdu = function(text) {
       const urduPattern = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
       return urduPattern.test(text);
     };
 
     window.startStudentLiveTest = async function(testId) {
       const classKey = cleanClassStr(assignedClass);
-      const test = await safeDataFetch(`online_tests/${classKey}/${testId}`);
-      if(!test) { alert("Test details not found or test has expired."); return; }
+      let test = null;
+      try {
+        const testSnap = await get(ref(db, `online_tests/${classKey}/${testId}`));
+        if(testSnap.exists()) test = testSnap.val();
+      } catch(e) {}
+
+      if(!test) { 
+        window.showCustomAlert("Test details not found or test has expired."); 
+        return; 
+      }
+
+      const now = new Date().getTime();
+      const expiryTime = test.expiry ? new Date(test.expiry).getTime() : NaN;
+      if(!isNaN(expiryTime) && now > expiryTime) {
+        window.showCustomAlert("⚠️ Yeh test expire ho chuka hai aur ab attempt nahi kiya ja sakta.");
+        loadStudentDueTests();
+        return;
+      }
 
       currentLiveTestObj = test;
       if(document.getElementById("liveTestTitleDisplay")) document.getElementById("liveTestTitleDisplay").innerText = test.title;
@@ -10438,38 +10475,48 @@ document.getElementById("hwTitleInput").value = "";
       }
     };
 
-        window.loadTeacherActiveOnlineTests = async function() {
+        
+          // 👩‍🏫 Teacher Online Tests: Direct RTDB se load, Expired test par laal badge aayega aur teacher ke remove karne par hi delete hoga
+    window.loadTeacherActiveOnlineTests = async function() {
       const container = document.getElementById("tActiveOnlineTestsContainer");
       if (!container) return;
 
       const classKey = cleanClassStr(assignedClass);
-      const allTests = await safeDataFetch("online_tests") || {};
-      
-      // Class filter: check nested or root map
-      let classTests = allTests[classKey] || {};
-      if (Object.keys(classTests).length === 0) {
-        Object.entries(allTests).forEach(([k, v]) => {
-          if (v && cleanClassStr(v.class) === classKey) {
-            classTests[k] = v;
-          }
-        });
+      let classTests = {};
+
+      try {
+        const snap = await get(ref(db, `online_tests/${classKey}`));
+        if (snap.exists()) classTests = snap.val();
+      } catch(e) {
+        console.warn("RTDB teacher tests load error:", e);
       }
 
       container.innerHTML = "";
       const testEntries = Object.entries(classTests);
       if (testEntries.length === 0) {
-        container.innerHTML = `<div style="font-size:11px; color:var(--text-muted); padding: 10px; background: rgba(0,0,0,0.02); border-radius: 8px;">No active tests found for Class ${assignedClass}.</div>`;
+        container.innerHTML = `<div style="font-size:11px; color:var(--text-muted); padding: 10px; background: rgba(0,0,0,0.02); border-radius: 8px;">No online tests found for Class ${assignedClass}.</div>`;
         return;
       }
 
+      const now = new Date().getTime();
       let html = "";
       for (const [testId, t] of testEntries) {
         if (!t) continue;
+
+        const expiryTime = t.expiry ? new Date(t.expiry).getTime() : NaN;
+        const isExpired = !isNaN(expiryTime) && now > expiryTime;
+        const statusBadge = isExpired 
+          ? `<span style="background: rgba(239, 68, 68, 0.15); color: #dc2626; border: 1px solid #ef4444; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 800; margin-left: 6px;">Expired ⌛</span>`
+          : `<span style="background: rgba(34, 197, 94, 0.15); color: #16a34a; border: 1px solid #16a34a; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 800; margin-left: 6px;">Active ✔</span>`;
+
         html += `
           <div style="display:flex; justify-content:space-between; align-items:center; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; margin-bottom: 8px; background: var(--card-bg); box-shadow: 0 2px 8px rgba(0,0,0,0.02);">
             <div>
-              <div style="font-size:13px; font-weight:800; color:var(--text-color);">${t.title || t.testName || "Online Test"}</div>
-              <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Sub: ${t.subject || '-'} | Time: ${t.timeMinutes || 15} Min</div>
+              <div style="font-size:13px; font-weight:800; color:var(--text-color); display:flex; align-items:center; flex-wrap:wrap; gap:4px;">
+                <span>${t.title || t.testName || "Online Test"}</span>
+                ${statusBadge}
+              </div>
+              <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Sub: ${t.subject || '-'} | Time: ${t.timeMinutes || 15} Min | Expiry: ${t.expiry ? t.expiry.replace('T', ' ') : '-'}</div>
             </div>
             <button class="btn-sm-del" style="background:#dc2626; color:white; padding:6px 12px; font-size:11px; border-radius:8px; cursor:pointer;" onclick="window.removeOnlineTest('${testId}')">🗑️ Remove</button>
           </div>`;
