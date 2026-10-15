@@ -5479,25 +5479,31 @@ Exact Output JSON Format Required:
     }
 
     // M.M ISLAMIC PURANA FEE STRUCTURE ENGINE (WITH CONCESSION SUPPORT)
-    // 💰 Universal Robust Fee Structure (Handles Jr. KG, Sr. KG, Nursery & All Standards)
+   // 💰 Universal Robust Fee Structure (Includes Months + 4 Term/Exam Heads)
   window.getFeeStructure = function(cls) {
     const raw = String(cls || "").trim().toLowerCase();
-    const monthlyList = ["June", "July", "August", "September", "October", "November", "December", "January", "February", "March", "April", "May"];
+    // 12 Months + 4 Terms/Exams (Total 16 Fee Heads)
+    const completeFeeList = [
+      "June", "July", "August", "September", "October", "November", 
+      "December", "January", "February", "March", "April", "May",
+      "1st Term", "1st Exam", "2nd Term", "2nd Exam"
+    ];
     
     // KG / Pre-Primary checks
-    if(raw.includes("jr") || raw.includes("junior")) return { rate: 450, list: monthlyList };
-    if(raw.includes("sr") || raw.includes("senior")) return { rate: 450, list: monthlyList };
-    if(raw.includes("nur")) return { rate: 400, list: monthlyList };
+    if(raw.includes("jr") || raw.includes("junior")) return { rate: 450, termRate: 400, examRate: 400, list: completeFeeList };
+    if(raw.includes("sr") || raw.includes("senior")) return { rate: 450, termRate: 400, examRate: 400, list: completeFeeList };
+    if(raw.includes("nur")) return { rate: 400, termRate: 400, examRate: 400, list: completeFeeList };
 
     // Standard numeric checks
     const c = cleanClassStr(cls);
-    if(c === "1" || c === "2") return { rate: 500, list: monthlyList };
-    if(c === "3" || c === "4") return { rate: 550, list: monthlyList };
-    if(c === "5" || c === "6" || c === "7") return { rate: 600, list: monthlyList };
-    if(c === "8" || c === "9" || c === "10") return { rate: 700, list: monthlyList };
+    if(c === "1" || c === "2") return { rate: 500, termRate: 400, examRate: 400, list: completeFeeList };
+    if(c === "3" || c === "4") return { rate: 550, termRate: 400, examRate: 400, list: completeFeeList };
+    if(c === "5" || c === "6" || c === "7") return { rate: 600, termRate: 400, examRate: 400, list: completeFeeList };
+    if(c === "8" || c === "9" || c === "10") return { rate: 700, termRate: 400, examRate: 400, list: completeFeeList };
 
-    return { rate: 500, list: monthlyList };
+    return { rate: 500, termRate: 400, examRate: 400, list: completeFeeList };
   };
+
 
   // 🔍 Universal Matrix Fee Matcher: "June" aur "June Fee" dono ko automatically match karega
   window.getMatrixFeeRecord = function(stMatrix, feeName) {
@@ -9377,11 +9383,17 @@ document.getElementById("hwTitleInput").value = "";
         const thead = document.getElementById("trackMatrixHead");
         const tbody = document.getElementById("matrixTableBody");
 
-        let headHtml = `<tr><th style="min-width: 150px; text-align: left; padding-left:10px;">Student Name</th>`;
-        struct.list.forEach(m => headHtml += `<th>${m.replace("Installment ", "Inst ")}</th>`);
+            let headHtml = `<tr><th style="min-width: 140px; text-align: left; padding-left:10px;">Student Name</th>`;
+        struct.list.forEach(m => {
+          let label = m;
+          if (m === "1st Term") label = "1st T";
+          else if (m === "1st Exam") label = "1st E";
+          else if (m === "2nd Term") label = "2nd T";
+          else if (m === "2nd Exam") label = "2nd E";
+          headHtml += `<th style="min-width: 50px;">${label}</th>`;
+        });
         headHtml += `</tr>`;
         thead.innerHTML = headHtml;
-
         tbody.innerHTML = "";
 
         if (students.length === 0) {
