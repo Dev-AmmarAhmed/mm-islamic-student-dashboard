@@ -8160,12 +8160,11 @@ document.getElementById("hwTitleInput").value = "";
       let html = "";
       let isAnyMarked = false, isHoliday = false;
 
-      students.forEach(st => {
+          students.forEach(st => {
         let val = undefined;
-        if (allAtt && allAtt[st.admn] && allAtt[st.admn][currentMonth]) {
-          val = allAtt[st.admn][currentMonth][`day_${todayNum}`];
-        }
-    if(val !== undefined) isAnyMarked = true;
+        const studentMonthData = allAtt[`${st.admn}_${currentMonth}`] || (allAtt[st.admn] && allAtt[st.admn][currentMonth]) || {};
+        val = studentMonthData[`day_${todayNum}`] !== undefined ? studentMonthData[`day_${todayNum}`] : (studentMonthData.days ? studentMonthData.days[`day_${todayNum}`] : undefined);
+        if(val !== undefined) isAnyMarked = true;
         if(val === "H") isHoliday = true;
 
         html += `<tr><td style="text-align:left; padding-left:10px; font-weight:700;">${st.name}</td><td><input type="checkbox" class="t-today-att-chk" data-admn="${st.admn}" ${val === true ? 'checked' : ''}></td></tr>`;
@@ -8176,6 +8175,7 @@ document.getElementById("hwTitleInput").value = "";
       if(isHoliday) document.getElementById("todayAttHolidayStatusBox").style.display = "block";
       else if(isAnyMarked) document.getElementById("todayAttSavedStatusBox").style.display = "block";
     }
+
 
 
     addSafeListener("saveTodayAttendanceBtn", "click", () => {
@@ -8272,7 +8272,7 @@ document.getElementById("hwTitleInput").value = "";
         });
       }
 
-      students.forEach(s => {
+            students.forEach(s => {
         const isMatched = query !== "" && ((s.name || "").toLowerCase().includes(query) || String(s.admn || "").toLowerCase().includes(query));
         const card = document.createElement("div");
         card.className = "student-grid-card";
@@ -8281,12 +8281,20 @@ document.getElementById("hwTitleInput").value = "";
           card.style.background = "rgba(124, 58, 237, 0.08)";
         }
         card.onclick = () => window.openStudentProfileModal(s.admn);
-      const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(s.name || 'S')}&background=7c3aed&color=fff&bold=true`;
-const avatarSrc = (s.photo && !s.photo.includes("via.placeholder.com") && !s.photo.startsWith("firestore://")) ? s.photo : defaultAvatar;
-card.innerHTML = `<img src="${avatarSrc}" onerror="this.src='${defaultAvatar}'" class="student-avatar" alt="Avatar">...`;
-  container.appendChild(card);
+        const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(s.name || 'S')}&background=7c3aed&color=fff&bold=true`;
+        const avatarSrc = (s.photo && !s.photo.includes("via.placeholder.com") && !s.photo.startsWith("firestore://")) ? s.photo : defaultAvatar;
+        card.innerHTML = `
+          <img src="${avatarSrc}" onerror="this.src='${defaultAvatar}'" class="student-avatar" style="border-color:#7c3aed;" alt="Avatar">
+          <div style="flex:1;">
+            <div style="font-size:13px; font-weight:800; color:var(--text-color);">${s.name}</div>
+            <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">ID: <b>${s.admn}</b> | Class: ${s.class}</div>
+            <div style="font-size:10px; font-weight:700; color:#7c3aed; margin-top:2px;">Phone: ${s.phone || '-'} | PTS: ${s.points || 0}</div>
+          </div>
+          <div style="font-size:16px;">✏️</div>
+        `;
+        container.appendChild(card);
       });
-    }
+}
 
 
           // --- INSTANT ZERO-LAG STUDENT PROFILE MODAL ---
@@ -8863,8 +8871,10 @@ card.innerHTML = `<img src="${avatarSrc}" onerror="this.src='${defaultAvatar}'" 
       } else {
         let headerDays = "", tableRows = "";
         for(let d = 1; d <= daysCount; d++) { headerDays += `<th>${d}</th>`; }
-        students.forEach(st => {
-          const mData = allAtt[st.admn] && allAtt[st.admn][monthVal] ? allAtt[st.admn][monthVal] : {};
+       
+                students.forEach(st => {
+          const rawMData = allAtt[`${st.admn}_${monthVal}`] || (allAtt[st.admn] && allAtt[st.admn][monthVal]) || {};
+          const mData = rawMData.days || rawMData;
           let presentDays = 0, absentDays = 0, totalWorkingDays = 0, studentDaysCells = "";
           for(let d = 1; d <= daysCount; d++) {
             const isSunday = new Date(year, monthIndex, d).getDay() === 0;
@@ -8872,12 +8882,13 @@ card.innerHTML = `<img src="${avatarSrc}" onerror="this.src='${defaultAvatar}'" 
             let statusText = "-", textColor = "var(--text-color)";
             if(isSunday) { statusText = "SUN"; textColor = "#ea580c"; } 
             else if(val === "H") { statusText = "H"; textColor = "#9333ea"; } 
-            else if(val === true) { statusText = "P"; textColor = "#16a34a"; presentDays++; totalWorkingDays++; } 
+            else if(val === true || val === "Present" || val === "P") { statusText = "P"; textColor = "#16a34a"; presentDays++; totalWorkingDays++; } 
             else { statusText = "A"; textColor = "#dc2626"; absentDays++; totalWorkingDays++; }
             studentDaysCells += `<td style="color:${textColor}; font-weight:800;">${statusText}</td>`;
           }
-          tableRows += `<tr><td style="text-align:left; padding-left:8px; font-weight:700; min-width:140px;">${st.name}</td>${studentDaysCells}<td style="font-weight:900; background:rgba(2, 136, 209, 0.1);">${totalWorkingDays}</td><td style="font-weight:900; color:#16a34a; background:rgba(22, 163, 74, 0.1);">${presentDays}</td><td style="font-weight:900; color:#dc2626; background:rgba(220, 38, 38, 0.1);">${absentDays}</td></tr>`;
+          tableRows += `<tr><td style="text-align:left; padding-left:8px; font-weight:700; min-width:140px;">${st.name}</td>${studentDaysCells}<td style="font-weight:900; background:rgba(2, 136, 209, 0.1);">${totalWorkingDays}</td><td style="font-weight:900; color:#16a34a; background:rgba(220, 38, 38, 0.1);">${presentDays}</td><td style="font-weight:900; color:#dc2626; background:rgba(220, 38, 38, 0.1);">${absentDays}</td></tr>`;
         });
+
         reportDiv.innerHTML = `<div class="table-container"><table><thead><tr><th style="min-width:140px; text-align:left; padding-left:8px;">Name</th>${headerDays}<th style="background:#0288d1; color:white !important;">Total</th><th style="background:#16a34a; color:white !important;">P</th><th style="background:#dc2626; color:white !important;">A</th></tr></thead><tbody>${tableRows}</tbody></table></div>`;
       }
     }
