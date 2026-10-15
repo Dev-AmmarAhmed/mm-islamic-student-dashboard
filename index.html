@@ -8410,41 +8410,64 @@ document.getElementById("hwTitleInput").value = "";
       if(document.getElementById("trackTestStudentSelect")) document.getElementById("trackTestStudentSelect").innerHTML = options;
     }
 
-      
-       // ⭐ Award / Deduct Points to Students (Safe)
+
+
+          // ⭐ Award / Deduct Points to Students (Instant UI & Immediate Popup)
     addSafeListener("submitPerformPointsBtn", "click", () => {
       const btn = document.getElementById("submitPerformPointsBtn");
+      const admn = document.getElementById("performStudentSelect").value;
+      const ptsVal = document.getElementById("performPointsInput").value.trim();
+      const pts = parseInt(ptsVal);
+      const reasonTxt = document.getElementById("performReasonInput") ? document.getElementById("performReasonInput").value.trim() : 'Performance Points';
+
+      if(!admn || isNaN(pts) || pts === 0) { 
+        window.showCustomAlert("Please select a student and enter valid points (+ ya -)."); 
+        return; 
+      }
+
       runWithBtnSpinner(btn, "Submit Points", async () => {
-        const admn = document.getElementById("performStudentSelect").value;
-        const pts = parseInt(document.getElementById("performPointsInput").value.trim());
-        if(!admn || isNaN(pts) || pts === 0) { alert("Please select a student and enter valid points."); return; }
-
         const st = await getStudentRecord(admn);
-        if(st) {
-          const newPts = (st.points || 0) + pts;
-          st.points = newPts;
+        if(!st) {
+          window.showCustomAlert("Student record nahi mila.");
+          return;
+        }
+
+        const newPts = (Number(st.points) || 0) + pts;
+        st.points = newPts;
+
+        // 1. Local Memory me turant update
+        if(window.MM_STORE && window.MM_STORE.students) {
           window.MM_STORE.students[admn] = st;
+        }
+        if(typeof inMemoryStudentsData !== "undefined" && inMemoryStudentsData) {
+          inMemoryStudentsData[admn] = st;
+        }
 
-          // 🚀 1. Update Firestore
+        // 2. Static UI me Bina Refresh kiye Instant Update (0ms)
+        if(typeof window.loadTeacherLeaderboard === "function") window.loadTeacherLeaderboard();
+        if(typeof loadTeacherStudentsDirectory === "function") loadTeacherStudentsDirectory();
+        if(typeof renderAdminStudentsDirectory === "function") renderAdminStudentsDirectory(true);
+
+        // Inputs reset
+        document.getElementById("performPointsInput").value = "";
+        if (document.getElementById("performReasonInput")) document.getElementById("performReasonInput").value = "";
+
+        // 3. Instant Popup Alert
+        window.showCustomAlert(`✔ Points Updated!\n${st.name}: ${pts >= 0 ? '+' : ''}${pts} PTS\nAb Total: ${newPts} PTS`);
+
+        // 4. Background me Silent Save (UI wait nahi karega)
+        try {
           await setDoc(doc(fsDb, "students", String(admn)), { points: newPts }, { merge: true });
-
-          // 🚀 2. Update Local Cache
           const Sentinel = window.Igris || window.AccuEngine;
           if (Sentinel && typeof Sentinel.setLocal === "function") {
             await Sentinel.setLocal("students", admn, st);
           }
-
+          await update(ref(db), { [`students/${admn}/points`]: newPts }).catch(() => {});
           if (typeof window.pushAppNotification === "function") {
-            const reasonTxt = document.getElementById("performReasonInput") ? document.getElementById("performReasonInput").value.trim() : 'Performance Points';
             await window.pushAppNotification(admn, "Points Updated ⭐", `You received ${pts > 0 ? '+'+pts : pts} points. Reason: ${reasonTxt}`, "points_update", { points: pts });
           }
-
-          document.getElementById("performPointsInput").value = "";
-          if (document.getElementById("performReasonInput")) document.getElementById("performReasonInput").value = "";
-
-          await refreshAllTeacherData();
-          window.loadTeacherLeaderboard();
-          alert(`✔ Updated Points for ${st.name}: ${pts >= 0 ? '+' : ''}${pts} Points.`);
+        } catch(err) {
+          console.warn("Background student points sync error:", err);
         }
       });
     });
@@ -8463,56 +8486,77 @@ document.getElementById("hwTitleInput").value = "";
       });
     };
 
-    // 👩‍🏫 Admin: Save Teacher Points & Write to Logs
+    // 👩‍🏫 Admin: Save Teacher Points & Write to Logs (Instant UI & Immediate Popup)
     window.saveTeacherPointsFromAdmin = function() {
       const btn = document.getElementById("submitTeacherPointsBtn");
+      const username = document.getElementById("adminTeacherSelect").value;
+      const ptsVal = document.getElementById("adminTeacherPointsInput").value.trim();
+      const pts = parseInt(ptsVal);
+      const reason = document.getElementById("adminTeacherReasonInput").value.trim();
+
+      if (!username || isNaN(pts) || pts === 0 || !reason) {
+        window.showCustomAlert("Please select a teacher, enter valid points, and write a reason.");
+        return;
+      }
+
       runWithBtnSpinner(btn, "⭐ Submit Points", async () => {
-        const username = document.getElementById("adminTeacherSelect").value;
-        const pts = parseInt(document.getElementById("adminTeacherPointsInput").value.trim());
-        const reason = document.getElementById("adminTeacherReasonInput").value.trim();
-
-        if (!username || isNaN(pts) || pts === 0 || !reason) {
-          alert("Please select a teacher, enter valid points, and write a reason.");
-          return;
-        }
-
         const teachers = await safeDataFetch("teachers") || {};
-        const t = teachers[username];
-        if (!t) { alert("Teacher record not found."); return; }
+        const t = teachers[username] || (window.MM_STORE && window.MM_STORE.teachers ? window.MM_STORE.teachers[username] : null);
+        if (!t) { 
+          window.showCustomAlert("Teacher record nahi mila."); 
+          return; 
+        }
 
         const currentPts = Number(t.points) || 0;
         const newPts = currentPts + pts;
         t.points = newPts;
 
-        // 1. Update Teacher Document
-        await setDoc(doc(fsDb, "teachers", String(username)), { points: newPts }, { merge: true });
-
-        // 2. Add Entry to teacher_points_logs
-        const logId = Date.now().toString();
-        const logPayload = {
-          id: logId,
-          username: username,
-          teacherName: t.name,
-          points: pts,
-          totalPoints: newPts,
-          reason: reason,
-          date: getTodayFormattedDate()
-        };
-        await setDoc(doc(fsDb, "teacher_points_logs", logId), logPayload, { merge: true });
-
-        // 3. Update Local Storage
-        const Sentinel = window.Igris || window.AccuEngine;
-        if (Sentinel && typeof Sentinel.setLocal === "function") {
-          await Sentinel.setLocal("teachers", username, t);
+        if(window.MM_STORE && window.MM_STORE.teachers) {
+          window.MM_STORE.teachers[username] = t;
         }
 
-        alert(`✔ Awarded ${pts >= 0 ? '+' : ''}${pts} points to ${t.name}!`);
+        // 1. Static UI me Bina Refresh kiye Instant Update
+        if (typeof window.renderAdminHomeTeacherboardCards === "function") window.renderAdminHomeTeacherboardCards();
+        if (typeof window.renderTeacherboardCardsTable === "function") window.renderTeacherboardCardsTable();
+        if (typeof window.loadAdminTeacherLeaderboard === "function") window.loadAdminTeacherLeaderboard();
+        if (typeof window.loadManageTeacherList === "function") window.loadManageTeacherList();
+
+        // Inputs reset & Close Modal
         document.getElementById("adminTeacherPointsInput").value = "";
         document.getElementById("adminTeacherReasonInput").value = "";
         window.closeModal("addTeacherPointsModal");
 
-        if (typeof window.renderAdminHomeTeacherboardCards === "function") window.renderAdminHomeTeacherboardCards();
-        if (typeof window.loadAdminTeacherLeaderboard === "function") window.loadAdminTeacherLeaderboard();
+        // 2. Instant Popup Alert
+        setTimeout(() => {
+          window.showCustomAlert(`✔ Points Updated!\n${t.name}: ${pts >= 0 ? '+' : ''}${pts} PTS\nAb Total: ${newPts} PTS`);
+        }, 250);
+
+        // 3. Background me Silent Save
+        try {
+          const logId = Date.now().toString();
+          const logPayload = {
+            id: logId,
+            username: username,
+            teacherName: t.name,
+            points: pts,
+            totalPoints: newPts,
+            reason: reason,
+            date: getTodayFormattedDate()
+          };
+          await setDoc(doc(fsDb, "teachers", String(username)), { points: newPts }, { merge: true });
+          await setDoc(doc(fsDb, "teacher_points_logs", logId), logPayload, { merge: true });
+          await update(ref(db), {
+            [`teachers/${username}/points`]: newPts,
+            [`teacher_points_logs/${logId}`]: logPayload
+          }).catch(() => {});
+
+          const Sentinel = window.Igris || window.AccuEngine;
+          if (Sentinel && typeof Sentinel.setLocal === "function") {
+            await Sentinel.setLocal("teachers", username, t);
+          }
+        } catch(err) {
+          console.warn("Background teacher points sync error:", err);
+        }
       });
     };
 
@@ -8544,6 +8588,7 @@ document.getElementById("hwTitleInput").value = "";
       });
       tbody.innerHTML = html;
     };
+
 
 
 
