@@ -7383,7 +7383,7 @@ isAdminLbEditMode = false;
       else { iconEl.innerText = "🏆"; textEl.innerText = `${pts} Points`; }
     }
 
-    async function checkAndRenderDailyRewardStatus(student) {
+       async function checkAndRenderDailyRewardStatus(student) {
       if(!student) return;
       const today = new Date();
       const isWeekend = (today.getDay() === 0 || today.getDay() === 6);
@@ -7393,13 +7393,14 @@ isAdminLbEditMode = false;
       if (titleEl) titleEl.innerText = `+${pointsToAward} Points Today (${isWeekend ? 'Weekend Bonus' : 'Weekday'})`;
 
       const todayKey = getTodayKey();
-      const userClaims = await safeDataFetch(`daily_claims/${student.admn}`) || {};
+      const rawClaims = await safeDataFetch(`daily_claims/${student.admn}`) || {};
+      const claims = rawClaims.claims || rawClaims;
       const claimBtn = document.getElementById("sClaimDailyPointsBtn");
       const claimedBadge = document.getElementById("sDailyClaimedBadge");
       const expiredBadge = document.getElementById("sDailyExpiredBadge");
 
       if (!claimBtn || !claimedBadge || !expiredBadge) return;
-      if(userClaims[todayKey] === true) {
+      if(claims[todayKey] === true) {
         claimBtn.style.display = "none"; claimedBadge.style.display = "block"; expiredBadge.style.display = "none";
       } else {
         claimBtn.style.display = "block"; claimBtn.innerText = `🎁 Claim Today's +${pointsToAward} Points`; claimedBadge.style.display = "none"; expiredBadge.style.display = "none";
@@ -7413,32 +7414,33 @@ isAdminLbEditMode = false;
         if(!student) return;
 
         const todayKey = getTodayKey();
-        const userClaims = await safeDataFetch(`daily_claims/${student.admn}`) || {};
-        if(userClaims[todayKey] === true) { alert("You have already claimed today's daily points."); checkAndRenderDailyRewardStatus(student); return; }
+        const rawClaims = await safeDataFetch(`daily_claims/${student.admn}`) || {};
+        const claims = { ...(rawClaims.claims || rawClaims) };
+
+        if(claims[todayKey] === true) { 
+          alert("You have already claimed today's daily points."); 
+          checkAndRenderDailyRewardStatus(student); 
+          return; 
+        }
 
         const today = new Date();
         const pointsToAward = (today.getDay() === 0 || today.getDay() === 6) ? 80 : 50;
         const newPts = (student.points || 0) + pointsToAward;
 
-             student.points = newPts;
+        student.points = newPts;
         inMemoryStudentsData[student.admn] = student;
         triggerStarBurstAnimation();
         document.getElementById("sClaimDailyPointsBtn").style.display = "none";
         document.getElementById("sDailyClaimedBadge").style.display = "block";
         await updateHeaderStarBadge();
 
-        // 🚀 Firestore + AccuEngine (Student Claims & Points)
-        let sClaims = {};
-        if (window.AccuEngine) {
-          sClaims = await window.AccuEngine.fetch(`daily_claims/${student.admn}`) || {};
-        }
-        sClaims[todayKey] = true;
+        claims[todayKey] = true;
 
-        await setDoc(doc(fsDb, "daily_claims", String(student.admn)), { claims: sClaims }, { merge: true });
+        await setDoc(doc(fsDb, "daily_claims", String(student.admn)), { claims: claims, userId: String(student.admn) }, { merge: true });
         await setDoc(doc(fsDb, "students", String(student.admn)), { points: newPts }, { merge: true });
 
         if (window.AccuEngine) {
-          await window.AccuEngine.setLocal("daily_claims", student.admn, sClaims);
+          await window.AccuEngine.setLocal("daily_claims", student.admn, claims);
           await window.AccuEngine.setLocal("students", student.admn, student);
           window.AccuEngine.bumpSyncVersion();
         }
@@ -7448,18 +7450,11 @@ isAdminLbEditMode = false;
           [`students/${student.admn}/points`]: newPts
         }).catch(() => {});
 
-
-
-        // Force memory update strictly before refresh
-        if (fullDbCache && fullDbCache.students && fullDbCache.students[student.admn]) {
-           fullDbCache.students[student.admn].points = newPts;
-        }
-
         alert(`Congratulations! You have claimed +${pointsToAward} points for today.`);
         await refreshStudentDashboard();
-
       });
     });
+
 
          async function calculateRealtimeStudentDues(student) {
       if(!student) return;
@@ -10484,46 +10479,82 @@ document.getElementById("hwTitleInput").value = "";
       } else { blueCardTapTimer = setTimeout(() => { blueCardTapCount = 0; }, 800); }
     };
 
+          window.checkTeacherDailyClaimStatus = async function() {
+      const loggedUser = localStorage.getItem("loggedUser");
+      const btn = document.getElementById("tClaimDailyPointsBtn");
+      const badge = document.getElementById("tDailyClaimedBadge");
+      if(!loggedUser || !btn) return;
+
+      const todayKey = getTodayKey();
+      const rawClaims = await safeDataFetch(`daily_claims/${loggedUser}`) || {};
+      const claims = rawClaims.claims || rawClaims;
+
+      if(claims[todayKey] === true) {
+        btn.style.display = "none";
+        if(badge) badge.style.display = "block";
+      } else {
+        btn.style.display = "block";
+        if(badge) badge.style.display = "none";
+      }
+    };
+
     window.claimTeacherDailyPoints = async function() {
       const btn = document.getElementById("tClaimDailyPointsBtn");
+      const badge = document.getElementById("tDailyClaimedBadge");
       const loggedUser = localStorage.getItem("loggedUser");
       if(!loggedUser || !btn) return;
-      btn.disabled = true; btn.innerText = "⌛ Verifying Database...";
+
       const todayKey = getTodayKey();
+      const rawClaims = await safeDataFetch(`daily_claims/${loggedUser}`) || {};
+      const claims = { ...(rawClaims.claims || rawClaims) };
+
+      if (claims[todayKey] === true) {
+        alert("You have already collected today's points!");
+        btn.style.display = "none";
+        if (badge) badge.style.display = "block";
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerText = "⌛ Verifying Database...";
 
       try {
-        if (await safeDataFetch(`teacher_daily_claims/${loggedUser}/${todayKey}`) === true) {
-          alert("You have already collected today's point!"); btn.style.display = "none";
-          if (document.getElementById("tDailyClaimedBadge")) document.getElementById("tDailyClaimedBadge").style.display = "block"; return;
-        }
-
         const btnRect = btn.getBoundingClientRect();
-        const flyEl = document.createElement("div"); flyEl.className = "flying-point"; flyEl.innerText = "+50 PTS";
-        flyEl.style.left = `${btnRect.left + 20}px`; flyEl.style.top = `${btnRect.top}px`; document.body.appendChild(flyEl);
+        const flyEl = document.createElement("div");
+        flyEl.className = "flying-point";
+        flyEl.innerText = "+50 PTS";
+        flyEl.style.left = `${btnRect.left + 20}px`;
+        flyEl.style.top = `${btnRect.top}px`;
+        document.body.appendChild(flyEl);
 
         const targetCard = document.getElementById(`tbCard_${loggedUser}`);
         let targetX = window.innerWidth / 2, targetY = 100;
-        if (targetCard) { const cardRect = targetCard.getBoundingClientRect(); targetX = cardRect.left + cardRect.width - 40; targetY = cardRect.top + 10; }
+        if (targetCard) {
+          const cardRect = targetCard.getBoundingClientRect();
+          targetX = cardRect.left + cardRect.width - 40;
+          targetY = cardRect.top + 10;
+        }
 
-        setTimeout(() => { flyEl.style.left = `${targetX}px`; flyEl.style.top = `${targetY}px`; flyEl.style.opacity = "0"; flyEl.style.transform = "scale(1.4)"; }, 100);
+        setTimeout(() => {
+          flyEl.style.left = `${targetX}px`;
+          flyEl.style.top = `${targetY}px`;
+          flyEl.style.opacity = "0";
+          flyEl.style.transform = "scale(1.4)";
+        }, 100);
 
-               setTimeout(async () => {
+        setTimeout(async () => {
           flyEl.remove();
-                 const teacherData = await safeDataFetch(`teachers/${loggedUser}`) || {};
+          const teacherData = await safeDataFetch(`teachers/${loggedUser}`) || {};
           const newPts = (teacherData.points || 0) + 50;
 
-          // 🚀 Firestore + AccuEngine (Teacher Claims & Points)
-          let tClaims = {};
-          if (window.AccuEngine) {
-            tClaims = await window.AccuEngine.fetch(`daily_claims/${loggedUser}`) || {};
-          }
-          tClaims[todayKey] = true;
+          claims[todayKey] = true;
 
-          await setDoc(doc(fsDb, "daily_claims", String(loggedUser)), { claims: tClaims }, { merge: true });
+          // Save strictly inside Firestore 'daily_claims'
+          await setDoc(doc(fsDb, "daily_claims", String(loggedUser)), { claims: claims, userId: String(loggedUser) }, { merge: true });
           await setDoc(doc(fsDb, "teachers", String(loggedUser)), { points: newPts }, { merge: true });
 
           if (window.AccuEngine) {
-            await window.AccuEngine.setLocal("daily_claims", loggedUser, tClaims);
+            await window.AccuEngine.setLocal("daily_claims", loggedUser, claims);
             if (teacherData) {
               teacherData.points = newPts;
               await window.AccuEngine.setLocal("teachers", loggedUser, teacherData);
@@ -10531,23 +10562,31 @@ document.getElementById("hwTitleInput").value = "";
             window.AccuEngine.bumpSyncVersion();
           }
 
-          await update(ref(db), { [`teachers/${loggedUser}/points`]: newPts, [`teacher_daily_claims/${loggedUser}/${todayKey}`]: true }).catch(() => {});
+          await update(ref(db), {
+            [`teachers/${loggedUser}/points`]: newPts,
+            [`daily_claims/${loggedUser}/${todayKey}`]: true
+          }).catch(() => {});
 
           btn.style.display = "none";
-          if (document.getElementById("tDailyClaimedBadge")) document.getElementById("tDailyClaimedBadge").style.display = "block";
+          if (badge) badge.style.display = "block";
 
-          // Force immediate DOM update for Teacherboard card
           const myTbCard = document.getElementById(`tbCard_${loggedUser}`);
           if (myTbCard) {
-             const pointsDiv = myTbCard.querySelector("div:nth-child(2)");
-             if(pointsDiv) pointsDiv.innerText = `${newPts} PTS`;
+            const pointsDiv = myTbCard.querySelector("div:nth-child(2)");
+            if(pointsDiv) pointsDiv.innerText = `${newPts} PTS`;
           }
-          window.refreshTeacherDashboardData();
+          if (typeof window.refreshTeacherDashboardData === "function") {
+            window.refreshTeacherDashboardData();
+          }
         }, 1200);
 
-
-      } catch (err) { btn.disabled = false; btn.innerText = "🎁 Claim Today's Points"; }
+      } catch (err) {
+        btn.disabled = false;
+        btn.innerText = "🎁 Claim Today's Points";
+        alert("Error claiming points: " + err.message);
+      }
     };
+
 
     window.updateMyRankAnimation = function(currentRank) {
       const rankNumEl = document.getElementById("tMyRankNum"), arrowEl = document.getElementById("tMyRankArrow");
