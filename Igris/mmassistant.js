@@ -1,7 +1,6 @@
 /**
  * ====================================================================
- * MMASSISTANT AI v14.0 (DEEP ADMINISTRATIVE BRAIN + IGRIS SYNC)
- * Powered by Groq Cloud & Igris Local Cache
+ * MMASSISTANT AI v15.0 (UNIVERSAL RESOLVER + MARKDOWN FORMATTER)
  * M.M ISLAMIC ENGLISH SCHOOL ERP
  * ====================================================================
  */
@@ -9,7 +8,6 @@
 (function (window) {
   "use strict";
 
-  // Obfuscated Groq Key (Bot-Protected)
   const _k1 = "Z3NrX1U0Z2xpQzZrbHE5TDRTdzFlcVQ0";
   const _k2 = "V0dkeWIzRllzMWNXS2d4R3NFZUNqMFFK";
   const _k3 = "a2gzclJKdnU=";
@@ -24,7 +22,7 @@
 
   const STORAGE_KEY = "mm_assistant_chat_history_v1";
 
-  // 2D AI Sparkle Icon
+  // 2D AI Sparkle SVG
   const AI_SPARKLE_SVG = `
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M12 2C12 7.52285 7.52285 12 2 12C7.52285 12 12 16.4771 12 22C12 16.4771 16.4771 12 22 12C16.4771 12 12 7.52285 12 2Z" fill="url(#sparkleGrad)" />
@@ -50,6 +48,28 @@
       </defs>
     </svg>
   `;
+
+  // ----------------------------------------------------
+  // CLEAN MARKDOWN TO HTML CONVERTER (NO MORE RAW ASTERISKS)
+  // ----------------------------------------------------
+  function formatMarkdown(text) {
+    if (!text) return "";
+    let safe = text
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+
+    // Bold (**word**)
+    safe = safe.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+
+    // Bullet points (* item or - item)
+    safe = safe.replace(/^[\*\-]\s+(.*)$/gim, "<span style='display:block; padding-left:12px;'>• $1</span>");
+
+    // Numbered lists (1. item)
+    safe = safe.replace(/^(\d+)\.\s+(.*)$/gim, "<span style='display:block; padding-left:12px;'><b>$1.</b> $2</span>");
+
+    return safe;
+  }
 
   // ----------------------------------------------------
   // 1. UI INJECTION ENGINE
@@ -119,7 +139,7 @@
   }
 
   // ----------------------------------------------------
-  // 2. CHAT STORAGE & RENDERING
+  // 2. CHAT STORAGE & RENDERING (WITH HTML MARKDOWN PARSING)
   // ----------------------------------------------------
   function getHistory() {
     try {
@@ -162,9 +182,10 @@
 
     history.forEach((m) => {
       const isUser = m.role === "user";
+      const formattedContent = isUser ? m.text : formatMarkdown(m.text);
       box.innerHTML += `
         <div style="display:flex; flex-direction:column; align-items:${isUser ? 'flex-end' : 'flex-start'};">
-          <div style="max-width:85%; padding:12px 16px; border-radius:${isUser ? '18px 18px 4px 18px' : '18px 18px 18px 4px'}; background:${isUser ? 'linear-gradient(135deg, #10b981 0%, #047857 100%)' : 'rgba(255,255,255,0.06)'}; color:${isUser ? '#ffffff' : 'var(--text-color, #f8fafc)'}; border:1px solid ${isUser ? 'transparent' : 'var(--border-color, #1e293b)'}; font-size:13px; font-weight:650; line-height:1.55; white-space:pre-wrap; word-break:break-word; box-shadow:0 2px 8px rgba(0,0,0,0.05);">${m.text}</div>
+          <div style="max-width:88%; padding:12px 16px; border-radius:${isUser ? '18px 18px 4px 18px' : '18px 18px 18px 4px'}; background:${isUser ? 'linear-gradient(135deg, #10b981 0%, #047857 100%)' : 'rgba(255,255,255,0.06)'}; color:${isUser ? '#ffffff' : 'var(--text-color, #f8fafc)'}; border:1px solid ${isUser ? 'transparent' : 'var(--border-color, #1e293b)'}; font-size:13px; font-weight:600; line-height:1.6; white-space:pre-wrap; word-break:break-word; box-shadow:0 2px 8px rgba(0,0,0,0.05);">${formattedContent}</div>
           <span style="font-size:9.5px; color:var(--text-muted, #64748b); margin-top:3px; padding:0 4px;">${m.time}</span>
         </div>
       `;
@@ -173,129 +194,152 @@
   }
 
   // ----------------------------------------------------
-  // 3. MASTER KNOWLEDGE & LIVE CONTEXT INGESTION
+  // 3. UNIVERSAL IGRIS CONTEXT HARVESTER
   // ----------------------------------------------------
   async function buildContextSlice(userQuery, recentHistoryText) {
     const Sentinel = window.Igris || window.AccuEngine;
+    const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+    const now = new Date();
+    const currentMonth = months[now.getMonth()]; // Dynamically picks October, etc.
+    const todayDay = now.getDate();
 
-    // 🏫 PERMANENT VERIFIED INSTITUTION RECORD
+    // 🏫 Master School Information
     const context = {
       institution_profile: {
         name: "M.M ISLAMIC ENGLISH SCHOOL",
-        full_official_address: "46/K/05 (Room No 5, Line K, Plot No 46), Road No 04, Shivaji Nagar, Govandi, Mumbai - 400043, Maharashtra.",
+        full_address: "46/K/05 (Room No 5, Line K, Plot No 46), Road No 04, Shivaji Nagar, Govandi, Mumbai - 400043, Maharashtra.",
         landmarks: "S.N. Hospital aur Honest Life English School ke bazu me, Sufi Dairy ke paas.",
-        affiliation_standards: "Approved English Medium Islamic & Modern Curriculum. Currently operating Nursery to Class 5 (Target & Structure up to Class 10th).",
+        affiliation_standards: "Approved English Medium Islamic & Modern Curriculum. Currently operating Nursery to Class 5th (Vision & setup up to Class 10th).",
         principal: {
-          name: "Saba Teacher",
+          name: "Saba Teacher (Saba Parveen)",
           designation: "Principal / Head of Institution",
           qualifications: "D.Ed, B.Ed, LLB",
           primary_contact_whatsapp: "7302132270",
           secondary_contact: "9322298658"
         },
-        official_office_contact: "7302132270 / 9322298658"
+        office_contacts: ["7302132270", "9322298658"]
       },
-      app_modules_guide: {
-        architecture: "Igris Sentinel Engine (Client-side 256-bit AES-GCM Encrypted Local Cache, Instant Offline Execution, Zero unnecessary Firestore Reads).",
-        admin_dashboard_tabs: {
-          "Home": "Analytics overview, Month Fee summary card, Mentors Rank (Teacher leaderboard cards), and MMAssistant AI.",
-          "Students": "Student directory, class filter, add/edit records, admission numbers, parents contact info.",
-          "Entry": "Fees entry window (+ ADD FEES ENTRY), monthly collection, triple-tap to see paid/unpaid lists.",
-          "Track": "Student fee payment tracker and transaction history.",
-          "Attend": "Monthly student attendance grid with Present / Absent / Holiday markers.",
-          "Card": "Automated student ID card generator with printable layout.",
-          "Expns": "Daily and monthly school expense entries log."
-        },
-        teachers_dashboard_tabs: {
-          "Home": "Assigned class stats, mentor points progression.",
-          "Attend": "Daily class attendance marker (Save Today's Attendance, Mark Holiday for All).",
-          "Track": "Class-wise student tracking.",
-          "Students": "Student directory of assigned classes.",
-          "Perform": "Teacher leaderboard ranking.",
-          "Test": "Create and conduct online objective tests and view results."
-        }
-      }
+      current_portal_date: `${todayDay} ${currentMonth} ${now.getFullYear()}`
     };
 
-    if (!Sentinel) return JSON.stringify(context, null, 2);
+    if (!Sentinel) return JSON.stringify(context);
 
     try {
-      const studentsMap = (await Sentinel.fetch("students")) || {};
-      const teachersMap = (await Sentinel.fetch("teachers")) || {};
-      const students = Object.values(studentsMap).filter(Boolean);
-      const teachers = Object.values(teachersMap).filter(Boolean);
+      const [studentsMap, teachersMap, feesMap, leavesMap, musterDoc] = await Promise.all([
+        Sentinel.fetch("students") || {},
+        Sentinel.fetch("teachers") || {},
+        Sentinel.fetch("fees_matrix") || {},
+        Sentinel.fetch("leaves") || {},
+        Sentinel.fetch(`muster/${currentMonth}`) || {}
+      ]);
 
-      const combinedText = (userQuery + " " + recentHistoryText).toLowerCase().replace(/[^a-z0-9\s]/g, "");
+      const students = Object.values(studentsMap || {}).filter(Boolean);
+      const teachers = Object.values(teachersMap || {}).filter(Boolean);
 
-      // 👩‍🏫 ALL TEACHERS FEED (With Mobile Numbers)
-      context.all_teachers_directory = teachers.map((t) => ({
-        name: t.name || "Unknown Teacher",
-        phone_number: t.phone || t.mobile || t.whatsapp || t.contact || "Not updated",
-        assigned_classes: t.assignedClass || t.classes || "All",
-        performance_points: t.points || 0,
-        username: t.username || ""
-      }));
+      context.school_stats = {
+        total_students: students.length,
+        total_teachers: teachers.length
+      };
 
-      // Search matching teacher
-      const matchedTeacher = context.all_teachers_directory.find((t) => {
-        const tn = t.name.toLowerCase();
-        return tn && (combinedText.includes(tn) || tn.split(" ").some((p) => p.length >= 3 && combinedText.includes(p)));
+      // Directory of all teachers with Phone & Leave count
+      const allLeaves = Object.values(leavesMap || {}).filter(Boolean);
+      context.teachers_directory = teachers.map(t => {
+        const teacherLeaves = allLeaves.filter(l => String(l.admn || l.teacherId || l.name).toLowerCase() === String(t.name || t.id).toLowerCase());
+        return {
+          name: t.name || "Teacher",
+          phone: t.phone || t.mobile || t.whatsapp || t.contact || "Not updated",
+          assignedClass: t.assignedClass || t.classes || "All",
+          points: t.points || 0,
+          approved_leaves_count: teacherLeaves.length,
+          muster_today: (musterDoc[`day_${todayDay}`] && musterDoc[`day_${todayDay}`][t.name]) || "Not marked today"
+        };
       });
-      if (matchedTeacher) {
-        context.currently_queried_teacher = matchedTeacher;
+
+      const qRaw = userQuery + " " + recentHistoryText;
+      const q = qRaw.toLowerCase().replace(/[^a-z0-9\s]/g, " ");
+
+      // 🔍 1. PHONE NUMBER SEARCH (Check if user typed a phone number)
+      const phoneMatch = qRaw.match(/\b\d{10}\b/);
+      if (phoneMatch) {
+        const searchedPhone = phoneMatch[0];
+        if (searchedPhone === "7302132270" || searchedPhone === "9322298658") {
+          context.phone_lookup_result = `Yeh number Principal Saba Teacher ka hai (${searchedPhone}).`;
+        } else {
+          const matchedTeacherPhone = context.teachers_directory.find(t => String(t.phone).replace(/\D/g, "").includes(searchedPhone));
+          if (matchedTeacherPhone) {
+            context.phone_lookup_result = `Yeh number Teacher ${matchedTeacherPhone.name} ka hai (Class ${matchedTeacherPhone.assignedClass}).`;
+          } else {
+            const matchedStudentPhone = students.find(s => String(s.phone || s.parentPhone).replace(/\D/g, "").includes(searchedPhone));
+            if (matchedStudentPhone) {
+              context.phone_lookup_result = `Yeh number student ${matchedStudentPhone.name} (Class ${matchedStudentPhone.class}, Admn ${matchedStudentPhone.admn}) ka hai.`;
+            } else {
+              context.phone_lookup_result = `Yeh number (${searchedPhone}) school ke kisi teacher ya student se match nahi hua.`;
+            }
+          }
+        }
       }
 
-      // 🔍 Student Search (Phone Numbers & Details)
-      const matchedList = [];
+      // 🔍 2. ADMISSION NUMBER / ID SEARCH (e.g., "admn 153", "153")
+      const admnMatches = qRaw.match(/(?:admn|admission|roll|id)?\s*#?\s*(\d{1,4})\b/i);
+      let targetStudentByAdmn = null;
+      if (admnMatches && admnMatches[1] && parseInt(admnMatches[1]) < 5000) {
+        const searchedAdmn = admnMatches[1];
+        targetStudentByAdmn = students.find(s => String(s.admn) === searchedAdmn);
+      }
+
+      // 🔍 3. NAME SEARCH (Students & Teachers)
+      const matchedStudents = [];
       for (const st of students) {
         const sName = (st.name || "").toLowerCase();
         if (!sName) continue;
-        const parts = sName.split(" ").filter((p) => p.length >= 3);
-        const isMatched = combinedText.includes(sName) || parts.some((p) => combinedText.includes(p));
+        const parts = sName.split(" ").filter(p => p.length >= 3);
+        const nameMatches = parts.some(p => q.includes(p));
 
-        if (isMatched) {
-          matchedList.push({
+        if (nameMatches || (targetStudentByAdmn && String(st.admn) === String(targetStudentByAdmn.admn))) {
+          // Fetch exact student attendance and fee status
+          const studentAttDoc = (await Sentinel.fetch(`attendance/${st.admn}_${currentMonth}`)) || 
+                                (await Sentinel.fetch(`attendance/${st.admn}/${currentMonth}`)) || {};
+          const stFees = feesMap[st.admn] || {};
+
+          matchedStudents.push({
             name: st.name,
             class: st.class,
-            roll_or_admn: st.admn,
-            phone_number: st.phone || st.parentPhone || st.mobile || st.contact || "Portal me update nahi hai",
-            father_name: st.fatherName || st.parent || ""
+            admn: st.admn,
+            phone: st.phone || st.parentPhone || st.mobile || "Not updated",
+            attendance_october: studentAttDoc,
+            fees_status: {
+              september: stFees["September"]?.paid ? "Paid" : "Unpaid",
+              october: stFees["October"]?.paid ? "Paid" : "Unpaid",
+              due_amount: st.customFee || 500
+            }
           });
-          if (matchedList.length >= 8) break;
+          if (matchedStudents.length >= 6) break;
         }
       }
 
-      if (matchedList.length > 0) {
-        context.matched_students = matchedList;
-        const currentMonth = ["January","February","March","April","May","June","July","August","September","October","November","December"][new Date().getMonth()];
-        context.primary_student_attendance = (await Sentinel.fetch(`attendance/${matchedList[0].roll_or_admn}/${currentMonth}`)) || {};
+      if (matchedStudents.length > 0) {
+        context.queried_students = matchedStudents;
       }
 
-      // 💳 Fees Matrix Analysis
-      if (/(fee|unpaid|pending|paid|due|rupaye|paisa|list)/i.test(combinedText)) {
-        const feesMap = (await Sentinel.fetch("fees_matrix")) || {};
-        const currentMonth = "September";
-        let unpaidCount = 0, paidCount = 0, totalDues = 0;
-        const unpaidStudentsList = [];
-
-        students.forEach((st) => {
-          const m = feesMap[st.admn] || {};
-          const isPaid = m[currentMonth] && m[currentMonth].paid;
-          const rate = st.customFee !== undefined ? parseFloat(st.customFee) : 500;
-          if (isPaid) {
-            paidCount++;
-          } else {
+      // 💳 4. UNPAID FEES LIST GENERATOR
+      if (/(fee|unpaid|pending|paid|due|rupaye|paisa|list)/i.test(q)) {
+        let unpaidCount = 0, totalDues = 0;
+        const unpaidList = [];
+        students.forEach(st => {
+          const isPaid = feesMap[st.admn] && feesMap[st.admn][currentMonth] && feesMap[st.admn][currentMonth].paid;
+          const feeVal = parseFloat(st.customFee || 500);
+          if (!isPaid) {
             unpaidCount++;
-            totalDues += rate;
-            unpaidStudentsList.push(`${st.name} (Class ${st.class})`);
+            totalDues += feeVal;
+            unpaidList.push(`${st.name} (Class ${st.class})`);
           }
         });
 
-        context.fees_data = {
+        context.fees_summary = {
           month: currentMonth,
           total_unpaid_students: unpaidCount,
-          total_paid_students: paidCount,
-          total_pending_fees_rupees: totalDues,
-          unpaid_students_names: unpaidStudentsList.slice(0, 50)
+          total_due_rupees: totalDues,
+          unpaid_student_names: unpaidList.slice(0, 40)
         };
       }
 
@@ -306,7 +350,7 @@
   }
 
   // ----------------------------------------------------
-  // 4. MODEL DISCOVERY (STRICT SAFE LLM WHITELIST)
+  // 4. CHAT MODEL WHITELIST
   // ----------------------------------------------------
   let memoizedLiveModel = null;
 
@@ -320,9 +364,8 @@
     if (!res.ok) throw new Error("API Key verification failed.");
 
     const json = await res.json();
-    const rawIds = (json.data || []).map((m) => m.id);
+    const rawIds = (json.data || []).map(m => m.id);
 
-    // 🔒 STRICT WHITELIST: Only verified high-grade conversational LLMs
     const trustedWhitelist = [
       "llama-3.3-70b-versatile",
       "qwen-2.5-32b",
@@ -330,62 +373,49 @@
       "mixtral-8x7b-32768"
     ];
 
-    for (const modelName of trustedWhitelist) {
-      if (rawIds.includes(modelName)) {
-        memoizedLiveModel = modelName;
-        console.log("✔ [MMAssistant] Locked Trusted Model:", memoizedLiveModel);
+    for (const m of trustedWhitelist) {
+      if (rawIds.includes(m)) {
+        memoizedLiveModel = m;
         return memoizedLiveModel;
       }
     }
 
-    // Fallback: only standard text llama models (no canopylabs/orpheus/audio/guard)
-    memoizedLiveModel = rawIds.find((id) => id.includes("llama-3") && !id.includes("guard")) || "llama-3.1-8b-instant";
+    memoizedLiveModel = rawIds.find(id => id.includes("llama-3") && !id.includes("guard")) || "llama-3.1-8b-instant";
     return memoizedLiveModel;
   }
 
   // ----------------------------------------------------
-  // 5. MASTER INFERENCE ENGINE
+  // 5. INFERENCE DISPATCHER
   // ----------------------------------------------------
   async function callGroqDirect(userPrompt, verifiedContext) {
     const apiKey = getSecureKey();
     const activeModel = await getLiveActiveModel(apiKey);
 
-    const systemPrompt = `Aap M.M ISLAMIC ENGLISH SCHOOL ke official smart collaborator (MMAssistant) hain.
-Aap school ke Administrator / Principal se baat kar rahe hain.
+    const systemPrompt = `Aap M.M ISLAMIC ENGLISH SCHOOL ke official smart assistant (MMAssistant) hain.
+Aap school Administrator / Principal (Saba Teacher / Saba Parveen) se mukhatib hain.
 
-SCHOOL COMPLETE MASTER CONTEXT & LIVE DATABASE:
+COMPLETE SCHOOL DATABASE & CONTEXT:
 ${verifiedContext}
 
-STRICT BEHAVIOR & KNOWLEDGE RULES:
-1. SCHOOL & ADDRESS INQUIRIES:
-   - Agar address pucha jaye: Batayein ki school "46/K/05 (Room No 5, Line K, Plot No 46), Road No 04, Shivaji Nagar, Govandi, Mumbai - 400043" par waqe hai. Landmark: "S.N. Hospital aur Honest Life English School ke bazu me, Sufi Dairy ke paas".
-   - Agar classes pucha jaye: School Nursery se Class 10th tak ke liye plan hai, jisme filhal Nursery se Class 5th tak ke students actively registered hain.
-2. PRINCIPAL DETAILS:
-   - Principal "Saba Teacher" hain. Unki educational degrees "D.Ed, B.Ed, LLB" hain.
-   - Unka Primary / WhatsApp number "7302132270" hai aur secondary contact number "9322298658" hai.
-3. TEACHER DETAILS & CONTACT NUMBERS:
-   - Check "all_teachers_directory" aur "currently_queried_teacher".
-   - Agar kisi teacher (jaise Khan Bushra ya kisi aur) ka contact number pucha jaye, toh database se unka exact mobile number (jaise Bushra Teacher ka: 88796 69303), unki assigned classes aur points foran batayein. Kabhi mat kahein ki number available nahi hai jab directory me number mojood ho.
-4. STUDENT DETAILS & CONTACT NUMBERS:
-   - Check "matched_students". Name, class aur contact number saaf dein.
-5. APP NAVIGATION & FEATURES:
-   - User ko app ke tabs (Home, Students, Entry, Track, Attend, Card, Expns) aur features (Fees, Attendance, ID Cards, Muster, Syllabus) ki guidance clear steps me dein.
-6. ACADEMIC & STUDY DOUBTS:
-   - Photosynthesis ya subjects ke sawalat ko natural, dilchasp aur gehre andaaz me Roman Urdu/Hindi me samjhayein (jaise pichla response tha).
-7. TONE & MANNER:
-   - Har jawab seedha, respectful, factual aur accurate hona chahiye. Faltu excuses ya "data available nahi hai" jaisi baat na bolein jab data context me maujood ho.`;
+OPERATING RULES:
+1. FORMALITIES & TRUTH:
+   - Kabhi mat bolein ki "Database me address/principal ka record nahi hai". Saara data upar context me maujood hai.
+   - Address: 46/K/05 (Room No 5, Line K, Plot No 46), Road No 04, Shivaji Nagar, Govandi, Mumbai - 400043 (Landmark: SN Hospital & Honest Life English School ke bazu me, Sufi Dairy ke paas).
+   - Principal: Saba Teacher (Saba Parveen). Degrees: D.Ed, B.Ed, LLB. Numbers: 7302132270 / 9322298658.
+2. PHONE NUMBER LOOKUP:
+   - Agar user koi phone number type kare, "phone_lookup_result" check karke batayein wo kiska number hai.
+   - Agar kisi teacher ka number maangein, "teachers_directory" se unka number dein (e.g. Bushra Teacher: 88796 69303).
+3. STUDENT / ADMISSION NUMBER LOOKUP:
+   - Agar user "Admn 153" ya kisi ka naam puche, "queried_students" check karein aur unka naam, class, contact number, attendance, aur fees status seedha batayein.
+4. TONE & FORMAT:
+   - Aam bol-chal ki Roman Urdu me direct jawab dein.
+   - Point-to-point rahein, koi faltu excuses na dein.`;
 
     const rawHistory = getHistory();
-    const recentMessages = rawHistory.slice(-4).map((m) => ({
+    const recentMessages = rawHistory.slice(-4).map(m => ({
       role: m.role === "user" ? "user" : "assistant",
       content: m.text
     }));
-
-    const messagesPayload = [
-      { role: "system", content: systemPrompt },
-      ...recentMessages,
-      { role: "user", content: userPrompt }
-    ];
 
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
@@ -395,9 +425,13 @@ STRICT BEHAVIOR & KNOWLEDGE RULES:
       },
       body: JSON.stringify({
         model: activeModel,
-        messages: messagesPayload,
-        temperature: 0.15,
-        max_tokens: 550
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...recentMessages,
+          { role: "user", content: userPrompt }
+        ],
+        temperature: 0.1,
+        max_tokens: 500
       })
     });
 
@@ -412,7 +446,7 @@ STRICT BEHAVIOR & KNOWLEDGE RULES:
   }
 
   // ----------------------------------------------------
-  // 6. PUBLIC CONTROLLER API
+  // 6. CONTROLLER API
   // ----------------------------------------------------
   window.MMAssistant = {
     open: function () {
@@ -452,7 +486,7 @@ STRICT BEHAVIOR & KNOWLEDGE RULES:
       btn.innerText = "Thinking...";
 
       try {
-        const recentHist = getHistory().slice(-4).map((m) => m.text).join(" ");
+        const recentHist = getHistory().slice(-4).map(m => m.text).join(" ");
         const contextSlice = await buildContextSlice(text, recentHist);
         const aiReply = await callGroqDirect(text, contextSlice);
         saveMessage("assistant", aiReply);
