@@ -9,8 +9,8 @@
   "use strict";
 
   const IGRIS_SIGNATURE = "IGRIS_CORE_SECURE_VAULT_7789";
-  const DB_NAME = "AccuEngine_Storage";
-  const DB_VERSION = 15; // Incremented to auto-wipe old corrupt encrypted cache
+   const DB_NAME = "AccuEngine_Storage";
+  const DB_VERSION = 16; // Upgraded for complete store support
   const STORES = [
     "users",
     "students",
@@ -22,6 +22,7 @@
     "homework",
     "timetable",
     "leaves",
+    "leave_applications",
     "subjects",
     "syllabus_config",
     "syllabus_chapters",
@@ -29,12 +30,15 @@
     "muster",
     "expenses",
     "daily_claims",
+    "teacher_daily_claims",
+    "email_lookup",
     "tests",
     "online_tests",
     "test_attempts",
     "sync_queue",
     "secure_keys"
   ];
+
 
   let idbInstance = null;
   let modules = null;
@@ -164,138 +168,74 @@
       } catch (e) {}
     },
 
-    checkAndSyncData: async function (force = false) {
-      if (!modules) return false;
-      if (this._syncInProgress) return false;
 
-      const { fsDb, db: rtdb, ref, get, set, child, getDocs, collection } = modules;
-      let remoteVersion = null;
-      const localVersion = localStorage.getItem("igris_local_version");
+      checkAndSyncData: async function (force = false) {
+    if (!modules) return false;
+    if (this._syncInProgress) return false;
 
-      if (navigator.onLine && rtdb) {
-        try {
-          const snap = await get(child(ref(rtdb), "sync_triggers/version"));
-          if (snap.exists()) {
-            remoteVersion = String(snap.val());
-          } else if (typeof set === "function") {
-            remoteVersion = "10001";
-            await set(ref(rtdb, "sync_triggers/version"), remoteVersion);
+    const { fsDb, getDocs, collection } = modules;
+    const localStudents = await idbGetAllMap("students");
+    const hasLocalData = Object.keys(localStudents).length > 0;
+
+    if (!force && hasLocalData && !navigator.onLine) {
+      return false;
+    }
+
+    this._syncInProgress = true;
+    try {
+      console.log("📥 [Igris] Fetching fresh data directly from Firestore...");
+
+      const collectionsToSync = [
+        "students", "teachers", "users", "fees_matrix", "fees_entries",
+        "attendance", "study_material", "homework", "timetable", "leaves",
+        "leave_applications", "subjects", "syllabus_config", "syllabus_chapters",
+        "syllabus_progress", "muster", "expenses", "daily_claims",
+        "teacher_daily_claims", "email_lookup", "tests", "online_tests", "test_attempts"
+      ];
+
+      const results = await Promise.allSettled(
+        collectionsToSync.map(colName => getDocs(collection(fsDb, colName)))
+      );
+
+      for (let i = 0; i < collectionsToSync.length; i++) {
+        const colName = collectionsToSync[i];
+        const res = results[i];
+
+        if (res.status === "fulfilled" && res.value) {
+          const map = {};
+          res.value.forEach(d => {
+            const dt = d.data();
+            if (colName === "fees_matrix") {
+              map[d.id] = dt.matrix || dt;
+            } else if (colName === "attendance") {
+              map[d.id] = dt.days || dt;
+            } else if (colName === "daily_claims" || colName === "teacher_daily_claims") {
+              map[d.id] = dt.claims || dt;
+            } else if (colName === "timetable") {
+              map[d.id] = dt.schedule || dt;
+            } else {
+              map[d.id] = dt;
+            }
+          });
+
+          if (Object.keys(map).length > 0) {
+            await idbSetBatch(colName, map);
           }
-        } catch (e) {}
+        }
       }
 
-      const localStudents = await idbGetAllMap("students");
-      const hasLocalData = Object.keys(localStudents).length > 0;
+      const freshVer = Date.now().toString();
+      localStorage.setItem("igris_local_version", freshVer);
+      console.log("✔ [Igris] All available Firestore collections synced successfully.");
+      return true;
+    } catch (err) {
+      console.error("Igris sync error:", err);
+      return false;
+    } finally {
+      this._syncInProgress = false;
+    }
+  },
 
-      if (!force && hasLocalData && remoteVersion && remoteVersion === localVersion) {
-        return false;
-      }
-      if (!navigator.onLine && hasLocalData) {
-        return false;
-      }
-
-      this._syncInProgress = true;
-      try {
-        console.log("📥 [Igris] Downloading fresh database snapshot from Firestore...");
-        const [
-          studentsSnap, teachersSnap, usersSnap, feesMatrixSnap, feesEntriesSnap, 
-          attendanceSnap, studyMatSnap, homeworkSnap, timetableSnap, leavesSnap, 
-          subjectsSnap, sylConfigSnap, sylChaptersSnap, sylProgressSnap, musterSnap,
-          expensesSnap, dailyClaimsSnap, testsSnap, onlineTestsSnap, testAttemptsSnap
-        ] = await Promise.all([
-          getDocs(collection(fsDb, "students")),
-          getDocs(collection(fsDb, "teachers")),
-          getDocs(collection(fsDb, "users")),
-          getDocs(collection(fsDb, "fees_matrix")),
-          getDocs(collection(fsDb, "fees_entries")),
-          getDocs(collection(fsDb, "attendance")),
-          getDocs(collection(fsDb, "study_material")),
-          getDocs(collection(fsDb, "homework")),
-          getDocs(collection(fsDb, "timetable")),
-          getDocs(collection(fsDb, "leaves")),
-          getDocs(collection(fsDb, "subjects")),
-          getDocs(collection(fsDb, "syllabus_config")),
-          getDocs(collection(fsDb, "syllabus_chapters")),
-          getDocs(collection(fsDb, "syllabus_progress")),
-          getDocs(collection(fsDb, "muster")),
-          getDocs(collection(fsDb, "expenses")),
-          getDocs(collection(fsDb, "daily_claims")),
-          getDocs(collection(fsDb, "tests")),
-          getDocs(collection(fsDb, "online_tests")),
-          getDocs(collection(fsDb, "test_attempts"))
-        ]);
-
-        const studentsMap = {}; studentsSnap.forEach(d => { studentsMap[d.id] = d.data(); });
-        await idbSetBatch("students", studentsMap);
-
-        const teachersMap = {}; teachersSnap.forEach(d => { teachersMap[d.id] = d.data(); });
-        await idbSetBatch("teachers", teachersMap);
-
-        const usersMap = {}; usersSnap.forEach(d => { usersMap[d.id] = d.data(); });
-        await idbSetBatch("users", usersMap);
-
-        const feesMap = {}; feesMatrixSnap.forEach(d => { const dt = d.data(); feesMap[d.id] = dt.matrix || dt; });
-        await idbSetBatch("fees_matrix", feesMap);
-
-        const entriesMap = {}; feesEntriesSnap.forEach(d => { entriesMap[d.id] = d.data(); });
-        await idbSetBatch("fees_entries", entriesMap);
-
-        const attMap = {}; attendanceSnap.forEach(d => { const dt = d.data(); attMap[d.id] = dt.days || dt; });
-        await idbSetBatch("attendance", attMap);
-
-        const matMap = {}; studyMatSnap.forEach(d => { matMap[d.id] = d.data(); });
-        await idbSetBatch("study_material", matMap);
-
-        const hwMap = {}; homeworkSnap.forEach(d => { hwMap[d.id] = d.data(); });
-        await idbSetBatch("homework", hwMap);
-
-        const ttMap = {}; timetableSnap.forEach(d => { ttMap[d.id] = d.data().schedule || d.data(); });
-        await idbSetBatch("timetable", ttMap);
-
-        const lvMap = {}; leavesSnap.forEach(d => { lvMap[d.id] = d.data(); });
-        await idbSetBatch("leaves", lvMap);
-
-        const subMap = {}; subjectsSnap.forEach(d => { subMap[d.id] = d.data(); });
-        await idbSetBatch("subjects", subMap);
-
-        const sylCfgMap = {}; sylConfigSnap.forEach(d => { sylCfgMap[d.id] = d.data().subjects || d.data(); });
-        await idbSetBatch("syllabus_config", sylCfgMap);
-
-        const chMap = {}; sylChaptersSnap.forEach(d => { chMap[d.id] = d.data().chapters || d.data(); });
-        await idbSetBatch("syllabus_chapters", chMap);
-
-        const progMap = {}; sylProgressSnap.forEach(d => { progMap[d.id] = d.data().progress || d.data(); });
-        await idbSetBatch("syllabus_progress", progMap);
-
-        const musMap = {}; musterSnap.forEach(d => { musMap[d.id] = d.data(); });
-        await idbSetBatch("muster", musMap);
-
-        const expMap = {}; expensesSnap.forEach(d => { expMap[d.id] = d.data(); });
-        await idbSetBatch("expenses", expMap);
-
-        const claimMap = {}; dailyClaimsSnap.forEach(d => { claimMap[d.id] = d.data().claims || d.data(); });
-        await idbSetBatch("daily_claims", claimMap);
-
-        const testMap = {}; testsSnap.forEach(d => { testMap[d.id] = d.data(); });
-        await idbSetBatch("tests", testMap);
-
-        const onlTestMap = {}; onlineTestsSnap.forEach(d => { onlTestMap[d.id] = d.data(); });
-        await idbSetBatch("online_tests", onlTestMap);
-
-        const attpMap = {}; testAttemptsSnap.forEach(d => { attpMap[d.id] = d.data(); });
-        await idbSetBatch("test_attempts", attpMap);
-
-        const finalVer = remoteVersion || "10001";
-        localStorage.setItem("igris_local_version", finalVer);
-        console.log("✔ [Igris] All collections synchronized to native storage.");
-        return true;
-      } catch (err) {
-        console.error("Igris sync error:", err);
-        return false;
-      } finally {
-        this._syncInProgress = false;
-      }
-    },
 
     fetch: async function (path) {
       if (!path) return null;
