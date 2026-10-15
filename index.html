@@ -7768,22 +7768,77 @@ document.getElementById("hwTitleInput").value = "";
         container.innerHTML += `<div class="lb-row" style="${isMe ? 'background:rgba(2, 136, 209, 0.12); font-weight:800;' : ''}"><div style="display:flex; align-items:center;"><div class="lb-badge" style="${isMe ? 'background:#0288d1;' : ''}">${idx + 1}</div><span style="font-size:13px;">${st.name} ${isMe ? '(You)' : ''}</span></div><span class="pts-chip" style="background:#fbbf24; color:#0f172a !important;">⭐ ${stars} (${pts} PTS)</span></div>`;
       });
     }
-
+          // 📊 Student Test Scores: Selected Month Filter Fix
     addSafeListener("sViewTestScoresBtn", "click", () => {
       const btn = document.getElementById("sViewTestScoresBtn");
       runWithBtnSpinner(btn, "View Scores", async () => {
-        const testsData = await safeDataFetch(`tests/${currentStudentAdmn}`);
+        const selectedMonth = document.getElementById("sTestMonthSelect").value;
         const tbody = document.getElementById("sTestScoresTableBody");
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:12px;">⏳ Loading scores...</td></tr>`;
+        document.getElementById("sTestScoresDisplayArea").style.display = "block";
+
+        const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        let testsList = [];
+
+        try {
+          // Direct Firestore 'tests' collection se student ke records fetch karna
+          const snap = await getDocs(collection(fsDb, "tests"));
+          snap.forEach(d => {
+            const data = d.data();
+            if(String(data.admn) === String(currentStudentAdmn) || d.id.startsWith(currentStudentAdmn + "_")) {
+              testsList.push(data);
+            }
+          });
+        } catch(err) {
+          console.warn("Firestore test history fetch error:", err);
+        }
+
+        if (testsList.length === 0) {
+          const cached = await safeDataFetch(`tests/${currentStudentAdmn}`) || {};
+          testsList = Object.values(cached);
+        }
+
+        // Strict Month Filtering
+        if (selectedMonth !== "ALL") {
+          testsList = testsList.filter(t => {
+            if (!t.date) return false;
+            const parts = t.date.split('/');
+            if (parts.length === 3) {
+              const monthIdx = parseInt(parts[1], 10) - 1;
+              return monthNames[monthIdx] === selectedMonth;
+            }
+            return false;
+          });
+        }
+
         tbody.innerHTML = "";
 
-        if(testsData && Object.keys(testsData).length > 0) {
-          Object.values(testsData).forEach(t => {
-            tbody.innerHTML += `<tr><td>${t.date}</td><td style="text-align:left; padding-left:8px; font-weight:700;">${t.name}</td><td><b>${t.obtained}</b></td><td>${t.total}</td><td><b>${t.percentage}%</b></td></tr>`;
+        if(testsList.length > 0) {
+          testsList.sort((a, b) => {
+            const parseD = (str) => {
+              if(!str) return 0;
+              const p = str.split('/');
+              return p.length === 3 ? new Date(`${p[2]}-${p[1]}-${p[0]}`).getTime() : 0;
+            };
+            return parseD(b.date) - parseD(a.date);
           });
-          document.getElementById("sTestScoresDisplayArea").style.display = "block";
-        } else { alert("No test records found."); document.getElementById("sTestScoresDisplayArea").style.display = "none"; }
+
+          testsList.forEach(t => {
+            tbody.innerHTML += `
+              <tr>
+                <td>${t.date || '-'}</td>
+                <td style="text-align:left; padding-left:8px; font-weight:700;">${t.name || 'Test'}</td>
+                <td><b>${t.obtained}</b></td>
+                <td>${t.total}</td>
+                <td><b>${t.percentage}%</b></td>
+              </tr>`;
+          });
+        } else {
+          tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:14px; color:var(--text-muted);">No test records found for ${selectedMonth === "ALL" ? "any month" : selectedMonth}.</td></tr>`;
+        }
       });
     });
+
 
        addSafeListener("sGenerateFeesCardBtn", "click", () => {
       const btn = document.getElementById("sGenerateFeesCardBtn");
@@ -10125,6 +10180,7 @@ document.getElementById("hwTitleInput").value = "";
       });
     });
 
+      
 
           // 🎓 Student Due Tests: Direct RTDB se load & Expired tests bacho ke liye completely hide honge
     async function loadStudentDueTests() {
