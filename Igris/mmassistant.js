@@ -1,6 +1,6 @@
 /**
  * ====================================================================
- * MMASSISTANT AI v16.0 (FLAGSHIP LLAMA-3.3 70B • AUTO-FAILOVER ENGINE)
+ * MMASSISTANT AI v17.0 (QWEN ENGINE PRIORITY + LIVE DISCOVERY)
  * M.M ISLAMIC ENGLISH SCHOOL ERP
  * ====================================================================
  */
@@ -21,14 +21,6 @@
   }
 
   const STORAGE_KEY = "mm_assistant_chat_history_v1";
-
-  // Top Active Conversational Models on Groq
-  const CANDIDATE_MODELS = [
-    "llama-3.3-70b-versatile",
-    "llama-3.2-3b-preview",
-    "llama-3.2-1b-preview",
-    "mixtral-8x7b-32768"
-  ];
 
   // 2D AI Sparkle Vector
   const AI_SPARKLE_SVG = `
@@ -57,7 +49,7 @@
     </svg>
   `;
 
-  // Markdown Formatter for clean UI
+  // Markdown Formatter
   function formatMarkdown(text) {
     if (!text) return "";
     let safe = text
@@ -195,7 +187,7 @@
   }
 
   // ----------------------------------------------------
-  // 3. IGRIS HARDWARE CACHE SLICER
+  // 3. IGRIS HARDWARE CACHE CONTEXT
   // ----------------------------------------------------
   async function buildContextSlice(userQuery, recentHistoryText) {
     const Sentinel = window.Igris || window.AccuEngine;
@@ -358,10 +350,57 @@
   }
 
   // ----------------------------------------------------
-  // 4. AUTO-FAILOVER INFERENCE ENGINE
+  // 4. LIVE QWEN-FIRST MODEL RESOLVER
+  // ----------------------------------------------------
+  let memoizedLiveModelsList = null;
+
+  async function getLiveActiveModels(apiKey) {
+    if (memoizedLiveModelsList && memoizedLiveModelsList.length > 0) {
+      return memoizedLiveModelsList;
+    }
+
+    const res = await fetch("https://api.groq.com/openai/v1/models", {
+      headers: { "Authorization": "Bearer " + apiKey }
+    });
+
+    if (!res.ok) throw new Error("API Key verification failed.");
+
+    const json = await res.json();
+    const rawIds = (json.data || []).map((m) => m.id);
+
+    // Filter out non-text/moderation models
+    const activeTextModels = rawIds.filter((id) => {
+      const s = id.toLowerCase();
+      return !s.includes("guard") &&
+             !s.includes("whisper") &&
+             !s.includes("embed") &&
+             !s.includes("vision") &&
+             !s.includes("audio") &&
+             !s.includes("orpheus") &&
+             !s.includes("moderation");
+    });
+
+    // 🚀 Sort by Priority: QWEN FIRST, then LLAMA-3.3, then others
+    const qwenModels = activeTextModels.filter((id) => id.toLowerCase().includes("qwen"));
+    const llamaModels = activeTextModels.filter((id) => id.toLowerCase().includes("llama-3.3") || id.toLowerCase().includes("llama-3.2"));
+    const otherModels = activeTextModels.filter((id) => !id.toLowerCase().includes("qwen") && !llamaModels.includes(id));
+
+    memoizedLiveModelsList = [...qwenModels, ...llamaModels, ...otherModels];
+
+    if (memoizedLiveModelsList.length === 0) {
+      memoizedLiveModelsList = ["llama-3.3-70b-versatile", "llama-3.2-3b-preview"];
+    }
+
+    console.log("✔ [MMAssistant] Active Live Models (Qwen prioritized):", memoizedLiveModelsList);
+    return memoizedLiveModelsList;
+  }
+
+  // ----------------------------------------------------
+  // 5. INFERENCE CALL
   // ----------------------------------------------------
   async function callGroqDirect(userPrompt, verifiedContext) {
     const apiKey = getSecureKey();
+    const activeModels = await getLiveActiveModels(apiKey);
 
     const systemPrompt = `Aap M.M ISLAMIC ENGLISH SCHOOL ke official smart assistant (MMAssistant) hain.
 Aap school Administrator / Principal (Saba Teacher / Saba Parveen) se mukhatib hain.
@@ -374,7 +413,7 @@ OPERATING RULES:
 2. Principal: Saba Teacher (Saba Parveen). Degrees: D.Ed, B.Ed, LLB. Numbers: 7302132270 / 9322298658.
 3. Phone lookup: Agar phone number pucha jaye ya type kiya jaye, exact person ka naam aur role batayein. Teachers directory se teacher ka contact number dein (e.g. Bushra Teacher: 88796 69303).
 4. Student lookup: Admission number (jaise Admn 153) ya naam se exact student ki class, phone number, attendance aur fees status dein.
-5. Answer naturally and respectfully in Roman Urdu or simple English without technical excuses.`;
+5. Answer naturally, respectfully and concisely in Roman Urdu, Hindi, or English without technical excuses or robotic preambles.`;
 
     const rawHistory = getHistory();
     const recentMessages = rawHistory.slice(-4).map((m) => ({
@@ -390,8 +429,7 @@ OPERATING RULES:
 
     let lastError = null;
 
-    // 🚀 Auto-Failover Loop: Tries models in order until one succeeds
-    for (const modelName of CANDIDATE_MODELS) {
+    for (const modelName of activeModels) {
       try {
         const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
           method: "POST",
@@ -402,8 +440,8 @@ OPERATING RULES:
           body: JSON.stringify({
             model: modelName,
             messages: messages,
-            temperature: 0.15,
-            max_tokens: 550
+            temperature: 0.2,
+            max_tokens: 500
           })
         });
 
@@ -414,18 +452,18 @@ OPERATING RULES:
 
         const errData = await response.json().catch(() => ({}));
         lastError = errData.error?.message || `HTTP ${response.status}`;
-        console.warn(`Model [${modelName}] failed: ${lastError}. Trying next candidate...`);
+        console.warn(`Model [${modelName}] skipped: ${lastError}`);
       } catch (err) {
         lastError = err.message;
-        console.warn(`Network fail on [${modelName}]: ${lastError}`);
       }
     }
 
-    throw new Error(lastError || "All Groq models failed.");
+    memoizedLiveModelsList = null;
+    throw new Error(lastError || "All models failed.");
   }
 
   // ----------------------------------------------------
-  // 5. PUBLIC CONTROLLER API
+  // 6. CONTROLLER API
   // ----------------------------------------------------
   window.MMAssistant = {
     open: function () {
