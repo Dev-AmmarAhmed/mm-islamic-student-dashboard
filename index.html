@@ -6117,57 +6117,60 @@ Exact Output JSON Format Required:
       }
     }
 
-    window.renderWeeklyScheduleModal = async function() {
-      const loggedUser = localStorage.getItem("loggedUser");
-      const loggedRole = localStorage.getItem("loggedRole");
-      if (!loggedUser) return;
+ window.renderWeeklyScheduleModal = async function() {
+ const loggedUser = localStorage.getItem("loggedUser");
+ const loggedRole = localStorage.getItem("loggedRole");
+ if (!loggedUser) return;
 
-      let userClaims = {};
-      if (loggedRole === "teacher") { userClaims = await safeDataFetch(`teacher_daily_claims/${loggedUser}`) || {}; } 
-      else {
-        const student = await getStudentRecord(currentStudentAdmn);
-        if (student) { userClaims = await safeDataFetch(`daily_claims/${student.admn}`) || {}; }
-      }
+ let targetId = loggedUser;
+ if (loggedRole === "student") {
+ const student = await getStudentRecord(currentStudentAdmn);
+ if (student) targetId = student.admn;
+ }
 
-      const today = new Date();
-      const dayOfWeek = today.getDay(); 
-      const distanceToMon = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-      const mondayDate = new Date(today);
-      mondayDate.setDate(today.getDate() + distanceToMon);
+ const rawData = await safeDataFetch(`daily_claims/${targetId}`) || {};
+ const userClaims = rawData.claims || rawData;
 
-      const daysConfig = [
-        { name: "Mon", idx: 0, pts: 50, isWeekend: false }, { name: "Tue", idx: 1, pts: 50, isWeekend: false }, { name: "Wed", idx: 2, pts: 50, isWeekend: false },
-        { name: "Thu", idx: 3, pts: 50, isWeekend: false }, { name: "Fri", idx: 4, pts: 50, isWeekend: false }, { name: "Sat", idx: 5, pts: 80, isWeekend: true }, { name: "Sun", idx: 6, pts: 80, isWeekend: true }
-      ];
+ const today = new Date();
+ const dayOfWeek = today.getDay(); 
+const distanceToMon = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+ const mondayDate = new Date(today);
+ mondayDate.setDate(today.getDate() + distanceToMon);
 
-      const topGrid = document.getElementById("weekdaysGridTop");
-      const bottomGrid = document.getElementById("weekendsGridBottom");
-      if (topGrid) topGrid.innerHTML = ""; if (bottomGrid) bottomGrid.innerHTML = "";
-      const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+ const daysConfig = [
+ { name: "Mon", idx: 0, pts: 50, isWeekend: false }, { name: "Tue", idx: 1, pts: 50, isWeekend: false }, { name: "Wed", idx: 2, pts: 50, isWeekend: false },
+ { name: "Thu", idx: 3, pts: 50, isWeekend: false }, { name: "Fri", idx: 4, pts: 50, isWeekend: false }, { name: "Sat", idx: 5, pts: 80, isWeekend: true }, { name: "Sun", idx: 6, pts: 80, isWeekend: true }
+ ];
 
-      daysConfig.forEach(day => {
-        const dayDate = new Date(mondayDate);
-        dayDate.setDate(mondayDate.getDate() + day.idx);
-        dayDate.setHours(0,0,0,0);
-        const dayKey = `${dayDate.getFullYear()}_${dayDate.getMonth() + 1}_${dayDate.getDate()}`;
-        const isClaimed = userClaims[dayKey] === true;
-        const isToday = dayDate.getTime() === todayMidnight.getTime();
-        const isFuture = dayDate.getTime() > todayMidnight.getTime();
-        const isPast = dayDate.getTime() < todayMidnight.getTime();
+ const topGrid = document.getElementById("weekdaysGridTop");
+ const bottomGrid = document.getElementById("weekendsGridBottom");
+ if (topGrid) topGrid.innerHTML = ""; if (bottomGrid) bottomGrid.innerHTML = "";
+ const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
-        let statusBtnHtml = "";
-        if (isClaimed) { statusBtnHtml = `<button class="btn-status-claimed" onclick="window.shakeButton(this)">Claimed</button>`; } 
-        else if (isToday) {
-          const claimHandler = loggedRole === "teacher" ? "window.claimTeacherPointsFromModal()" : "window.claimPointsFromModal()";
-          statusBtnHtml = `<button class="btn-primary btn-orange" style="margin-top:0; padding:4px 2px; font-size:10px;" onclick="${claimHandler}">Claim</button>`;
-        } 
-        else if (isFuture) { statusBtnHtml = `<button class="btn-status-wait" onclick="window.shakeButton(this)">Wait</button>`; } 
-        else if (isPast) { statusBtnHtml = `<button class="btn-status-expired" onclick="window.shakeButton(this)">Expired</button>`; }
+ daysConfig.forEach(day => {
+ const dayDate = new Date(mondayDate);
+ dayDate.setDate(mondayDate.getDate() + day.idx);
+ dayDate.setHours(0,0,0,0);
+ const dayKey = `${dayDate.getFullYear()}_${dayDate.getMonth() + 1}_${dayDate.getDate()}`;
+ const isClaimed = userClaims[dayKey] === true;
+ const isToday = dayDate.getTime() === todayMidnight.getTime();
+ const isFuture = dayDate.getTime() > todayMidnight.getTime();
+ const isPast = dayDate.getTime() < todayMidnight.getTime();
 
-        const cardHtml = `<div class="day-card ${day.isWeekend ? 'weekend-card' : ''} ${isClaimed ? 'claimed-box' : ''}" style="${isToday && !isClaimed ? 'border: 1.5px solid #0288d1; background: rgba(2, 136, 209, 0.12); box-shadow: 0 0 10px rgba(2, 136, 209, 0.3);' : ''}"><div class="day-card-title">${day.name}</div><div class="day-card-pts">+${day.pts}</div>${statusBtnHtml}</div>`;
-        if (day.isWeekend) { if (bottomGrid) bottomGrid.innerHTML += cardHtml; } else { if (topGrid) topGrid.innerHTML += cardHtml; }
-      });
-    };
+ let statusBtnHtml = "";
+ if (isClaimed) { statusBtnHtml = `<button class="btn-status-claimed" onclick="window.shakeButton(this)">Claimed</button>`; } 
+else if (isToday) {
+ const claimHandler = loggedRole === "teacher" ? "window.claimTeacherPointsFromModal()" : "window.claimPointsFromModal()";
+ statusBtnHtml = `<button class="btn-primary btn-orange" style="margin-top:0; padding:4px 2px; font-size:10px;" onclick="${claimHandler}">Claim</button>`;
+ } 
+else if (isFuture) { statusBtnHtml = `<button class="btn-status-wait" onclick="window.shakeButton(this)">Wait</button>`; } 
+else if (isPast) { statusBtnHtml = `<button class="btn-status-expired" onclick="window.shakeButton(this)">Expired</button>`; }
+
+ const cardHtml = `<div class="day-card ${day.isWeekend ? 'weekend-card' : ''} ${isClaimed ? 'claimed-box' : ''}" style="${isToday && !isClaimed ? 'border: 1.5px solid #0288d1; background: rgba(2, 136, 209, 0.12); box-shadow: 0 0 10px rgba(2, 136, 209, 0.3);' : ''}"><div class="day-card-title">${day.name}</div><div class="day-card-pts">+${day.pts}</div>${statusBtnHtml}</div>`;
+ if (day.isWeekend) { if (bottomGrid) bottomGrid.innerHTML += cardHtml; } else { if (topGrid) topGrid.innerHTML += cardHtml; }
+ });
+ };
+
 
     window.claimTeacherPointsFromModal = function() {
       window.closeModal("weeklyRewardDetailsModal");
