@@ -29,7 +29,7 @@
   <script src="./Igris/igris.js"></script>
 
    <!-- MMASSISTANT AI (FORCED FRESH CACHE) -->
-<script src="./Igris/mmassistant.js?v=9.0"></script>
+<script src="./Igris/mmassistant.js?v=7.5"></script>
 
   <!-- 🚨 IGRIS INTEGRITY VERIFICATION GATE (ANTI-BYPASS PROTOCOL) -->
   <script>
@@ -9352,12 +9352,25 @@ document.getElementById("hwTitleInput").value = "";
     });
 
 
-              // 🔍 Track Fees Matrix Table: Accurate June/July/August Tick Fix
+    // 🔍 Track Fees Matrix Table: Direct Firestore Fallback & Dual Name Matcher
     addSafeListener("trackFeesBtn", "click", () => {
       const btn = document.getElementById("trackFeesBtn");
       runWithBtnSpinner(btn, "Track Fees Matrix", async () => {
         const std = document.getElementById("trackStdSelect").value;
-        const students = getLiveStudents().filter(s => cleanClassStr(s.class) === cleanClassStr(std));
+        if(!std) {
+          window.showCustomAlert("Please select Class / Standard first.");
+          return;
+        }
+
+        // 1. Agar bache memory me na hon toh direct Firestore se fetch karein
+        let students = getLiveStudents().filter(s => cleanClassStr(s.class) === cleanClassStr(std));
+        if (students.length === 0) {
+          const freshStudents = await safeDataFetch("students") || {};
+          if (window.MM_STORE) window.MM_STORE.students = freshStudents;
+          students = getLiveStudents().filter(s => cleanClassStr(s.class) === cleanClassStr(std));
+        }
+
+        // 2. Fees Matrix direct fetch karein
         const rawMatrix = await safeDataFetch("fees_matrix") || {};
 
         const struct = window.getFeeStructure(std);
@@ -9370,25 +9383,40 @@ document.getElementById("hwTitleInput").value = "";
         thead.innerHTML = headHtml;
 
         tbody.innerHTML = "";
+
         if (students.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="${struct.list.length + 1}" style="color:var(--text-muted); padding:14px; text-align:center;">No records found for Class ${std}</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="${struct.list.length + 1}" style="color:var(--text-muted); padding:14px; text-align:center;">No students found registered in Class ${std}.</td></tr>`;
         } else {
+          students.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+
           students.forEach(st => {
             const docMatrix = rawMatrix[st.admn] || {};
             const stMatrix = docMatrix.matrix || docMatrix;
             let rowHtml = `<tr><td style="text-align:left; padding-left:10px; font-weight:700;">${st.name}</td>`;
+
             struct.list.forEach(m => {
-              const isPaid = !!window.getMatrixFeeRecord(stMatrix, m);
+              // June aur June Fee dono formats check karega
+              let isPaid = false;
+              if (typeof window.getMatrixFeeRecord === "function") {
+                isPaid = !!window.getMatrixFeeRecord(stMatrix, m);
+              } else {
+                const rec = stMatrix[m] || stMatrix[`${m} Fee`] || stMatrix[`${m} fee`];
+                isPaid = !!(rec && (rec.paid === true || rec.paid === "true"));
+              }
+
               rowHtml += `<td class="${isPaid ? 'paid-cell' : ''}" style="font-weight:800;">${isPaid ? '✔' : '-'}</td>`;
             });
+
             rowHtml += `</tr>`;
             tbody.innerHTML += rowHtml;
           });
         }
+
         document.getElementById("trackClassTitle").innerText = `Class ${std} Fee Matrix Record`;
         document.getElementById("trackMatrixArea").style.display = "block";
       });
     });
+
 
 
       // 💳 Admin Fees Card Generator (₹NaN Hatakar Actual Rates & 16 Heads Render Karna)
