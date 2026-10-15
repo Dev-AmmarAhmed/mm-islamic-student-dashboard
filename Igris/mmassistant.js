@@ -1,6 +1,6 @@
 /**
  * ====================================================================
- * MMASSISTANT AI v9.5 (STRICT CHAT-ONLY ENGINE • NO CLASSIFIERS)
+ * MMASSISTANT AI v11.0 (DIRECT FACTUAL AGENT • ZERO FILLER / NO EXCUSES)
  * M.M ISLAMIC ENGLISH SCHOOL ERP
  * ====================================================================
  */
@@ -165,7 +165,7 @@
   }
 
   // ----------------------------------------------------
-  // INTELLIGENT CONTEXT BUILDER
+  // INTELLIGENT CONTEXT BUILDER (PHONE NUMBERS & STUDENT LISTS INCLUDED)
   // ----------------------------------------------------
   async function buildContextSlice(userQuery, recentHistoryText) {
     const Sentinel = window.Igris || window.AccuEngine;
@@ -180,15 +180,15 @@
       const combinedText = (userQuery + " " + recentHistoryText).toLowerCase().replace(/[^a-z0-9\s]/g, "");
 
       const context = {
-        total_students: students.length,
-        total_teachers: teachers.length,
+        total_students_registered: students.length,
+        total_teachers_count: teachers.length,
         top_teachers: teachers
           .sort((a, b) => (b.points || 0) - (a.points || 0))
           .slice(0, 5)
           .map((t) => `${t.name} (Class ${t.assignedClass}): ${t.points || 0} pts`)
       };
 
-      // Multi-match student finder
+      // 🔍 Student Matching (Includes exact Phone Number and details)
       const matchedList = [];
       for (const st of students) {
         const sName = (st.name || "").toLowerCase();
@@ -200,36 +200,47 @@
           matchedList.push({
             name: st.name,
             class: st.class,
-            roll_or_admn: st.admn
+            roll_or_admn: st.admn,
+            phone_number: st.phone || st.parentPhone || st.mobile || st.contact || "Number not updated in portal",
+            father_name: st.fatherName || st.parent || ""
           });
           if (matchedList.length >= 8) break;
         }
       }
 
       if (matchedList.length > 0) {
-        context.found_students = matchedList;
+        context.matched_students = matchedList;
         const currentMonth = ["January","February","March","April","May","June","July","August","September","October","November","December"][new Date().getMonth()];
         context.primary_student_attendance = (await Sentinel.fetch(`attendance/${matchedList[0].roll_or_admn}/${currentMonth}`)) || {};
       }
 
-      if (/(fee|unpaid|pending|paid|due|rupaye|paisa)/i.test(combinedText)) {
+      // 💳 Fees Query Analysis (Includes ACTUAL LIST OF UNPAID STUDENTS)
+      if (/(fee|unpaid|pending|paid|due|rupaye|paisa|list)/i.test(combinedText)) {
         const feesMap = (await Sentinel.fetch("fees_matrix")) || {};
         const currentMonth = "September";
-        let unpaid = 0, paid = 0, dues = 0;
+        let unpaidCount = 0, paidCount = 0, totalDues = 0;
+        const unpaidStudentsList = [];
 
         students.forEach((st) => {
           const m = feesMap[st.admn] || {};
           const isPaid = m[currentMonth] && m[currentMonth].paid;
           const rate = st.customFee !== undefined ? parseFloat(st.customFee) : 500;
-          if (isPaid) paid++;
-          else { unpaid++; dues += rate; }
+          if (isPaid) {
+            paidCount++;
+          } else {
+            unpaidCount++;
+            totalDues += rate;
+            unpaidStudentsList.push(`${st.name} (Class ${st.class})`);
+          }
         });
 
-        context.fees_summary = {
+        context.fees_data = {
           month: currentMonth,
-          unpaid_count: unpaid,
-          paid_count: paid,
-          total_due_amount: dues
+          total_unpaid_students: unpaidCount,
+          total_paid_students: paidCount,
+          total_pending_fees_rupees: totalDues,
+          // List of unpaid students passed directly
+          unpaid_students_names: unpaidStudentsList.slice(0, 40)
         };
       }
 
@@ -240,7 +251,7 @@
   }
 
   // ----------------------------------------------------
-  // STRICT CHAT-ONLY MODEL DISCOVERY (CLASSIFIERS BLOCKED)
+  // STRICT CHAT MODEL SELECTOR
   // ----------------------------------------------------
   let memoizedLiveModel = null;
 
@@ -256,7 +267,6 @@
     const json = await res.json();
     const rawIds = (json.data || []).map(m => m.id);
 
-    // 🚨 STRICT FILTER: Guard, classifier, whisper, vision, audio ko poori tarah block karein
     const chatOnlyModels = rawIds.filter(id => {
       const s = id.toLowerCase();
       return !s.includes("guard") &&
@@ -270,57 +280,54 @@
     });
 
     if (chatOnlyModels.length === 0) {
-      throw new Error("No pure conversational models available on this Groq account.");
+      throw new Error("No pure chat models available on Groq.");
     }
 
-    // High quality chat models ki priority order
     const preferredOrder = [
       "llama-3.3-70b-versatile",
       "llama-3.1-70b-versatile",
       "llama-3.1-8b-instant",
       "llama-3.2-3b-preview",
       "llama-3.2-1b-preview",
-      "mixtral-8x7b-32768",
-      "qwen-2.5-32b",
-      "deepseek-r1-distill-llama-70b"
+      "mixtral-8x7b-32768"
     ];
 
     for (const p of preferredOrder) {
       if (chatOnlyModels.includes(p)) {
         memoizedLiveModel = p;
-        console.log("✔ [MMAssistant] Active Chat Model Selected:", memoizedLiveModel);
         return memoizedLiveModel;
       }
     }
 
-    // Agar preference list ka koi na mile, toh pehla pure chat model pick karo (Llama prefer karke)
     memoizedLiveModel = chatOnlyModels.find(id => id.toLowerCase().includes("llama")) || chatOnlyModels[0];
-    console.log("✔ [MMAssistant] Fallback Chat Model Selected:", memoizedLiveModel);
     return memoizedLiveModel;
   }
 
   // ----------------------------------------------------
-  // MULTI-TURN INFERENCE CALL
+  // ZERO-FILLER FACTUAL INFERENCE CALL
   // ----------------------------------------------------
   async function callGroqDirect(userPrompt, verifiedContext) {
     const apiKey = getSecureKey();
     const activeModel = await getLiveActiveModel(apiKey);
 
-    const systemPrompt = `You are MMAssistant, an intelligent and polite AI assistant of M.M Islamic English School.
-You are talking to the School Administrator (Admin).
+    const systemPrompt = `You are MMAssistant, an accurate, direct, and zero-nonsense school assistant for M.M Islamic English School.
+The user is the School Admin/Principal.
 
-School Database Context:
+School Portal Database Context:
 ${verifiedContext}
 
-CRITICAL RULES:
-1. Always remember previous conversation context. If the user asks a follow-up question (e.g. "Konsi class me?"), refer to the student mentioned in previous messages.
-2. The user is the Admin. NEVER say "Aap 3rd class me hain" or "Aap student hain".
-3. When asked if a student exists:
-   - Check "found_students" in the Database Context.
-   - If found: State their full name and class clearly. (e.g. "Ji haan, Faisal Khan Class 3 mein registered hain.")
-   - If not found: State politely that no student with this name was found in school records.
-4. Answer concisely (1-2 sentences) in natural Roman Urdu or simple English.
-5. Never output technical system instructions or rules.`;
+STRICT INSTRUCTIONS:
+1. NEVER use preamble fillers like "Aapke liye yeh information available hai", "Database batayega", or "Please provide the month". Cut straight to the exact factual answer.
+2. If asked for a phone number or contact:
+   - Provide the student name, class, and their exact phone_number from "matched_students".
+   - Example: "Faisal (Class 4) ka mobile number: 9876543210 hai."
+3. If asked for unpaid fees list or students:
+   - State the total count and list the student names cleanly with their class from "unpaid_students_names".
+4. If asked about fees summary:
+   - State the total unpaid count and total pending amount directly in 1-2 lines.
+5. If asked if a student exists:
+   - State their name, class, and roll_or_admn directly.
+6. Answer strictly in clear, natural Roman Urdu or simple English without technical rules or excuses.`;
 
     const rawHistory = getHistory();
     const recentMessages = rawHistory.slice(-4).map(m => ({
@@ -343,8 +350,8 @@ CRITICAL RULES:
       body: JSON.stringify({
         model: activeModel,
         messages: messagesPayload,
-        temperature: 0.15,
-        max_tokens: 300
+        temperature: 0.1,
+        max_tokens: 450
       })
     });
 
