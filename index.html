@@ -1,4 +1,4 @@
-l<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -5846,34 +5846,77 @@ Exact Output JSON Format Required:
       }
     }
 
-  // 🛡️ UNIVERSAL IGRIS BOOTSTRAPPER (PHASE 3 UNIFIED STORE)
+    // 🛡️ UNIVERSAL IGRIS BOOTSTRAPPER (FULL SCHOOL DEEP SYNC FOR ADMIN)
   window.ensureUniversalIgrisSync = async function(force = false) {
     const Sentinel = window.Igris || window.AccuEngine;
-    if (!Sentinel || typeof Sentinel.checkAndSyncData !== "function") return false;
+    const role = localStorage.getItem("loggedRole");
 
     try {
       if (typeof window.ensureFirebaseAuth === "function") {
         await window.ensureFirebaseAuth();
       }
 
-      // Sync local IndexedDB from Firestore
-      await Sentinel.checkAndSyncData(force);
-      
-      // Fetch fresh data from local cache into memory
-      const [stMap, tchMap, feesMap, usersMap] = await Promise.all([
-        Sentinel.fetch("students"),
-        Sentinel.fetch("teachers"),
-        Sentinel.fetch("fees_matrix"),
-        Sentinel.fetch("users")
-      ]);
+      // 1. Agar Admin hai to hamesha Force Sync karein taaki purana lock break ho
+      const shouldForce = force || (role === "admin");
 
-      window.MM_STORE.students = stMap || {};
-      window.MM_STORE.teachers = tchMap || {};
-      window.MM_STORE.fees_matrix = feesMap || {};
-      window.MM_STORE.users = usersMap || {};
-      cachedUsersMap = window.MM_STORE.users;
+      if (Sentinel && typeof Sentinel.checkAndSyncData === "function") {
+        await Sentinel.checkAndSyncData(shouldForce);
+      }
 
-      console.log(`✔ [Phase 3 Store] Hydrated: ${Object.keys(window.MM_STORE.students).length} Students, ${Object.keys(window.MM_STORE.teachers).length} Teachers.`);
+      // 2. Admin ke liye Direct Firestore Master Sweep (Puri School ka Data)
+      if (role === "admin") {
+        const collectionsToDownload = ["students", "teachers", "fees_matrix", "fees_entries", "users", "expenses"];
+        
+        for (const colName of collectionsToDownload) {
+          try {
+            const snap = await getDocs(collection(fsDb, colName));
+            const colMap = {};
+            snap.forEach(d => {
+              const dt = d.data();
+              if (colName === "fees_matrix") {
+                colMap[d.id] = dt.matrix || dt;
+              } else {
+                colMap[d.id] = dt;
+              }
+            });
+
+            // Local Memory Store me save
+            if (window.MM_STORE && colName in window.MM_STORE) {
+              window.MM_STORE[colName] = colMap;
+            }
+
+            // IndexedDB (Igris Vault) me save
+            if (Sentinel && typeof Sentinel.setLocal === "function") {
+              for (const [k, v] of Object.entries(colMap)) {
+                await Sentinel.setLocal(colName, k, v);
+              }
+            }
+          } catch (colErr) {
+            console.warn(`Firestore download error for ${colName}:`, colErr);
+          }
+        }
+
+        cachedUsersMap = window.MM_STORE.users || {};
+        console.log(`✔ [Admin Full School Sync] Success: ${Object.keys(window.MM_STORE.students).length} Students, ${Object.keys(window.MM_STORE.teachers).length} Teachers, ${Object.keys(window.MM_STORE.fees_matrix).length} Fee Matrices cached.`);
+        return true;
+      }
+
+      // 3. Normal Teacher / Student Flow
+      if (Sentinel && typeof Sentinel.fetch === "function") {
+        const [stMap, tchMap, feesMap, usersMap] = await Promise.all([
+          Sentinel.fetch("students"),
+          Sentinel.fetch("teachers"),
+          Sentinel.fetch("fees_matrix"),
+          Sentinel.fetch("users")
+        ]);
+
+        window.MM_STORE.students = stMap || {};
+        window.MM_STORE.teachers = tchMap || {};
+        window.MM_STORE.fees_matrix = feesMap || {};
+        window.MM_STORE.users = usersMap || {};
+        cachedUsersMap = window.MM_STORE.users;
+      }
+
       return true;
     } catch (err) {
       console.error("❌ Universal Sync failed:", err);
