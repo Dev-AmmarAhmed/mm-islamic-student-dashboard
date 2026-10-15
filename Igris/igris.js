@@ -1,6 +1,6 @@
 /**
  * ====================================================================
- * IGRIS v8.0 - DIRECT HIGH-SPEED ENGINE (ZERO-OVERHEAD NATIVE IDB)
+ * IGRIS v9.0 - ENTERPRISE HIGH-SPEED SECURE CACHE & SYNC SENTINEL
  * M.M ISLAMIC ENGLISH SCHOOL ERP
  * ====================================================================
  */
@@ -9,8 +9,9 @@
   "use strict";
 
   const IGRIS_SIGNATURE = "IGRIS_CORE_SECURE_VAULT_7789";
-   const DB_NAME = "AccuEngine_Storage";
-  const DB_VERSION = 16; // Upgraded for complete store support
+  const DB_NAME = "AccuEngine_Storage";
+  const DB_VERSION = 18; // Upgraded for complete store support & stability
+
   const STORES = [
     "users",
     "students",
@@ -23,6 +24,7 @@
     "timetable",
     "leaves",
     "leave_applications",
+    "teacher_leave_applications",
     "subjects",
     "syllabus_config",
     "syllabus_chapters",
@@ -31,6 +33,8 @@
     "expenses",
     "daily_claims",
     "teacher_daily_claims",
+    "teacher_permissions",
+    "teacher_points_logs",
     "email_lookup",
     "tests",
     "online_tests",
@@ -39,27 +43,29 @@
     "secure_keys"
   ];
 
-
   let idbInstance = null;
   let modules = null;
 
+  // --- SAFE IDB OPEN WITH MIGRATION ---
   function openIDB() {
     if (idbInstance) return Promise.resolve(idbInstance);
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(DB_NAME, DB_VERSION);
+
       request.onupgradeneeded = (e) => {
         const db = e.target.result;
         STORES.forEach((store) => {
-          if (db.objectStoreNames.contains(store)) {
-            db.deleteObjectStore(store); // Purana corrupt encrypted data saaf
+          if (!db.objectStoreNames.contains(store)) {
+            db.createObjectStore(store);
           }
-          db.createObjectStore(store);
         });
       };
+
       request.onsuccess = (e) => {
         idbInstance = e.target.result;
         resolve(idbInstance);
       };
+
       request.onerror = (e) => reject(e.target.error);
     });
   }
@@ -69,9 +75,10 @@
     try {
       const db = await openIDB();
       return new Promise((resolve) => {
+        if (!db.objectStoreNames.contains(storeName)) return resolve(null);
         const tx = db.transaction(storeName, "readonly");
         const req = tx.objectStore(storeName).get(String(key));
-        req.onsuccess = () => resolve(req.result || null);
+        req.onsuccess = () => resolve(req.result !== undefined ? req.result : null);
         req.onerror = () => resolve(null);
       });
     } catch (e) {
@@ -84,6 +91,7 @@
     try {
       const db = await openIDB();
       return new Promise((resolve) => {
+        if (!db.objectStoreNames.contains(storeName)) return resolve(false);
         const tx = db.transaction(storeName, "readwrite");
         const store = tx.objectStore(storeName);
         if (value === null || value === undefined) {
@@ -99,13 +107,35 @@
     }
   }
 
-  // --- BATCH SET (Direct memory injection) ---
-  async function idbSetBatch(storeName, entriesMap) {
+  // --- CLEAR A STORE ---
+  async function idbClear(storeName) {
     try {
       const db = await openIDB();
       return new Promise((resolve) => {
+        if (!db.objectStoreNames.contains(storeName)) return resolve(false);
+        const tx = db.transaction(storeName, "readwrite");
+        tx.objectStore(storeName).clear();
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      });
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // --- BATCH SET (Atomic IDB Injection) ---
+  async function idbSetBatch(storeName, entriesMap, clearFirst = false) {
+    try {
+      const db = await openIDB();
+      return new Promise((resolve) => {
+        if (!db.objectStoreNames.contains(storeName)) return resolve(false);
         const tx = db.transaction(storeName, "readwrite");
         const store = tx.objectStore(storeName);
+
+        if (clearFirst) {
+          store.clear();
+        }
+
         for (const [k, v] of Object.entries(entriesMap)) {
           if (v === null || v === undefined) {
             store.delete(String(k));
@@ -126,6 +156,7 @@
     try {
       const db = await openIDB();
       return new Promise((resolve) => {
+        if (!db.objectStoreNames.contains(storeName)) return resolve({});
         const tx = db.transaction(storeName, "readonly");
         const store = tx.objectStore(storeName);
         const map = {};
@@ -146,16 +177,22 @@
     }
   }
 
+  // ==========================================
+  // IGRIS CORE INSTANCE
+  // ==========================================
   const Igris = {
     isAlive: true,
     signature: IGRIS_SIGNATURE,
+    _syncInProgress: false,
 
     init: function (config) {
       modules = config;
-      console.log("⚡ [Igris v8.0] Direct Native IndexedDB Active (Zero Encryption Lag).");
+      console.log("⚡ [Igris v9.0] Enterprise Sentinel Active (Complete IDB Vault).");
+      // Auto-flush pending queue when online
+      if (navigator.onLine) {
+        this.triggerBackgroundSync();
+      }
     },
-
-    _syncInProgress: false,
 
     bumpSyncVersion: async function () {
       if (!navigator.onLine || !modules) return;
@@ -168,96 +205,162 @@
       } catch (e) {}
     },
 
+    // --- FULL FIRESTORE SYNC WITH DEEP SWEEP ---
+    checkAndSyncData: async function (force = false) {
+      if (!modules) return false;
+      if (this._syncInProgress) return false;
 
-      checkAndSyncData: async function (force = false) {
-    if (!modules) return false;
-    if (this._syncInProgress) return false;
+      const { fsDb, getDocs, collection } = modules;
+      const localStudents = await idbGetAllMap("students");
+      const hasLocalData = Object.keys(localStudents).length > 0;
 
-    const { fsDb, getDocs, collection } = modules;
-    const localStudents = await idbGetAllMap("students");
-    const hasLocalData = Object.keys(localStudents).length > 0;
-
-    if (!force && hasLocalData && !navigator.onLine) {
-      return false;
-    }
-
-    this._syncInProgress = true;
-    try {
-      console.log("📥 [Igris] Fetching fresh data directly from Firestore...");
-
-      const collectionsToSync = [
-        "students", "teachers", "users", "fees_matrix", "fees_entries",
-        "attendance", "study_material", "homework", "timetable", "leaves",
-        "leave_applications", "subjects", "syllabus_config", "syllabus_chapters",
-        "syllabus_progress", "muster", "expenses", "daily_claims",
-        "teacher_daily_claims", "email_lookup", "tests", "online_tests", "test_attempts"
-      ];
-
-      const results = await Promise.allSettled(
-        collectionsToSync.map(colName => getDocs(collection(fsDb, colName)))
-      );
-
-      for (let i = 0; i < collectionsToSync.length; i++) {
-        const colName = collectionsToSync[i];
-        const res = results[i];
-
-        if (res.status === "fulfilled" && res.value) {
-          const map = {};
-          res.value.forEach(d => {
-            const dt = d.data();
-            if (colName === "fees_matrix") {
-              map[d.id] = dt.matrix || dt;
-            } else if (colName === "attendance") {
-              map[d.id] = dt.days || dt;
-            } else if (colName === "daily_claims" || colName === "teacher_daily_claims") {
-              map[d.id] = dt.claims || dt;
-            } else if (colName === "timetable") {
-              map[d.id] = dt.schedule || dt;
-            } else {
-              map[d.id] = dt;
-            }
-          });
-
-          if (Object.keys(map).length > 0) {
-            await idbSetBatch(colName, map);
-          }
-        }
+      // Agar offline hain aur data pehle se hai toh cache se chalao
+      if (!force && hasLocalData && !navigator.onLine) {
+        return false;
       }
 
-      const freshVer = Date.now().toString();
-      localStorage.setItem("igris_local_version", freshVer);
-      console.log("✔ [Igris] All available Firestore collections synced successfully.");
-      return true;
-    } catch (err) {
-      console.error("Igris sync error:", err);
-      return false;
-    } finally {
-      this._syncInProgress = false;
-    }
-  },
+      this._syncInProgress = true;
+      try {
+        console.log("📥 [Igris] Initiating deep sync from Cloud Firestore...");
 
+        const collectionsToSync = [
+          "students",
+          "teachers",
+          "users",
+          "fees_matrix",
+          "fees_entries",
+          "attendance",
+          "study_material",
+          "homework",
+          "timetable",
+          "leaves",
+          "leave_applications",
+          "teacher_leave_applications",
+          "subjects",
+          "syllabus_config",
+          "syllabus_chapters",
+          "syllabus_progress",
+          "muster",
+          "expenses",
+          "daily_claims",
+          "teacher_daily_claims",
+          "teacher_permissions",
+          "teacher_points_logs",
+          "email_lookup",
+          "tests",
+          "online_tests",
+          "test_attempts"
+        ];
 
+        const results = await Promise.allSettled(
+          collectionsToSync.map((colName) => getDocs(collection(fsDb, colName)))
+        );
+
+        let totalSyncedDocs = 0;
+
+        for (let i = 0; i < collectionsToSync.length; i++) {
+          const colName = collectionsToSync[i];
+          const res = results[i];
+
+          if (res.status === "fulfilled" && res.value) {
+            const map = {};
+            res.value.forEach((d) => {
+              const dt = d.data();
+              if (colName === "fees_matrix") {
+                map[d.id] = dt.matrix || dt;
+              } else if (colName === "attendance") {
+                map[d.id] = dt.days || dt;
+              } else if (colName === "daily_claims" || colName === "teacher_daily_claims") {
+                map[d.id] = dt.claims || dt;
+              } else if (colName === "timetable") {
+                map[d.id] = dt.schedule || dt;
+              } else {
+                map[d.id] = dt;
+              }
+              totalSyncedDocs++;
+            });
+
+            // Clean update: Purana deleted data hatakar naya clean map save karein
+            await idbSetBatch(colName, map, true);
+          }
+        }
+
+        const freshVer = Date.now().toString();
+        localStorage.setItem("igris_local_version", freshVer);
+        console.log(`✔ [Igris] Master Sync Complete: ${totalSyncedDocs} documents cached in IndexedDB.`);
+
+        // Pending offline queue execute karein
+        await this.triggerBackgroundSync();
+
+        return true;
+      } catch (err) {
+        console.error("Igris sync error:", err);
+        return false;
+      } finally {
+        this._syncInProgress = false;
+      }
+    },
+
+    // --- SMART PATH RESOLVER (Supports 1, 2, and 3 segments & composite keys) ---
     fetch: async function (path) {
       if (!path) return null;
       const parts = path.split("/");
       const root = parts[0];
 
+      // 1 Segment: e.g. "students" -> return complete dictionary map
       if (parts.length === 1) {
         return await idbGetAllMap(root);
-      } else if (parts.length === 2) {
-        return await idbGet(root, parts[1]);
-      } else {
-        const docKey = parts.slice(1).join("_");
-        const res = await idbGet(root, docKey);
-        if (res !== null && res !== undefined) return res;
+      }
+
+      // 2 Segments: e.g. "students/101" or "fees_entries/101"
+      if (parts.length === 2) {
+        // Direct key hit check
+        const direct = await idbGet(root, parts[1]);
+        if (direct !== null && direct !== undefined) return direct;
+
+        // Composite / Prefix matching (e.g. fees_entries, study_material, tests)
         const all = await idbGetAllMap(root);
+        const prefix = parts[1] + "_";
+        const subMap = {};
+
+        for (const [k, v] of Object.entries(all)) {
+          if (
+            k.startsWith(prefix) ||
+            (v && (String(v.admn) === parts[1] || String(v.class) === parts[1] || String(v.username) === parts[1]))
+          ) {
+            subMap[k] = v;
+          }
+        }
+
+        if (Object.keys(subMap).length > 0) return subMap;
         return all[parts[1]] || null;
       }
+
+      // 3 Segments: e.g. "attendance/101/September" or "timetable/1/schedule"
+      if (parts.length >= 3) {
+        const compositeKey = `${parts[1]}_${parts[2]}`;
+        const res = await idbGet(root, compositeKey);
+        if (res !== null && res !== undefined) return res;
+
+        // Fallback direct check
+        const directSecond = await idbGet(root, parts[2]);
+        if (directSecond !== null && directSecond !== undefined) return directSecond;
+
+        const all = await idbGetAllMap(root);
+        if (all[compositeKey]) return all[compositeKey];
+        if (all[parts[1]] && typeof all[parts[1]] === "object") {
+          return all[parts[1]][parts[2]] || null;
+        }
+        return null;
+      }
+
+      return null;
     },
 
+    // --- LOCAL MUTATIONS ---
     setLocal: async function (storeName, key, value) {
-      if (arguments.length === 2) {
-        await idbSetBatch(storeName, key);
+      if (arguments.length === 2 && typeof key === "object") {
+        await idbSetBatch(storeName, key, false);
       } else {
         await idbSet(storeName, key, value);
       }
@@ -267,6 +370,73 @@
       await idbSet(storeName, key, null);
     },
 
+    clearStore: async function (storeName) {
+      await idbClear(storeName);
+    },
+
+    // --- OFFLINE QUEUE & AUTO-FLUSH ENGINE ---
+    queueOfflineAction: async function (actionType, payload) {
+      try {
+        const actionId = `act_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+        const actionItem = {
+          id: actionId,
+          type: actionType,
+          payload: payload,
+          timestamp: Date.now()
+        };
+        await idbSet("sync_queue", actionId, actionItem);
+        console.log(`⚡ [Igris Queue] Offline action registered: ${actionType}`);
+        return true;
+      } catch (e) {
+        console.warn("Queue error:", e);
+        return false;
+      }
+    },
+
+    triggerBackgroundSync: async function () {
+      if (!navigator.onLine || !modules) return;
+      try {
+        const queue = await idbGetAllMap("sync_queue");
+        const items = Object.values(queue);
+        if (items.length === 0) return;
+
+        console.log(`🔄 [Igris Queue] Flushing ${items.length} pending offline actions...`);
+        const { fsDb, setDoc, doc } = modules;
+
+        for (const item of items) {
+          try {
+            if (item.type === "attendance_batch" && Array.isArray(item.payload)) {
+              for (const att of item.payload) {
+                await setDoc(doc(fsDb, "attendance", att.key), {
+                  admn: String(att.admn),
+                  month: att.month,
+                  days: att.daysData,
+                  updatedAt: new Date().toISOString()
+                }, { merge: true });
+              }
+            } else if (item.type === "offline_test" && item.payload) {
+              await setDoc(doc(fsDb, "tests", item.payload.testDocId), item.payload.testData, { merge: true });
+              await setDoc(doc(fsDb, "students", String(item.payload.admn)), { points: item.payload.newPoints }, { merge: true });
+            } else if (item.type === "online_test" && item.payload) {
+              await setDoc(doc(fsDb, "online_tests", String(item.payload.testId)), item.payload.testData, { merge: true });
+            } else if (item.type === "student_update" && item.payload) {
+              await setDoc(doc(fsDb, "students", String(item.payload.admn)), item.payload.studentData, { merge: true });
+              await setDoc(doc(fsDb, "users", String(item.payload.admn)), item.payload.userData, { merge: true });
+            }
+
+            // Successfully processed item ko queue se wipe karein
+            await idbSet("sync_queue", item.id, null);
+          } catch (itemErr) {
+            console.warn(`Retry queued for item ${item.id}:`, itemErr);
+          }
+        }
+        console.log("✔ [Igris Queue] All pending offline operations synchronized.");
+      } catch (err) {
+        console.warn("Queue flush error:", err);
+      }
+    },
+
+    // --- SECURE APP LOCK & BIOMETRIC GATE ---
     setAppLock: async function (userId, pin, enableBiometrics) {
       if (!userId || !pin || pin.length !== 4) return false;
       const lockConfig = {
@@ -307,6 +477,7 @@
     }
   };
 
+  // Anti-tamper Freeze Gate
   Object.freeze(Igris);
   window.Igris = Igris;
   window.AccuEngine = Igris;
