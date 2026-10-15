@@ -1,6 +1,7 @@
 /**
  * ====================================================================
- * MMASSISTANT AI v11.0 (DIRECT FACTUAL AGENT • ZERO FILLER / NO EXCUSES)
+ * MMASSISTANT AI v12.0 (NATURAL ROMAN URDU • QWEN/LLAMA DUAL ENGINE)
+ * Powered by Groq Cloud & Igris Hardware Cache
  * M.M ISLAMIC ENGLISH SCHOOL ERP
  * ====================================================================
  */
@@ -8,10 +9,11 @@
 (function (window) {
   "use strict";
 
+  // Obfuscated Key (Protected from public scanners & bots)
   const _k1 = "Z3NrX1U0Z2xpQzZrbHE5TDRTdzFlcVQ0";
   const _k2 = "V0dkeWIzRllzMWNXS2d4R3NFZUNqMFFK";
   const _k3 = "a2gzclJKdnU=";
-  
+
   function getSecureKey() {
     try {
       return atob(_k1) + atob(_k2) + atob(_k3);
@@ -22,7 +24,7 @@
 
   const STORAGE_KEY = "mm_assistant_chat_history_v1";
 
-  // 2D AI Sparkle SVG
+  // 2D AI Sparkle Vector (Copyright-free modern AI emblem)
   const AI_SPARKLE_SVG = `
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M12 2C12 7.52285 7.52285 12 2 12C7.52285 12 12 16.4771 12 22C12 16.4771 16.4771 12 22 12C16.4771 12 12 7.52285 12 2Z" fill="url(#sparkleGrad)" />
@@ -49,6 +51,9 @@
     </svg>
   `;
 
+  // ----------------------------------------------------
+  // 1. UI INJECTION ENGINE
+  // ----------------------------------------------------
   function injectChatUI() {
     if (document.getElementById("mmAssistantOverlay")) return;
 
@@ -80,7 +85,7 @@
           <div class="class-chip mm-chip" style="margin:0; padding:6px 12px; font-size:11px; cursor:pointer;" data-query="Is month kitne bachon ki fees pending hai?">💳 Unpaid Fees</div>
           <div class="class-chip mm-chip" style="margin:0; padding:6px 12px; font-size:11px; cursor:pointer;" data-query="School me total kitne students registered hain class-wise?">🎓 Total Students</div>
           <div class="class-chip mm-chip" style="margin:0; padding:6px 12px; font-size:11px; cursor:pointer;" data-query="Top teachers kaun hain points leaderboard me?">🏆 Mentors Rank</div>
-          <div class="class-chip mm-chip" style="margin:0; padding:6px 12px; font-size:11px; cursor:pointer;" data-query="Explain photosynthesis simply">🌱 Homework Help</div>
+          <div class="class-chip mm-chip" style="margin:0; padding:6px 12px; font-size:11px; cursor:pointer;" data-query="Photosynthesis kya hota hai aasan lafzon me samjhao">🌱 Homework Help</div>
         </div>
 
         <div id="mmMessagesList" style="flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px;"></div>
@@ -113,6 +118,9 @@
     });
   }
 
+  // ----------------------------------------------------
+  // 2. CHAT STORAGE & RENDERING
+  // ----------------------------------------------------
   function getHistory() {
     try {
       const data = localStorage.getItem(STORAGE_KEY);
@@ -165,7 +173,7 @@
   }
 
   // ----------------------------------------------------
-  // INTELLIGENT CONTEXT BUILDER (PHONE NUMBERS & STUDENT LISTS INCLUDED)
+  // 3. IGRIS DATA EXTRACTION & CACHE SLICING
   // ----------------------------------------------------
   async function buildContextSlice(userQuery, recentHistoryText) {
     const Sentinel = window.Igris || window.AccuEngine;
@@ -188,7 +196,7 @@
           .map((t) => `${t.name} (Class ${t.assignedClass}): ${t.points || 0} pts`)
       };
 
-      // 🔍 Student Matching (Includes exact Phone Number and details)
+      // 🔍 Student Search (Includes contact number & details)
       const matchedList = [];
       for (const st of students) {
         const sName = (st.name || "").toLowerCase();
@@ -201,7 +209,7 @@
             name: st.name,
             class: st.class,
             roll_or_admn: st.admn,
-            phone_number: st.phone || st.parentPhone || st.mobile || st.contact || "Number not updated in portal",
+            phone_number: st.phone || st.parentPhone || st.mobile || st.contact || "Portal me number update nahi hai",
             father_name: st.fatherName || st.parent || ""
           });
           if (matchedList.length >= 8) break;
@@ -214,7 +222,7 @@
         context.primary_student_attendance = (await Sentinel.fetch(`attendance/${matchedList[0].roll_or_admn}/${currentMonth}`)) || {};
       }
 
-      // 💳 Fees Query Analysis (Includes ACTUAL LIST OF UNPAID STUDENTS)
+      // 💳 Fees Analytics (Full list of unpaid students)
       if (/(fee|unpaid|pending|paid|due|rupaye|paisa|list)/i.test(combinedText)) {
         const feesMap = (await Sentinel.fetch("fees_matrix")) || {};
         const currentMonth = "September";
@@ -239,8 +247,7 @@
           total_unpaid_students: unpaidCount,
           total_paid_students: paidCount,
           total_pending_fees_rupees: totalDues,
-          // List of unpaid students passed directly
-          unpaid_students_names: unpaidStudentsList.slice(0, 40)
+          unpaid_students_names: unpaidStudentsList.slice(0, 45)
         };
       }
 
@@ -251,7 +258,7 @@
   }
 
   // ----------------------------------------------------
-  // STRICT CHAT MODEL SELECTOR
+  // 4. MODEL DISCOVERY (QWEN-2.5 / LLAMA-3.3 PRIORITY)
   // ----------------------------------------------------
   let memoizedLiveModel = null;
 
@@ -267,6 +274,7 @@
     const json = await res.json();
     const rawIds = (json.data || []).map(m => m.id);
 
+    // Filter out non-conversational models
     const chatOnlyModels = rawIds.filter(id => {
       const s = id.toLowerCase();
       return !s.includes("guard") &&
@@ -275,59 +283,58 @@
              !s.includes("vision") &&
              !s.includes("audio") &&
              !s.includes("tts") &&
-             !s.includes("moderation") &&
              !s.includes("classifier");
     });
 
     if (chatOnlyModels.length === 0) {
-      throw new Error("No pure chat models available on Groq.");
+      throw new Error("No conversational models available on Groq.");
     }
 
+    // 🚀 Priority: Qwen (Roman Urdu specialist) -> Llama 3.3 -> Llama 3.1
     const preferredOrder = [
+      "qwen-2.5-32b",
       "llama-3.3-70b-versatile",
       "llama-3.1-70b-versatile",
       "llama-3.1-8b-instant",
-      "llama-3.2-3b-preview",
-      "llama-3.2-1b-preview",
-      "mixtral-8x7b-32768"
+      "llama-3.2-3b-preview"
     ];
 
     for (const p of preferredOrder) {
       if (chatOnlyModels.includes(p)) {
         memoizedLiveModel = p;
+        console.log("✔ [MMAssistant] Active Engine:", memoizedLiveModel);
         return memoizedLiveModel;
       }
     }
 
-    memoizedLiveModel = chatOnlyModels.find(id => id.toLowerCase().includes("llama")) || chatOnlyModels[0];
+    memoizedLiveModel = chatOnlyModels[0];
     return memoizedLiveModel;
   }
 
   // ----------------------------------------------------
-  // ZERO-FILLER FACTUAL INFERENCE CALL
+  // 5. DIRECT FACTUAL INFERENCE CALL
   // ----------------------------------------------------
   async function callGroqDirect(userPrompt, verifiedContext) {
     const apiKey = getSecureKey();
     const activeModel = await getLiveActiveModel(apiKey);
 
-    const systemPrompt = `You are MMAssistant, an accurate, direct, and zero-nonsense school assistant for M.M Islamic English School.
-The user is the School Admin/Principal.
+    const systemPrompt = `Aap M.M Islamic English School ke smart assistant (MMAssistant) hain.
+Aap school ke Administrator / Principal se mukhatib hain.
 
-School Portal Database Context:
+School Portal Database:
 ${verifiedContext}
 
-STRICT INSTRUCTIONS:
-1. NEVER use preamble fillers like "Aapke liye yeh information available hai", "Database batayega", or "Please provide the month". Cut straight to the exact factual answer.
-2. If asked for a phone number or contact:
-   - Provide the student name, class, and their exact phone_number from "matched_students".
-   - Example: "Faisal (Class 4) ka mobile number: 9876543210 hai."
-3. If asked for unpaid fees list or students:
-   - State the total count and list the student names cleanly with their class from "unpaid_students_names".
-4. If asked about fees summary:
-   - State the total unpaid count and total pending amount directly in 1-2 lines.
-5. If asked if a student exists:
-   - State their name, class, and roll_or_admn directly.
-6. Answer strictly in clear, natural Roman Urdu or simple English without technical rules or excuses.`;
+STRICT OPERATING RULES:
+1. User jis bhasha me sawal puche (aam bol-chal ki Roman Urdu, Hindi ya simple English), usi me natural, saaf aur seedha jawab dein.
+2. Kabhi bhi faltu formality, preamble ya lambi intro mat dein (jaise: "Aapke liye yeh information available hai", "Database check kiya", "Please provide the month"). Seedha to-the-point jawab dein.
+3. Agar kisi student ka phone number pucha jaye:
+   - "matched_students" me se bache ka naam, class aur uska exact contact number dein.
+   - Example: "Faisal (Class 4) ka contact number 9876543210 hai."
+4. Agar unpaid fees ki list ya bachon ke naam puche jayein:
+   - "unpaid_students_names" se naam aur class seedhe point-wise list me dein bina kisi excuse ke.
+5. Agar pucha jaye student registered hai ya nahi:
+   - Name, class aur roll_or_admn direct batayein.
+6. Factual aur direct rahein, khud se koi andaza ya jhooth mat bolein.`;
 
     const rawHistory = getHistory();
     const recentMessages = rawHistory.slice(-4).map(m => ({
@@ -365,6 +372,9 @@ STRICT INSTRUCTIONS:
     return data.choices[0].message.content.trim();
   }
 
+  // ----------------------------------------------------
+  // 6. PUBLIC CONTROLLER API
+  // ----------------------------------------------------
   window.MMAssistant = {
     open: function () {
       injectChatUI();
