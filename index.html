@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+l<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -5479,20 +5479,46 @@ Exact Output JSON Format Required:
     }
 
     // M.M ISLAMIC PURANA FEE STRUCTURE ENGINE (WITH CONCESSION SUPPORT)
-    window.getFeeStructure = function(cls) {
-      const cleanCls = cleanClassStr(cls);
-      const isNurseryOrKG = ["Nursery", "Jr. KG", "Sr. KG"].includes(cleanCls);
-      const monthlyRate = isNurseryOrKG ? 400 : 500;
-      const termRate = isNurseryOrKG ? 400 : 500;
-      const examRate = isNurseryOrKG ? 400 : 450;
-      return {
-        type: "monthly",
-        rate: monthlyRate,
-        termRate: termRate,
-        examRate: examRate,
-        list: ["June", "July", "August", "September", "October", "November", "December", "January", "February", "March", "April", "May", "1st Term", "1st Exam", "2nd Term", "2nd Exam"]
-      };
-    };
+    // 💰 Universal Robust Fee Structure (Handles Jr. KG, Sr. KG, Nursery & All Standards)
+  window.getFeeStructure = function(cls) {
+    const raw = String(cls || "").trim().toLowerCase();
+    const monthlyList = ["June", "July", "August", "September", "October", "November", "December", "January", "February", "March", "April", "May"];
+    
+    // KG / Pre-Primary checks
+    if(raw.includes("jr") || raw.includes("junior")) return { rate: 450, list: monthlyList };
+    if(raw.includes("sr") || raw.includes("senior")) return { rate: 450, list: monthlyList };
+    if(raw.includes("nur")) return { rate: 400, list: monthlyList };
+
+    // Standard numeric checks
+    const c = cleanClassStr(cls);
+    if(c === "1" || c === "2") return { rate: 500, list: monthlyList };
+    if(c === "3" || c === "4") return { rate: 550, list: monthlyList };
+    if(c === "5" || c === "6" || c === "7") return { rate: 600, list: monthlyList };
+    if(c === "8" || c === "9" || c === "10") return { rate: 700, list: monthlyList };
+
+    return { rate: 500, list: monthlyList };
+  };
+
+  // 🔍 Universal Matrix Fee Matcher: "June" aur "June Fee" dono ko automatically match karega
+  window.getMatrixFeeRecord = function(stMatrix, feeName) {
+    if (!stMatrix || typeof stMatrix !== 'object') return null;
+    const target = String(feeName || "").trim().toLowerCase();
+    const targetNoFee = target.replace(/\s*fee$/i, '').trim();
+
+    for (const [k, v] of Object.entries(stMatrix)) {
+      if (!v) continue;
+      const kLower = String(k).trim().toLowerCase();
+      const kNoFee = kLower.replace(/\s*fee$/i, '').trim();
+
+      if (kLower === target || kNoFee === targetNoFee || kLower === targetNoFee + " fee") {
+        if (v.paid === true || v.paid === "true" || v.status === "paid") {
+          return v;
+        }
+      }
+    }
+    return null;
+  };
+
 
 
       
@@ -7981,30 +8007,59 @@ document.getElementById("hwTitleInput").value = "";
     });
 
 
-       addSafeListener("sGenerateFeesCardBtn", "click", () => {
+     
+    // 💳 Student Profile: Fees Card Generator (No NaN & Full Fee Heads)
+    addSafeListener("sGenerateFeesCardBtn", "click", () => {
       const btn = document.getElementById("sGenerateFeesCardBtn");
       runWithBtnSpinner(btn, "Generate Fees Card", async () => {
         const student = await getStudentRecord(currentStudentAdmn);
         if(!student) return;
         
-        const studentMatrix = await safeDataFetch(`fees_matrix/${currentStudentAdmn}`) || {};
+        const rawMatrix = await safeDataFetch(`fees_matrix/${currentStudentAdmn}`) || {};
+        const stMatrix = rawMatrix.matrix || rawMatrix;
         const struct = window.getFeeStructure(student.class);
-        const monthlyRate = student.customFee !== undefined ? parseFloat(student.customFee) : struct.rate;
+
+        const parsedCustom = student.customFee !== undefined ? parseFloat(student.customFee) : NaN;
+        const validMonthlyRate = !isNaN(parsedCustom) ? parsedCustom : (Number(struct.rate) || 500);
 
         const thead = document.getElementById("sFeesCardHead");
         const tbody = document.getElementById("sFeesCardBody");
         thead.innerHTML = "<tr><th>Fee Type</th><th>Fees</th><th>Status</th><th>Payment Details</th></tr>";
-        tbody.innerHTML = "";
 
-        struct.list.forEach(item => {
-          const rec = studentMatrix[item];
-          const isPaid = rec && rec.paid;
-          let itemRate = monthlyRate;
-          if (item.includes("Term")) itemRate = struct.termRate;
-          else if (item.includes("Exam")) itemRate = struct.examRate;
+        const feeTypesList = [
+          { name: "June Fee", amount: validMonthlyRate },
+          { name: "July Fee", amount: validMonthlyRate },
+          { name: "August Fee", amount: validMonthlyRate },
+          { name: "September Fee", amount: validMonthlyRate },
+          { name: "October Fee", amount: validMonthlyRate },
+          { name: "November Fee", amount: validMonthlyRate },
+          { name: "December Fee", amount: validMonthlyRate },
+          { name: "January Fee", amount: validMonthlyRate },
+          { name: "February Fee", amount: validMonthlyRate },
+          { name: "March Fee", amount: validMonthlyRate },
+          { name: "April Fee", amount: validMonthlyRate },
+          { name: "May Fee", amount: validMonthlyRate },
+          { name: "1st Term Fee", amount: 400 },
+          { name: "1st Exam Fee", amount: 400 },
+          { name: "2nd Term Fee", amount: 400 },
+          { name: "2nd Exam Fee", amount: 400 }
+        ];
 
-          tbody.innerHTML += `<tr><td style="font-weight:700;">${item} Fee</td><td>₹${itemRate}</td><td class="${isPaid ? 'paid-cell' : ''}">${isPaid ? 'PAID ✔' : '-'}</td><td>${isPaid ? (rec.date || 'Recorded') : '-'}</td></tr>`;
+        let tableHtml = "";
+        feeTypesList.forEach(item => {
+          const mRec = window.getMatrixFeeRecord(stMatrix, item.name);
+          const isPaid = !!mRec;
+          const payDate = isPaid ? (mRec.date || '-') : '-';
+          tableHtml += `
+            <tr>
+              <td>${item.name}</td>
+              <td><b>₹${item.amount}</b></td>
+              <td class="${isPaid ? 'paid-cell' : ''}" style="font-weight:800;">${isPaid ? 'PAID ✔' : '-'}</td>
+              <td>${payDate}</td>
+            </tr>
+          `;
         });
+        tbody.innerHTML = tableHtml;
         document.getElementById("sFeesCardViewArea").style.display = "block";
       });
     });
@@ -9116,7 +9171,7 @@ document.getElementById("hwTitleInput").value = "";
 
 
     
-    // 🔍 Fees Overview Dashboard: Get Stats Fix
+        // 🔍 Fees Overview Dashboard: Get Stats Fix (Universal Matcher)
     addSafeListener("getStatsBtn", "click", () => {
       const btn = document.getElementById("getStatsBtn");
       runWithBtnSpinner(btn, "Get Stats", async () => {
@@ -9140,7 +9195,7 @@ document.getElementById("hwTitleInput").value = "";
           students.forEach(st => {
             const docMatrix = rawMatrix[st.admn] || {};
             const stMatrix = docMatrix.matrix || docMatrix;
-            const isPaid = stMatrix[month] && stMatrix[month].paid;
+            const isPaid = !!window.getMatrixFeeRecord(stMatrix, month);
 
             if(isPaid) paidCount++; else unpaidCount++;
             const tr = document.createElement("tr");
@@ -9254,7 +9309,7 @@ document.getElementById("hwTitleInput").value = "";
     });
 
 
-       // 🔍 Track Fees Matrix Table: Direct Unpacked Matrix Fix
+              // 🔍 Track Fees Matrix Table: Accurate June/July/August Tick Fix
     addSafeListener("trackFeesBtn", "click", () => {
       const btn = document.getElementById("trackFeesBtn");
       runWithBtnSpinner(btn, "Track Fees Matrix", async () => {
@@ -9280,7 +9335,7 @@ document.getElementById("hwTitleInput").value = "";
             const stMatrix = docMatrix.matrix || docMatrix;
             let rowHtml = `<tr><td style="text-align:left; padding-left:10px; font-weight:700;">${st.name}</td>`;
             struct.list.forEach(m => {
-              const isPaid = stMatrix[m] && stMatrix[m].paid;
+              const isPaid = !!window.getMatrixFeeRecord(stMatrix, m);
               rowHtml += `<td class="${isPaid ? 'paid-cell' : ''}" style="font-weight:800;">${isPaid ? '✔' : '-'}</td>`;
             });
             rowHtml += `</tr>`;
@@ -9293,39 +9348,68 @@ document.getElementById("hwTitleInput").value = "";
     });
 
 
+      // 💳 Admin Fees Card Generator (₹NaN Hatakar Actual Rates & 16 Heads Render Karna)
     addSafeListener("generateCardBtn", "click", () => {
       const btn = document.getElementById("generateCardBtn");
       runWithBtnSpinner(btn, "Generate Fees Card", async () => {
         const admn = document.getElementById("cardSelectedAdmn").value;
-        if(!admn) { alert("Please select a student."); return; }
+        if(!admn) { window.showCustomAlert("Please select a student."); return; }
 
         const student = await getStudentRecord(admn);
-        if(!student) { alert("Student details not found."); return; }
+        if(!student) { window.showCustomAlert("Student details not found."); return; }
 
-               const studentMatrix = await safeDataFetch(`fees_matrix/${admn}`) || {};
- const struct = window.getFeeStructure(student.class);
+        const rawMatrix = await safeDataFetch(`fees_matrix/${admn}`) || {};
+        const stMatrix = rawMatrix.matrix || rawMatrix;
+        const struct = window.getFeeStructure(student.class);
+
+        const parsedCustom = student.customFee !== undefined ? parseFloat(student.customFee) : NaN;
+        const validMonthlyRate = !isNaN(parsedCustom) ? parsedCustom : (Number(struct.rate) || 500);
 
         document.getElementById("cardStudentHeaderName").innerText = `Student Name: ${student.name}`;
         document.getElementById("cardStudentHeaderClass").innerText = `Class: ${student.class} | Admn No: ${student.admn}`;
 
         const thead = document.getElementById("cardDisplayHead");
         const tbody = document.getElementById("cardDisplayBody");
-        tbody.innerHTML = "";
-
-                const monthlyRate = student.customFee !== undefined ? parseFloat(student.customFee) : struct.rate;
         thead.innerHTML = "<tr><th>Fee Type</th><th>Fees</th><th>Status</th><th>Payment Details</th></tr>";
-        struct.list.forEach(item => {
-          const rec = studentMatrix[item];
-          const isPaid = rec && rec.paid;
-          let itemRate = monthlyRate;
-          if (item.includes("Term")) itemRate = struct.termRate;
-          else if (item.includes("Exam")) itemRate = struct.examRate;
 
-          tbody.innerHTML += `<tr><td style="font-weight:700;">${item} Fee</td><td>${isPaid ? '₹' + itemRate : '₹' + itemRate}</td><td class="${isPaid ? 'paid-cell' : ''}">${isPaid ? 'PAID ✔' : '-'}</td><td>${isPaid ? (rec.date || 'Recorded') : '-'}</td></tr>`;
+        const feeTypesList = [
+          { name: "June Fee", amount: validMonthlyRate },
+          { name: "July Fee", amount: validMonthlyRate },
+          { name: "August Fee", amount: validMonthlyRate },
+          { name: "September Fee", amount: validMonthlyRate },
+          { name: "October Fee", amount: validMonthlyRate },
+          { name: "November Fee", amount: validMonthlyRate },
+          { name: "December Fee", amount: validMonthlyRate },
+          { name: "January Fee", amount: validMonthlyRate },
+          { name: "February Fee", amount: validMonthlyRate },
+          { name: "March Fee", amount: validMonthlyRate },
+          { name: "April Fee", amount: validMonthlyRate },
+          { name: "May Fee", amount: validMonthlyRate },
+          { name: "1st Term Fee", amount: 400 },
+          { name: "1st Exam Fee", amount: 400 },
+          { name: "2nd Term Fee", amount: 400 },
+          { name: "2nd Exam Fee", amount: 400 }
+        ];
+
+        let tableHtml = "";
+        feeTypesList.forEach(item => {
+          const mRec = window.getMatrixFeeRecord(stMatrix, item.name);
+          const isPaid = !!mRec;
+          const payDate = isPaid ? (mRec.date || '-') : '-';
+          tableHtml += `
+            <tr>
+              <td>${item.name}</td>
+              <td><b>₹${item.amount}</b></td>
+              <td class="${isPaid ? 'paid-cell' : ''}" style="font-weight:800;">${isPaid ? 'PAID ✔' : '-'}</td>
+              <td>${payDate}</td>
+            </tr>
+          `;
         });
+        tbody.innerHTML = tableHtml;
         document.getElementById("feesCardDisplayArea").style.display = "block";
-        });
+      });
     });
+
 
     addSafeListener("loadEditingMatrixBtn", "click", () => {
       const btn = document.getElementById("loadEditingMatrixBtn");
@@ -10621,19 +10705,50 @@ document.getElementById("hwTitleInput").value = "";
 
       
 
-          // 🎓 Student Due Tests: Direct RTDB se load & Expired tests bacho ke liye completely hide honge
+            // 🎓 Student Due Tests: Direct RTDB & Class Fallback Fix
     async function loadStudentDueTests() {
       const container = document.getElementById("sDueOnlineTestsContainer");
       if(!container) return;
       container.innerHTML = `<p style="font-size:12px; color:var(--text-muted);">Loading due tests...</p>`;
 
-      const classKey = cleanClassStr(assignedClass);
+      const stObj = await getStudentRecord(currentStudentAdmn);
+      const classKey = cleanClassStr(stObj ? stObj.class : assignedClass);
+
       let testsData = {};
       let myAttempted = {};
 
-      
+      try {
+        // 1. Direct class folder se check karein
+        const testsSnap = await get(ref(db, `online_tests/${classKey}`));
+        if(testsSnap.exists()) {
+          testsData = testsSnap.val();
+        } else {
+          // 2. Fallback root search
+          const allSnap = await get(ref(db, "online_tests"));
+          if(allSnap.exists()) {
+            const allObj = allSnap.val();
+            Object.entries(allObj).forEach(([k, v]) => {
+              if (v && cleanClassStr(v.class) === classKey) {
+                testsData[k] = v;
+              }
+            });
+          }
+        }
+
+        // Firestore se attempt records check karein
+        const attemptsSnap = await getDocs(collection(fsDb, "test_attempts"));
+        attemptsSnap.forEach(d => {
+          const data = d.data();
+          if(String(data.admn) === String(currentStudentAdmn)) {
+            myAttempted[data.testId] = data;
+          }
+        });
+      } catch (e) {
+        console.warn("Tests loading error:", e);
+      }
 
       container.innerHTML = "";
+
 
       if(testsData && typeof testsData === 'object' && Object.keys(testsData).length > 0) {
         let count = 0;
@@ -11190,7 +11305,8 @@ document.getElementById("hwTitleInput").value = "";
         }
       });
 
-      // 2. Calculate Due Fees Upto Current Month
+      
+          // 2. Calculate Due Fees Upto Current Month (Safe Number Parsing & Universal Matrix Match)
       const academicMonths = ["June", "July", "August", "September", "October", "November", "December", "January", "February", "March", "April", "May"];
       const activeMonthsToEvaluate = [];
       for(let m of academicMonths) { 
@@ -11205,16 +11321,72 @@ document.getElementById("hwTitleInput").value = "";
       liveStudents.forEach(st => {
         if(!st || !st.class || !st.admn) return;
         const struct = window.getFeeStructure(st.class);
-        const feeRate = st.customFee !== undefined ? parseFloat(st.customFee) : struct.rate;
+        const parsedCustom = st.customFee !== undefined ? parseFloat(st.customFee) : NaN;
+        const feeRate = !isNaN(parsedCustom) ? parsedCustom : (Number(struct.rate) || 500);
+
         const docMatrix = rawMatrix[st.admn] || {};
         const stMatrix = docMatrix.matrix || docMatrix;
 
         activeMonthsToEvaluate.forEach(mName => {
-          const rec = stMatrix[mName];
-          if(!rec || !rec.paid) {
+          const isPaid = !!window.getMatrixFeeRecord(stMatrix, mName);
+          if(!isPaid) {
             totalDueUptoCurrentMonth += feeRate;
           }
         });
+      });
+
+      collectedEl.innerText = `₹${totalCollectedCurrentMonth.toLocaleString('en-IN')}`;
+      dueEl.innerText = `₹${Math.round(totalDueUptoCurrentMonth).toLocaleString('en-IN')}`;
+    };
+
+    window.renderFeesDueDetailTable = async function(selectedClass) {
+      const tbody = document.getElementById("dueModalTableBody");
+      const summaryText = document.getElementById("dueModalTotalSummaryText");
+      const tableWrap = document.getElementById("dueModalTableContainer");
+      if (!tbody) return;
+      if (tableWrap) tableWrap.style.height = "82px";
+      tbody.innerHTML = `<tr><td colspan="5" style="padding:14px; text-align:center;">⏳ Calculating due records...</td></tr>`;
+
+      const currentMonthName = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][new Date().getMonth()];
+      const academicMonths = ["June", "July", "August", "September", "October", "November", "December", "January", "February", "March", "April", "May"];
+      const activeMonthsToEvaluate = [];
+      for(let m of academicMonths) { activeMonthsToEvaluate.push(m); if(m === currentMonthName) break; }
+
+      const liveStudents = getLiveStudents();
+      const rawMatrix = await safeDataFetch("fees_matrix") || {};
+      let dueList = [], grandTotalDue = 0;
+
+      liveStudents.forEach(st => {
+        if(!st || !st.class || !st.admn) return;
+        const cleanCls = cleanClassStr(st.class);
+        if (selectedClass !== "ALL" && cleanCls !== cleanClassStr(selectedClass)) return;
+
+        const struct = window.getFeeStructure(cleanCls);
+        const parsedCustom = st.customFee !== undefined ? parseFloat(st.customFee) : NaN;
+        const feeRate = !isNaN(parsedCustom) ? parsedCustom : (Number(struct.rate) || 500);
+
+        const docMatrix = rawMatrix[st.admn] || {};
+        const stMatrix = docMatrix.matrix || docMatrix;
+        let dueMonths = [], studentTotalDue = 0;
+
+        if (currentFeeListMode === "UNPAID") {
+          activeMonthsToEvaluate.forEach(mName => {
+            const isPaid = !!window.getMatrixFeeRecord(stMatrix, mName);
+            if(!isPaid) { 
+              dueMonths.push(mName); 
+              studentTotalDue += feeRate; 
+            }
+          });
+        } else {
+          activeMonthsToEvaluate.forEach(mName => {
+            const mRec = window.getMatrixFeeRecord(stMatrix, mName);
+            if(mRec) { 
+              dueMonths.push(mName); 
+              studentTotalDue += (parseFloat(mRec.amount) || feeRate); 
+            }
+          });
+        }
+
       });
 
       collectedEl.innerText = `₹${totalCollectedCurrentMonth.toLocaleString('en-IN')}`;
