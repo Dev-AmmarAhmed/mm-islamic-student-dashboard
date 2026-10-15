@@ -5707,7 +5707,8 @@ Exact Output JSON Format Required:
 
     
 
-        async function safeDataFetch(refPath) {
+   // ⚡ Universal Safe Data Fetch (Auto Unpacks fees_matrix & fees_entries)
+  async function safeDataFetch(refPath) {
     if (!refPath) return null;
     const Sentinel = window.Igris || window.AccuEngine;
 
@@ -5730,7 +5731,16 @@ Exact Output JSON Format Required:
       if (parts.length === 1) {
         const snap = await getDocs(collection(fsDb, collectionName));
         const map = {};
-        snap.forEach(d => { map[d.id] = d.data(); });
+        snap.forEach(d => { 
+          const dt = d.data();
+          // Fees Matrix ke doc me se direct matrix extract karein
+          if (collectionName === "fees_matrix") {
+            map[d.id] = dt.matrix || dt;
+          } else {
+            map[d.id] = dt;
+          }
+        });
+
         if (Sentinel && typeof Sentinel.setLocal === "function" && Object.keys(map).length > 0) {
           for (const [k, v] of Object.entries(map)) {
             await Sentinel.setLocal(collectionName, k, v);
@@ -5738,9 +5748,22 @@ Exact Output JSON Format Required:
         }
         return map;
       } else if (parts.length === 2) {
+        // Kisi specific student ke fees_entries load karna (e.g. fees_entries/1)
+        if (collectionName === "fees_entries") {
+          const snapAll = await getDocs(collection(fsDb, "fees_entries"));
+          const map = {};
+          snapAll.forEach(d => {
+            const data = d.data();
+            if (String(data.admn) === String(parts[1]) || d.id.startsWith(parts[1] + "_")) {
+              map[d.id] = data;
+            }
+          });
+          return map;
+        }
+
         let docSnap = await getDoc(doc(fsDb, collectionName, parts[1]));
         if (!docSnap.exists()) {
-          // Agar direct ID na mile, toh class filter check karo (study_material / homework)
+          // Agar direct ID na mile, toh class filter check karo
           const snapAll = await getDocs(collection(fsDb, collectionName));
           const map = {};
           snapAll.forEach(d => {
@@ -5751,13 +5774,16 @@ Exact Output JSON Format Required:
           });
           if (Object.keys(map).length > 0) return map;
         }
+
         const docData = docSnap.exists() ? docSnap.data() : null;
+        if (docData && collectionName === "fees_matrix") {
+          return docData.matrix || docData;
+        }
         if (docData && Sentinel && typeof Sentinel.setLocal === "function") {
           await Sentinel.setLocal(collectionName, parts[1], docData);
         }
         return docData;
       } else if (parts.length === 3) {
-        // e.g. attendance/1/September -> composite doc ID: 1_September
         const compositeKey = `${parts[1]}_${parts[2]}`;
         let docSnap = await getDoc(doc(fsDb, collectionName, compositeKey));
         if (!docSnap.exists()) {
@@ -5774,6 +5800,8 @@ Exact Output JSON Format Required:
 
     return null;
   }
+
+
 
 
 
@@ -9088,28 +9116,39 @@ document.getElementById("hwTitleInput").value = "";
 
 
     
+    // 🔍 Fees Overview Dashboard: Get Stats Fix
     addSafeListener("getStatsBtn", "click", () => {
       const btn = document.getElementById("getStatsBtn");
       runWithBtnSpinner(btn, "Get Stats", async () => {
         const std = document.getElementById("homeStdSelect").value;
         const month = document.getElementById("homeMonthSelect").value;
-        if(!std) { alert("Please select Standard."); return; }
+        if(!std) { 
+          window.showCustomAlert("Please select Standard."); 
+          return; 
+        }
 
         const students = getLiveStudents().filter(s => cleanClassStr(s.class) === cleanClassStr(std));
-        const matrix = await safeDataFetch("fees_matrix") || {};
+        const rawMatrix = await safeDataFetch("fees_matrix") || {};
 
         let paidCount = 0; let unpaidCount = 0;
         const tbody = document.getElementById("homeFeeListBody");
         tbody.innerHTML = "";
 
         if (students.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="3" style="color:var(--text-muted);">No students registered in Class ${std}</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="3" style="color:var(--text-muted); padding:12px;">No students registered in Class ${std}</td></tr>`;
         } else {
           students.forEach(st => {
-            const isPaid = matrix[st.admn] && matrix[st.admn][month] && matrix[st.admn][month].paid;
+            const docMatrix = rawMatrix[st.admn] || {};
+            const stMatrix = docMatrix.matrix || docMatrix;
+            const isPaid = stMatrix[month] && stMatrix[month].paid;
+
             if(isPaid) paidCount++; else unpaidCount++;
             const tr = document.createElement("tr");
-            tr.innerHTML = `<td>${st.admn}</td><td style="text-align:left; padding-left:8px;">${st.name}</td><td class="${isPaid ? 'paid-cell' : ''}">${isPaid ? 'PAID ✔' : 'UNPAID ❌'}</td>`;
+            tr.innerHTML = `
+              <td><b>${st.admn}</b></td>
+              <td style="text-align:left; padding-left:8px; font-weight:700;">${st.name}</td>
+              <td class="${isPaid ? 'paid-cell' : ''}" style="font-weight:800;">${isPaid ? 'PAID ✔' : 'UNPAID ❌'}</td>
+            `;
             tbody.appendChild(tr);
           });
         }
@@ -9119,6 +9158,8 @@ document.getElementById("hwTitleInput").value = "";
       });
     });
 
+
+      // 📝 Add Fees Entry: 100% Pure Firestore Save & Instant Analytics Update
     addSafeListener("submitFeeEntryBtn", "click", () => {
       const btn = document.getElementById("submitFeeEntryBtn");
       runWithBtnSpinner(btn, "Submit Entry", async () => {
@@ -9127,26 +9168,33 @@ document.getElementById("hwTitleInput").value = "";
         const mode = document.getElementById("feeModalMode").value;
         const selectedChks = Array.from(document.querySelectorAll(".fee-chk:checked")).map(c => c.value);
 
-        if(!admn || selectedChks.length === 0 || !total) { alert("Please select Student, Fee Types, and enter Amount."); return; }
+        if(!admn || selectedChks.length === 0 || !total) { 
+          window.showCustomAlert("Please select Student, Fee Types, and enter Amount."); 
+          return; 
+        }
 
-                const dateStr = getTodayFormattedDate();
+        const dateStr = getTodayFormattedDate();
         const entryId = Date.now().toString();
-        const updates = {};
-        updates[`fees_entries/${admn}/${entryId}`] = { id: entryId, admn: admn, types: selectedChks, amount: total, mode: mode, date: dateStr };
+        const docKey = `${admn}_${entryId}`;
+        const student = await getStudentRecord(admn);
+        const stName = student ? student.name : "Student";
 
-        selectedChks.forEach(feeType => {
-          updates[`fees_matrix/${admn}/${feeType}`] = { paid: true, date: dateStr, amount: total };
-        });
-        await update(ref(db), updates);
+        const entryPayload = {
+          id: entryId,
+          docKey: docKey,
+          admn: String(admn),
+          studentName: stName,
+          types: selectedChks,
+          amount: total,
+          mode: mode,
+          date: dateStr,
+          createdAt: new Date().toISOString()
+        };
 
-        // 🚀 Firestore Sync via AccuEngine
         try {
-          // 1. Fee Entry Document
-          await setDoc(doc(fsDb, "fees_entries", `${admn}_${entryId}`), {
-            id: entryId, admn: String(admn), types: selectedChks, amount: total, mode: mode, date: dateStr, entryId: entryId
-          }, { merge: true });
+          // 🚀 1. Pure Firestore Saves
+          await setDoc(doc(fsDb, "fees_entries", docKey), entryPayload, { merge: true });
 
-          // 2. Fees Matrix Document
           const matrixDocRef = doc(fsDb, "fees_matrix", String(admn));
           const matrixSnap = await getDoc(matrixDocRef);
           let currentMatrix = matrixSnap.exists() && matrixSnap.data().matrix ? matrixSnap.data().matrix : {};
@@ -9155,27 +9203,48 @@ document.getElementById("hwTitleInput").value = "";
           });
           await setDoc(matrixDocRef, { admn: String(admn), matrix: currentMatrix, updatedAt: new Date().toISOString() }, { merge: true });
 
-          // Invalidate Local Cache
-          if (window.AccuEngine) {
-            await window.AccuEngine.invalidate("fees_matrix", admn);
-            await window.AccuEngine.invalidate("fees_entries", admn);
+          // 🚀 2. Invalidate Local Cache
+          const Sentinel = window.Igris || window.AccuEngine;
+          if (Sentinel && typeof Sentinel.invalidate === "function") {
+            await Sentinel.invalidate("fees_matrix", admn);
+            await Sentinel.invalidate("fees_entries", docKey);
           }
+
+          lastGeneratedReceipt = { studentName: stName, phone: student ? student.phone : "", amount: total, types: selectedChks.join(", "), date: dateStr };
+
+          if (typeof window.calculateAdminEntryTabAnalytics === "function") {
+            window.calculateAdminEntryTabAnalytics();
+          }
+
+          document.getElementById("feeSubmittedStatusBox").style.display = "block";
+          window.showCustomAlert(`✔ Fees entry successfully saved for ${stName}!\nAmount: ₹${total}`);
+
         } catch (fsErr) {
-          console.warn("Firestore fee sync warning:", fsErr);
+          window.showCustomAlert("Error saving fee entry to Firestore: " + fsErr.message);
         }
-
-        const student = await getStudentRecord(admn);
-               lastGeneratedReceipt = { studentName: student ? student.name : "Student", phone: student ? student.phone : "", amount: total, types: selectedChks.join(", "), date: dateStr };
-
-        // Push Fee Notification to Student
-        const feeMonthsStr = selectedChks.join(", ");
-        await window.pushAppNotification(admn, "Fees Submitted ✔️", `Fees submitted for ${feeMonthsStr}. Amount: ₹${total}`, "fee_paid", { amount: total, months: feeMonthsStr });
-
-        document.getElementById("feeSubmittedStatusBox").style.display = "block";
-
-        alert("Fee entry saved successfully.");
       });
     });
+
+    // 🗑️ Delete Fee Entry: Direct Firestore Doc Deletion
+    window.deleteFeeEntry = async function(admn, entryDocId) {
+      window.showCustomConfirm("Kya aap waqai is fee transaction log ko delete karna chahte hain?", async () => {
+        try {
+          const docId = String(entryDocId).includes('_') ? entryDocId : `${admn}_${entryDocId}`;
+          await deleteDoc(doc(fsDb, "fees_entries", String(docId)));
+          
+          const Sentinel = window.Igris || window.AccuEngine;
+          if (Sentinel && typeof Sentinel.invalidate === "function") {
+            await Sentinel.invalidate("fees_entries", docId);
+          }
+
+          window.showCustomAlert("✔ Fee entry successfully removed from Firestore.");
+          if (typeof window.loadSystemFeesLogs === "function") window.loadSystemFeesLogs();
+          if (typeof window.calculateAdminEntryTabAnalytics === "function") window.calculateAdminEntryTabAnalytics();
+        } catch(err) {
+          window.showCustomAlert("Error deleting fee entry: " + err.message);
+        }
+      });
+    };
 
       addSafeListener("sendWhatsappReceiptBtn", "click", () => {
       if(!lastGeneratedReceipt) return;
@@ -9185,12 +9254,13 @@ document.getElementById("hwTitleInput").value = "";
     });
 
 
+       // 🔍 Track Fees Matrix Table: Direct Unpacked Matrix Fix
     addSafeListener("trackFeesBtn", "click", () => {
       const btn = document.getElementById("trackFeesBtn");
       runWithBtnSpinner(btn, "Track Fees Matrix", async () => {
         const std = document.getElementById("trackStdSelect").value;
         const students = getLiveStudents().filter(s => cleanClassStr(s.class) === cleanClassStr(std));
-        const matrix = await safeDataFetch("fees_matrix") || {};
+        const rawMatrix = await safeDataFetch("fees_matrix") || {};
 
         const struct = window.getFeeStructure(std);
         const thead = document.getElementById("trackMatrixHead");
@@ -9203,13 +9273,15 @@ document.getElementById("hwTitleInput").value = "";
 
         tbody.innerHTML = "";
         if (students.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="${struct.list.length + 1}" style="color:var(--text-muted);">No records found for Class ${std}</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="${struct.list.length + 1}" style="color:var(--text-muted); padding:14px; text-align:center;">No records found for Class ${std}</td></tr>`;
         } else {
           students.forEach(st => {
+            const docMatrix = rawMatrix[st.admn] || {};
+            const stMatrix = docMatrix.matrix || docMatrix;
             let rowHtml = `<tr><td style="text-align:left; padding-left:10px; font-weight:700;">${st.name}</td>`;
             struct.list.forEach(m => {
-              const isPaid = matrix[st.admn] && matrix[st.admn][m] && matrix[st.admn][m].paid;
-              rowHtml += `<td class="${isPaid ? 'paid-cell' : ''}">${isPaid ? '✔' : '-'}</td>`;
+              const isPaid = stMatrix[m] && stMatrix[m].paid;
+              rowHtml += `<td class="${isPaid ? 'paid-cell' : ''}" style="font-weight:800;">${isPaid ? '✔' : '-'}</td>`;
             });
             rowHtml += `</tr>`;
             tbody.innerHTML += rowHtml;
@@ -9219,6 +9291,7 @@ document.getElementById("hwTitleInput").value = "";
         document.getElementById("trackMatrixArea").style.display = "block";
       });
     });
+
 
     addSafeListener("generateCardBtn", "click", () => {
       const btn = document.getElementById("generateCardBtn");
@@ -10254,20 +10327,37 @@ document.getElementById("hwTitleInput").value = "";
       window.loadSystemFeesLogs();
     };
 
-       window.loadSystemFeesLogs = async function() {
+
+          // 📜 System Fees Logs: Flat Firestore & Nested Dual Support
+    window.loadSystemFeesLogs = async function() {
       const tbody = document.getElementById("systemFeesLogsBody");
       if(!tbody) return;
-      tbody.innerHTML = `<tr><td colspan="7" style="padding:12px;">Loading logs...</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7" style="padding:14px; text-align:center;">⏳ Loading system logs from Firestore...</td></tr>`;
 
       const allEntries = await safeDataFetch("fees_entries") || {};
       const liveStudents = getLiveStudents();
       let flatEntriesList = [];
 
-      Object.entries(allEntries).forEach(([admn, entries]) => {
-        if(entries && typeof entries === 'object') {
-          const student = liveStudents.find(s => String(s.admn) === String(admn));
-          const stName = student ? student.name : "Unknown / Deleted";
-          Object.entries(entries).forEach(([entryId, item]) => { flatEntriesList.push({ admn: admn, entryId: entryId, stName: stName, item: item }); });
+      Object.entries(allEntries).forEach(([docKey, val]) => {
+        if (!val || typeof val !== 'object') return;
+
+        // Check 1: Direct Flat Firestore Document
+        if (val.amount !== undefined && val.date !== undefined) {
+          const admn = String(val.admn || docKey.split('_')[0] || "-");
+          const entryId = String(val.id || val.entryId || docKey.split('_')[1] || docKey);
+          const student = liveStudents.find(s => String(s.admn) === admn);
+          const stName = val.studentName || (student ? student.name : "Student ID: " + admn);
+          flatEntriesList.push({ admn: admn, entryId: entryId, docId: docKey, stName: stName, item: val });
+        } 
+        // Check 2: Nested Format Fallback
+        else {
+          const student = liveStudents.find(s => String(s.admn) === String(docKey));
+          const stName = student ? student.name : "Student ID: " + docKey;
+          Object.entries(val).forEach(([entryId, item]) => {
+            if (item && typeof item === 'object') {
+              flatEntriesList.push({ admn: docKey, entryId: entryId, docId: `${docKey}_${entryId}`, stName: stName, item: item });
+            }
+          });
         }
       });
 
@@ -10277,20 +10367,16 @@ document.getElementById("hwTitleInput").value = "";
           const parts = dStr.split('/');
           return parts.length === 3 ? new Date(`${parts[2]}-${parts[1]}-${parts[0]}`).getTime() : 0;
         };
-        const timeA = parseDate(a.item.date);
-        const timeB = parseDate(b.item.date);
-        if (timeA !== timeB) return timeA - timeB;
-        return Number(a.entryId) - Number(b.entryId);
+        return parseDate(b.item.date) - parseDate(a.item.date);
       });
 
       if(flatEntriesList.length === 0) { 
-          tbody.innerHTML = `<tr><td colspan="7" style="color:var(--text-muted); padding:12px;">No system fee logs found.</td></tr>`; 
-          return; 
+        tbody.innerHTML = `<tr><td colspan="7" style="color:var(--text-muted); padding:14px; text-align:center;">No system fee logs found in Firestore.</td></tr>`; 
+        return; 
       }
 
-      // 🚀 OPTIMIZATION: finalHtml variable mein collect karke ek hi baar DOM update karenge
       let finalHtml = "";
-      flatEntriesList.forEach(({ admn, entryId, stName, item }) => {
+      flatEntriesList.forEach(({ admn, entryId, docId, stName, item }) => {
         const typesArr = Array.isArray(item.types) ? item.types : (item.types ? String(item.types).split(", ") : []);
         const typesStr = typesArr.join(", ") || "-";
         const safeTypesJson = JSON.stringify(typesArr).replace(/"/g, '&quot;');
@@ -10305,16 +10391,17 @@ document.getElementById("hwTitleInput").value = "";
             <td>${item.mode || 'Cash'}</td>
             <td>
               <div style="display:flex; gap:4px; justify-content:center;">
-                <button class="btn-primary btn-blue" style="padding:3px 8px; font-size:10px; margin-top:0;" onclick="window.openEditFeeLogModal('${admn}', '${entryId}', '${stName.replace(/'/g, "\\'")}', '${item.amount}', '${item.mode}', '${item.date}', '${safeTypesJson}')">✏️ Edit</button>
-                <button class="btn-sm-del" style="padding:3px 8px; font-size:10px; margin-top:0;" onclick="window.deleteFeeEntry('${admn}', '${entryId}')">🗑️ Delete</button>
+                <button class="btn-primary btn-blue" style="padding:3px 8px; font-size:10px; margin-top:0;" onclick="window.openEditFeeLogModal('${admn}', '${entryId}', '${stName.replace(/'/g, "\\'")}', '${item.amount}', '${item.mode || 'Cash'}', '${item.date}', '${safeTypesJson}')">✏️ Edit</button>
+                <button class="btn-sm-del" style="padding:3px 8px; font-size:10px; margin-top:0;" onclick="window.deleteFeeEntry('${admn}', '${docId}')">🗑️ Delete</button>
               </div>
             </td>
           </tr>
         `;
       });
       
-      tbody.innerHTML = finalHtml; // DOM sirf 1 baar touch hoga! Animations freeze nahi hongi.
+      tbody.innerHTML = finalHtml;
     };
+
 
 
     window.openEditFeeLogModal = function(admn, entryId, studentName, amount, mode, date, typesJson) {
@@ -11059,6 +11146,8 @@ document.getElementById("hwTitleInput").value = "";
       } catch(e) { tbody.innerHTML = `<tr><td colspan="4" style="padding:12px; color:red;">Error loading results.</td></tr>`; }
     };
 
+    
+          // 📊 Admin Entry Tab: Collected & Due Amounts Calculation Fix
     window.calculateAdminEntryTabAnalytics = async function() {
       const liveDateEl = document.getElementById("entryTabLiveDate");
       const collectedEl = document.getElementById("entryCollectedAmountText");
@@ -11075,38 +11164,58 @@ document.getElementById("hwTitleInput").value = "";
       if(document.getElementById("entryCurrentMonthName1")) document.getElementById("entryCurrentMonthName1").innerText = currentMonthName;
       if(document.getElementById("entryCurrentMonthName2")) document.getElementById("entryCurrentMonthName2").innerText = currentMonthName;
 
+      // 1. Calculate Collected Amount
       const allEntries = await safeDataFetch("fees_entries") || {};
       let totalCollectedCurrentMonth = 0;
-      Object.values(allEntries).forEach(studentEntries => {
-        if(studentEntries && typeof studentEntries === 'object') {
-          Object.values(studentEntries).forEach(entry => {
-            if(entry && entry.date) {
-              const parts = entry.date.split('/');
-              if(parts.length === 3 && `${parts[1]}/${parts[2]}` === currentMonthYearStr) { totalCollectedCurrentMonth += (parseFloat(entry.amount) || 0); }
+
+      Object.values(allEntries).forEach(val => {
+        if (!val || typeof val !== 'object') return;
+        // Flat doc
+        if (val.amount !== undefined && val.date) {
+          const parts = val.date.split('/');
+          if (parts.length === 3 && `${parts[1]}/${parts[2]}` === currentMonthYearStr) {
+            totalCollectedCurrentMonth += (parseFloat(val.amount) || 0);
+          }
+        } 
+        // Nested doc fallback
+        else {
+          Object.values(val).forEach(nestedEntry => {
+            if (nestedEntry && nestedEntry.date) {
+              const parts = nestedEntry.date.split('/');
+              if (parts.length === 3 && `${parts[1]}/${parts[2]}` === currentMonthYearStr) {
+                totalCollectedCurrentMonth += (parseFloat(nestedEntry.amount) || 0);
+              }
             }
           });
         }
       });
 
+      // 2. Calculate Due Fees Upto Current Month
       const academicMonths = ["June", "July", "August", "September", "October", "November", "December", "January", "February", "March", "April", "May"];
       const activeMonthsToEvaluate = [];
-      for(let m of academicMonths) { activeMonthsToEvaluate.push(m); if(m === currentMonthName) break; }
+      for(let m of academicMonths) { 
+        activeMonthsToEvaluate.push(m); 
+        if(m === currentMonthName) break; 
+      }
 
       const liveStudents = getLiveStudents();
-      const matrix = await safeDataFetch("fees_matrix") || {};
+      const rawMatrix = await safeDataFetch("fees_matrix") || {};
       let totalDueUptoCurrentMonth = 0;
 
-            liveStudents.forEach(st => {
+      liveStudents.forEach(st => {
         if(!st || !st.class || !st.admn) return;
         const struct = window.getFeeStructure(st.class);
         const feeRate = st.customFee !== undefined ? parseFloat(st.customFee) : struct.rate;
-        const stMatrix = matrix[st.admn] || {};
+        const docMatrix = rawMatrix[st.admn] || {};
+        const stMatrix = docMatrix.matrix || docMatrix;
 
         activeMonthsToEvaluate.forEach(mName => {
-          if(!stMatrix[mName] || !stMatrix[mName].paid) totalDueUptoCurrentMonth += feeRate;
+          const rec = stMatrix[mName];
+          if(!rec || !rec.paid) {
+            totalDueUptoCurrentMonth += feeRate;
+          }
         });
       });
-
 
       collectedEl.innerText = `₹${totalCollectedCurrentMonth.toLocaleString('en-IN')}`;
       dueEl.innerText = `₹${totalDueUptoCurrentMonth.toLocaleString('en-IN')}`;
