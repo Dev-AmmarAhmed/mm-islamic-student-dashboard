@@ -8596,42 +8596,69 @@ document.getElementById("hwTitleInput").value = "";
 }
 
 
-          // --- INSTANT ZERO-LAG STUDENT PROFILE MODAL ---
+        // 👤 Student Profile Modal (Pure Firestore Direct Fetch & Capital Initials)
     window.openStudentProfileModal = async function(admn) {
-      const student = inMemoryStudentsData[admn] || await getStudentRecord(admn);
-      if(!student) return;
+      if (!admn) return;
 
-      const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(student.name || 'S')}&background=0288d1&color=fff&bold=true`;
+      // 1. Memory check ya Direct Firestore se student fetch karein
+      let student = (window.MM_STORE && window.MM_STORE.students && window.MM_STORE.students[admn]) ? window.MM_STORE.students[admn] : null;
+
+      if (!student) {
+        try {
+          const sDoc = await getDoc(doc(fsDb, "students", String(admn)));
+          if (sDoc.exists()) {
+            student = sDoc.data();
+            if (window.MM_STORE && window.MM_STORE.students) {
+              window.MM_STORE.students[admn] = student;
+            }
+          }
+        } catch(err) {
+          console.warn("Firestore student fetch error:", err);
+        }
+      }
+
+      if(!student) {
+        window.showCustomAlert("Student record Firestore me nahi mila.");
+        return;
+      }
+
+      // Fields populate karein
       document.getElementById("profStudentAdmn").value = student.admn;
       document.getElementById("profAdmnDisplay").value = student.admn;
-      document.getElementById("profPasswordInput").value = cachedUsersMap[admn]?.password || "MM";
-      document.getElementById("profAvatarDisplay").src = (student.photo && !student.photo.includes("via.placeholder.com")) ? student.photo : defaultAvatar;
-      document.getElementById("profClassBadge").innerText = `Class ${student.class}`;
+      document.getElementById("profClassBadge").innerText = `Class ${student.class || '-'}`;
       document.getElementById("profClassSelect").value = student.class || "1";
       document.getElementById("profPointsChip").innerText = `${student.points || 0} PTS`;
       document.getElementById("profNameInput").value = student.name || "";
       document.getElementById("profPhoneInput").value = student.phone || "";
-      document.getElementById("profDobInput").value = student.dob || "";
-           document.getElementById("profPointsInput").value = student.points || 0;
+      document.getElementById("profDobInput").value = (student.dob && student.dob !== "-") ? student.dob : "";
+      document.getElementById("profPointsInput").value = student.points || 0;
       if(document.getElementById("profEmailInput")) document.getElementById("profEmailInput").value = student.email || "";
+
+      // Capital Initials Avatar engine use karein
+      document.getElementById("profAvatarDisplay").src = window.getAvatarSrc(student, "#0288d1");
       document.getElementById("profPhotoFileInput").value = "";
       if(window.croppedPhotosMap) delete window.croppedPhotosMap["profPhotoFileInput"];
 
       document.getElementById("deleteAdminStudentBtn").style.display = currentRole === "admin" ? "block" : "none";
-      
-      // Pehle tab aur height set karo, phir 0ms mein modal open karo (No mid-animation jump!)
+
       if(window.switchStudentProfileTab) window.switchStudentProfileTab('profile');
       window.openModal("studentProfileModal");
       requestAnimationFrame(() => window.syncProfileModalHeight());
 
-      // Background mein sirf is single student ka password verify kar lo (Poore 'users' ko download mat karo)
-      safeDataFetch(`users/${admn}`).then(uObj => {
-        if (uObj && uObj.password) {
-          cachedUsersMap[admn] = uObj;
-          document.getElementById("profPasswordInput").value = uObj.password;
+      // 2. Password direct Firestore 'users' collection se mangwayein
+      try {
+        const uDoc = await getDoc(doc(fsDb, "users", String(admn)));
+        if (uDoc.exists() && uDoc.data().password) {
+          document.getElementById("profPasswordInput").value = uDoc.data().password;
+          cachedUsersMap[admn] = uDoc.data();
+        } else {
+          document.getElementById("profPasswordInput").value = cachedUsersMap[admn]?.password || "MM";
         }
-      });
+      } catch(e) {
+        document.getElementById("profPasswordInput").value = "MM";
+      }
     };
+
 
  
 
@@ -9481,26 +9508,28 @@ document.getElementById("hwTitleInput").value = "";
     });
 
 
-
-          addSafeListener("updateStudentProfileBtn", "click", () => {
+    // 💾 Student Profile Update (100% Pure Firestore Save & Instant UI Update)
+    addSafeListener("updateStudentProfileBtn", "click", () => {
       const btn = document.getElementById("updateStudentProfileBtn");
       runWithBtnSpinner(btn, "💾 Update Profile", async () => {
         const oldAdmn = document.getElementById("profStudentAdmn").value;
         const newAdmn = document.getElementById("profAdmnDisplay").value.trim();
         const name = document.getElementById("profNameInput").value.trim();
         const pass = document.getElementById("profPasswordInput").value.trim();
-        const cls = document.getElementById("profClassSelect").value;
+        const cls = cleanClassStr(document.getElementById("profClassSelect").value);
         const phone = document.getElementById("profPhoneInput").value.trim();
         const dob = document.getElementById("profDobInput").value.trim();
         const email = document.getElementById("profEmailInput") ? document.getElementById("profEmailInput").value.trim() : "";
         const pts = parseInt(document.getElementById("profPointsInput").value) || 0;
         const photoFile = document.getElementById("profPhotoFileInput");
 
-        if(!newAdmn || !name) { alert("Student Name and Admission No are required."); return; }
+        if(!newAdmn || !name) { 
+          window.showCustomAlert("Student Name aur Admission No bharna zaroori hai."); 
+          return; 
+        }
 
-               const currentStudent = await getStudentRecord(oldAdmn);
-        const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0288d1&color=fff&bold=true`;
-        let photoUrl = (currentStudent && currentStudent.photo && !currentStudent.photo.includes("via.placeholder.com")) ? currentStudent.photo : defaultAvatar;
+        const currentStudent = await getStudentRecord(oldAdmn) || {};
+        let photoUrl = currentStudent.photo || "";
 
         const croppedData = window.croppedPhotosMap && window.croppedPhotosMap["profPhotoFileInput"];
         if (croppedData) {
@@ -9511,11 +9540,10 @@ document.getElementById("hwTitleInput").value = "";
           if(uploadedPhoto) photoUrl = uploadedPhoto;
         }
 
-
         const updatedStudentObj = {
-          ...(currentStudent || {}),
-          srNo: newAdmn,
-          admn: newAdmn,
+          ...currentStudent,
+          srNo: String(newAdmn),
+          admn: String(newAdmn),
           name: name,
           class: cls,
           phone: phone,
@@ -9523,85 +9551,76 @@ document.getElementById("hwTitleInput").value = "";
           email: email || "",
           points: pts,
           photo: photoUrl,
-          regDate: currentStudent ? (currentStudent.regDate || getTodayFormattedDate()) : getTodayFormattedDate()
+          regDate: currentStudent.regDate || getTodayFormattedDate(),
+          updatedAt: new Date().toISOString()
         };
 
-               const updates = {};
-        if(String(oldAdmn) !== String(newAdmn)) {
-          updates[`students/${oldAdmn}`] = null;
-          updates[`users/${oldAdmn}`] = null;
-        }
-        updates[`students/${newAdmn}`] = updatedStudentObj;
-        updates[`users/${newAdmn}`] = { password: pass || "MM", role: "student", admn: newAdmn, assignedClass: cls };
-        if (currentStudent && currentStudent.email && currentStudent.email !== email) {
-          updates[`email_lookup/${window.encodeEmailKey(currentStudent.email)}`] = null;
-        }
-        if (email) {
-          updates[`email_lookup/${window.encodeEmailKey(email)}`] = String(newAdmn);
-        }
+        const userData = {
+          password: pass || "MM",
+          role: "student",
+          admn: String(newAdmn),
+          assignedClass: cls,
+          email: email || "",
+          updatedAt: new Date().toISOString()
+        };
 
-             // 🚀 1. Immediate Local Cache & Global Store Update
-        window.MM_STORE.students[newAdmn] = updatedStudentObj;
-        if (String(oldAdmn) !== String(newAdmn)) {
-          delete window.MM_STORE.students[oldAdmn];
-        }
-
-        const Sentinel = window.Igris || window.AccuEngine;
-        if (Sentinel && typeof Sentinel.setLocal === "function") {
-          await Sentinel.setLocal("students", newAdmn, updatedStudentObj);
+        try {
+          // 🚀 1. Direct Firestore Writes
           if (String(oldAdmn) !== String(newAdmn)) {
-            await Sentinel.invalidate("students", oldAdmn);
-          }
-        }
-
-                const syncPayload = {
-          admn: newAdmn,
-          studentData: updatedStudentObj,
-          userData: { password: pass || "MM", role: "student", admn: newAdmn, assignedClass: cls, email: email || "" },
-          rtdbPayload: updates
-        };
-
-
-        // 🚀 2. Online vs Offline Sync Handling
-        if (navigator.onLine) {
-          try {
-            await update(ref(db), updates);
-            await setDoc(doc(fsDb, "students", String(newAdmn)), updatedStudentObj, { merge: true });
-            await setDoc(doc(fsDb, "users", String(newAdmn)), syncPayload.userData, { merge: true });
-            alert("✔ Student Profile updated successfully!");
-          } catch (e) {
-            if (window.AccuEngine) {
-              await window.AccuEngine.queueOfflineAction("student_update", syncPayload);
-              window.AccuEngine.triggerBackgroundSync();
+            await deleteDoc(doc(fsDb, "students", String(oldAdmn))).catch(() => {});
+            await deleteDoc(doc(fsDb, "users", String(oldAdmn))).catch(() => {});
+            if (window.MM_STORE && window.MM_STORE.students) {
+              delete window.MM_STORE.students[oldAdmn];
             }
-            alert("⚡ Student details saved locally (Offline). Server sync queued!");
           }
-        } else {
-                   if (window.AccuEngine) {
-            await window.AccuEngine.queueOfflineAction("student_update", syncPayload);
-            window.AccuEngine.triggerBackgroundSync();
+
+          await setDoc(doc(fsDb, "students", String(newAdmn)), updatedStudentObj, { merge: true });
+          await setDoc(doc(fsDb, "users", String(newAdmn)), userData, { merge: true });
+
+          // 🚀 2. Local Memory & IndexedDB Instant Sync
+          if(window.MM_STORE && window.MM_STORE.students) {
+            window.MM_STORE.students[newAdmn] = updatedStudentObj;
           }
-          alert("⚡ Saved in Offline Mode. Profile updates will automatically sync to the server once online.");
+          if(window.MM_STORE && window.MM_STORE.users) {
+            window.MM_STORE.users[newAdmn] = userData;
+          }
+          cachedUsersMap[newAdmn] = userData;
+
+          const Sentinel = window.Igris || window.AccuEngine;
+          if (Sentinel && typeof Sentinel.setLocal === "function") {
+            await Sentinel.setLocal("students", newAdmn, updatedStudentObj);
+            await Sentinel.setLocal("users", newAdmn, userData);
+            if (String(oldAdmn) !== String(newAdmn)) {
+              await Sentinel.invalidate("students", oldAdmn);
+              await Sentinel.invalidate("users", oldAdmn);
+            }
+          }
+
+          // UI Refresh (Instant 0ms)
+          if(currentRole === "teacher") {
+            loadTeacherStudentsDirectory();
+          } else {
+            renderAdminStudentsDirectory();
+          }
+
+          window.closeModal("studentProfileModal");
+          window.showCustomAlert(`✔ Student Profile successfully updated in Firestore!\nID: ${newAdmn}\nName: ${name}`);
+
+        } catch (err) {
+          window.showCustomAlert("Error saving to Firestore: " + err.message);
         }
-
-
-               if(currentRole === "teacher") {
-          await refreshAllTeacherData();
-        } else {
-          renderAdminStudentsDirectory();
-        }
-        window.closeModal("studentProfileModal");
-
       });
     });
+
 
     addSafeListener("deleteAdminStudentBtn", "click", () => {
       const admn = document.getElementById("profStudentAdmn").value;
       if(admn) window.deleteStudent(admn);
     });
 
+          // 👤 Register New Student (100% Pure Firestore Save & Offline Cache Update)
     addSafeListener("saveStudentBtn", "click", () => {
-  const btn = document.getElementById("saveStudentBtn");
+      const btn = document.getElementById("saveStudentBtn");
       runWithBtnSpinner(btn, "Submit Registration", async () => {
         const finalAdmn = document.getElementById("regAdmn").value.trim();
         const name = document.getElementById("regName").value.trim();
@@ -9610,62 +9629,83 @@ document.getElementById("hwTitleInput").value = "";
         const dob = document.getElementById("regDob").value;
         const fileInput = document.getElementById("regPhotoFile");
 
-               if(!name || !std || !rawPhone) { alert("Please fill Name, Class, and Phone number."); return; }
+        if(!finalAdmn || !name || !std) { 
+          window.showCustomAlert("Admission No, Student Name aur Class bharna lazmi hai."); 
+          return; 
+        }
 
-        const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0288d1&color=fff&bold=true`;
-        let photoUrl = defaultAvatar;
-
+        let photoUrl = "";
         const croppedData = window.croppedPhotosMap && window.croppedPhotosMap["regPhotoFile"];
         if (croppedData) {
           photoUrl = croppedData;
           delete window.croppedPhotosMap["regPhotoFile"];
-        } else if (fileInput && fileInput.files.length > 0) {
+        } else if (fileInput && fileInput.files && fileInput.files.length > 0) {
           const uploadedPhoto = await readFileAsDataURL(fileInput.files[0], 400, 0.7);
           if (uploadedPhoto) photoUrl = uploadedPhoto;
         }
 
+        const cleanStd = cleanClassStr(std);
         const studentRecord = { 
           srNo: finalAdmn, 
-          admn: finalAdmn, 
+          admn: String(finalAdmn), 
           name: name, 
-          class: std, 
+          class: cleanStd, 
           phone: rawPhone.replace(/[^0-9]/g, ''), 
           dob: dob || "-", 
           photo: photoUrl, 
           regDate: getTodayFormattedDate(), 
-          points: 0 
+          points: 0,
+          createdAt: new Date().toISOString()
         };
 
-        // 🚀 1. Write to Firestore 'students' & 'users'
-        await setDoc(doc(fsDb, "students", String(finalAdmn)), studentRecord, { merge: true });
-        await setDoc(doc(fsDb, "users", String(finalAdmn)), {
+        const userRecord = {
           password: "MM",
           role: "student",
-          admn: finalAdmn,
-          assignedClass: std,
+          admn: String(finalAdmn),
+          assignedClass: cleanStd,
           email: "",
           createdAt: new Date().toISOString()
-        }, { merge: true });
+        };
 
-        // 🚀 2. Update Unified Memory & Local Cache
-        window.MM_STORE.students[finalAdmn] = studentRecord;
-        const Sentinel = window.Igris || window.AccuEngine;
-        if (Sentinel && typeof Sentinel.setLocal === "function") {
-          await Sentinel.setLocal("students", finalAdmn, studentRecord);
+        try {
+          // 🚀 1. Pure Firestore Write (No RTDB dependency)
+          await setDoc(doc(fsDb, "students", String(finalAdmn)), studentRecord, { merge: true });
+          await setDoc(doc(fsDb, "users", String(finalAdmn)), userRecord, { merge: true });
+
+          // 🚀 2. Local Memory & IndexedDB Update (Instant UI)
+          if(window.MM_STORE && window.MM_STORE.students) {
+            window.MM_STORE.students[finalAdmn] = studentRecord;
+          }
+          if(window.MM_STORE && window.MM_STORE.users) {
+            window.MM_STORE.users[finalAdmn] = userRecord;
+          }
+          const Sentinel = window.Igris || window.AccuEngine;
+          if (Sentinel && typeof Sentinel.setLocal === "function") {
+            await Sentinel.setLocal("students", finalAdmn, studentRecord);
+            await Sentinel.setLocal("users", finalAdmn, userRecord);
+          }
+
+          // UI Refresh
+          if(currentRole === "teacher") {
+            loadTeacherStudentsDirectory();
+          } else {
+            renderAdminStudentsDirectory();
+          }
+
+          window.showCustomAlert(`✔ Student successfully registered in Firestore!\nAdmission No: ${finalAdmn}\nName: ${name}`);
+
+          document.getElementById("regName").value = ""; 
+          document.getElementById("regPhone").value = ""; 
+          document.getElementById("regDob").value = "";
+          if(fileInput) fileInput.value = "";
+          window.closeModal("registerStudentModal");
+
+        } catch (err) {
+          window.showCustomAlert("Firestore me save karte waqt error aaya: " + err.message);
         }
-
-        // 🚀 3. RTDB Lightweight Sentinel (Kill-switch flag only)
-        await set(ref(db, `user_status/${finalAdmn}`), "active").catch(() => {});
-
-
-        if(currentRole === "teacher") await refreshAllTeacherData(); else renderAdminStudentsDirectory();
-        
-        alert(`✔ Student registered successfully with Admission No: ${finalAdmn}`);
-        document.getElementById("regName").value = ""; document.getElementById("regPhone").value = ""; document.getElementById("regDob").value = "";
-        if(fileInput) fileInput.value = "";
-        window.closeModal("registerStudentModal");
       });
     });
+
 
 
           addSafeListener("saveTeacherBtn", "click", () => {
@@ -9794,24 +9834,203 @@ document.getElementById("hwTitleInput").value = "";
       }
     }
 
-              window.deleteTeacherAccount = async function(username) {
-      if(confirm(`Are you sure you want to completely delete teacher account: ${username}?`)) {
-        // 🚀 1. Delete from Firestore
-        await deleteDoc(doc(fsDb, "teachers", String(username))).catch(() => {});
-        await deleteDoc(doc(fsDb, "users", String(username))).catch(() => {});
+        
+          // 👩‍🏫 Admin: Open Edit Teacher Profile Modal (Direct Firestore / Memory Load)
+    window.openEditTeacherModal = async function(username) {
+      if (!username) return;
 
-        // 🚀 2. Invalidate Local Cache
-        if (window.AccuEngine) {
-          await window.AccuEngine.invalidate("teachers", username);
+      let t = (window.MM_STORE && window.MM_STORE.teachers && window.MM_STORE.teachers[username]) ? window.MM_STORE.teachers[username] : null;
+
+      if (!t) {
+        try {
+          const tDoc = await getDoc(doc(fsDb, "teachers", String(username)));
+          if (tDoc.exists()) t = tDoc.data();
+        } catch(e) {}
+      }
+
+      if (!t) {
+        window.showCustomAlert("Teacher record Firestore me nahi mila.");
+        return;
+      }
+
+      document.getElementById("editTeacherOldUsername").value = t.username || username;
+      document.getElementById("editTeacherName").value = t.name || "";
+      document.getElementById("editTeacherUser").value = t.username || username;
+      document.getElementById("editTeacherPhone").value = t.phone || "";
+      document.getElementById("editTeacherEmail").value = t.email || "";
+      document.getElementById("editTeacherPointsInput").value = t.points || 0;
+      document.getElementById("editTeacherClassBadge").innerText = `Class: ${t.assignedClass || '-'}`;
+      document.getElementById("editTeacherPointsChip").innerText = `${t.points || 0} PTS`;
+      document.getElementById("editTeacherAvatarPreview").src = window.getAvatarSrc(t, "#7c3aed");
+
+      if (document.getElementById("editTeacherPhotoInput")) {
+        document.getElementById("editTeacherPhotoInput").value = "";
+      }
+      delete window.croppedPhotosMap["editTeacherPhotoInput"];
+
+      // Password direct Firestore se load karein
+      try {
+        const uDoc = await getDoc(doc(fsDb, "users", String(username)));
+        document.getElementById("editTeacherPass").value = (uDoc.exists() && uDoc.data().password) ? uDoc.data().password : "123456";
+      } catch(e) {
+        document.getElementById("editTeacherPass").value = "123456";
+      }
+
+      // Checkboxes tick karein
+      const assigned = String(t.assignedClass || "").split(",").map(c => cleanClassStr(c));
+      document.querySelectorAll(".t-edit-chk").forEach(chk => {
+        chk.checked = assigned.includes(cleanClassStr(chk.value));
+      });
+
+      if (typeof window.switchEditTeacherSubTab === "function") {
+        window.switchEditTeacherSubTab('info');
+      }
+      window.openModal("editTeacherModal");
+    };
+
+    // 💾 Admin: Save Updated Teacher Details (Pure Firestore Save)
+    window.saveUpdatedTeacherDetails = function() {
+      const btn = document.getElementById("updateTeacherBtn");
+      runWithBtnSpinner(btn, "💾 Update Teacher Profile", async () => {
+        const oldUser = document.getElementById("editTeacherOldUsername").value;
+        const newUser = document.getElementById("editTeacherUser").value.trim();
+        const name = document.getElementById("editTeacherName").value.trim();
+        const pass = document.getElementById("editTeacherPass").value.trim();
+        const phone = document.getElementById("editTeacherPhone").value.trim();
+        const email = document.getElementById("editTeacherEmail").value.trim();
+        const pts = parseInt(document.getElementById("editTeacherPointsInput").value) || 0;
+
+        const checkedClasses = Array.from(document.querySelectorAll(".t-edit-chk:checked")).map(c => cleanClassStr(c.value));
+        const assignedCls = checkedClasses.join(",");
+
+        if (!newUser || !name || !pass || checkedClasses.length === 0) {
+          window.showCustomAlert("Name, Username, Password bharna aur kam az kam 1 class assign karna zaroori hai.");
+          return;
         }
 
-        // 🚀 3. Kill-switch in RTDB
-        await set(ref(db, `user_status/${username}`), "deleted").catch(() => {});
-        await remove(ref(db, `teacher_daily_claims/${username}`)).catch(() => {});
+        const currentTeacher = (window.MM_STORE && window.MM_STORE.teachers && window.MM_STORE.teachers[oldUser]) || {};
+        let photoUrl = currentTeacher.photo || "";
 
-        alert("Teacher account and related data deleted successfully."); 
-        window.loadManageTeacherList();
+        const croppedData = window.croppedPhotosMap && window.croppedPhotosMap["editTeacherPhotoInput"];
+        if (croppedData) {
+          photoUrl = croppedData;
+          delete window.croppedPhotosMap["editTeacherPhotoInput"];
+        }
+
+        const updatedTeacher = {
+          ...currentTeacher,
+          name: name,
+          username: String(newUser),
+          assignedClass: assignedCls,
+          phone: phone,
+          email: email,
+          points: pts,
+          photo: photoUrl,
+          updatedAt: new Date().toISOString()
+        };
+
+        const userData = {
+          password: pass,
+          role: "teacher",
+          assignedClass: assignedCls,
+          email: email,
+          username: String(newUser),
+          updatedAt: new Date().toISOString()
+        };
+
+        try {
+          // 🚀 1. Pure Firestore Updates
+          if (oldUser !== newUser) {
+            await deleteDoc(doc(fsDb, "teachers", String(oldUser))).catch(() => {});
+            await deleteDoc(doc(fsDb, "users", String(oldUser))).catch(() => {});
+            if (window.MM_STORE && window.MM_STORE.teachers) {
+              delete window.MM_STORE.teachers[oldUser];
+            }
+          }
+
+          await setDoc(doc(fsDb, "teachers", String(newUser)), updatedTeacher, { merge: true });
+          await setDoc(doc(fsDb, "users", String(newUser)), userData, { merge: true });
+
+          // 🚀 2. Local Memory & IndexedDB Instant Sync
+          if (window.MM_STORE && window.MM_STORE.teachers) {
+            window.MM_STORE.teachers[newUser] = updatedTeacher;
+          }
+          if (window.MM_STORE && window.MM_STORE.users) {
+            window.MM_STORE.users[newUser] = userData;
+          }
+
+          const Sentinel = window.Igris || window.AccuEngine;
+          if (Sentinel && typeof Sentinel.setLocal === "function") {
+            await Sentinel.setLocal("teachers", newUser, updatedTeacher);
+            await Sentinel.setLocal("users", newUser, userData);
+            if (oldUser !== newUser) {
+              await Sentinel.invalidate("teachers", oldUser);
+              await Sentinel.invalidate("users", oldUser);
+            }
+          }
+
+          window.closeModal("editTeacherModal");
+          if (typeof window.loadManageTeacherList === "function") {
+            window.loadManageTeacherList();
+          }
+          if (typeof window.renderAdminHomeTeacherboardCards === "function") {
+            window.renderAdminHomeTeacherboardCards();
+          }
+
+          window.showCustomAlert(`✔ Teacher ${name} ki details Firestore me successfully update ho gayi hain!`);
+
+        } catch(err) {
+          window.showCustomAlert("Error updating teacher in Firestore: " + err.message);
+        }
+      });
+    };
+
+    // 🗑️ Admin: Delete Teacher from Modal
+    window.deleteTeacherFromModal = function() {
+      const username = document.getElementById("editTeacherOldUsername").value;
+      if (username) {
+        window.deleteTeacherAccount(username);
       }
+    };
+
+    // 🗑️ Admin: Delete Teacher Account (Pure Firestore)
+    window.deleteTeacherAccount = async function(username) {
+      if (!username) return;
+      window.showCustomConfirm(`Kya aap waqai Teacher: ${username} ko Firestore se mukammal delete karna chahte hain?`, async () => {
+        try {
+          // 🚀 1. Pure Firestore Deletions
+          await deleteDoc(doc(fsDb, "teachers", String(username))).catch(() => {});
+          await deleteDoc(doc(fsDb, "users", String(username))).catch(() => {});
+          await deleteDoc(doc(fsDb, "daily_claims", String(username))).catch(() => {});
+
+          // 🚀 2. Local Memory & Cache Cleanup
+          if (window.MM_STORE && window.MM_STORE.teachers) {
+            delete window.MM_STORE.teachers[username];
+          }
+          if (window.MM_STORE && window.MM_STORE.users) {
+            delete window.MM_STORE.users[username];
+          }
+
+          const Sentinel = window.Igris || window.AccuEngine;
+          if (Sentinel && typeof Sentinel.invalidate === "function") {
+            await Sentinel.invalidate("teachers", username);
+            await Sentinel.invalidate("users", username);
+            await Sentinel.invalidate("daily_claims", username);
+          }
+
+          window.closeModal("editTeacherModal");
+          if (typeof window.loadManageTeacherList === "function") {
+            window.loadManageTeacherList();
+          }
+          if (typeof window.renderAdminHomeTeacherboardCards === "function") {
+            window.renderAdminHomeTeacherboardCards();
+          }
+
+          window.showCustomAlert(`✔ Teacher ${username} Firestore se successfully delete ho chuka hai.`);
+        } catch(err) {
+          window.showCustomAlert("Error deleting teacher: " + err.message);
+        }
+      });
     };
 
 
@@ -9827,31 +10046,51 @@ document.getElementById("hwTitleInput").value = "";
       document.getElementById("rmStudentArea").style.display = "block";
     });
 
-           window.deleteStudent = async function(admn) {
-      if(confirm(`Are you sure you want to completely remove ALL data for student ID: ${admn}?`)) {
-        // 🚀 1. Delete from Firestore Collections
-        await deleteDoc(doc(fsDb, "students", String(admn))).catch(() => {});
-        await deleteDoc(doc(fsDb, "users", String(admn))).catch(() => {});
-        await deleteDoc(doc(fsDb, "fees_matrix", String(admn))).catch(() => {});
-        await deleteDoc(doc(fsDb, "daily_claims", String(admn))).catch(() => {});
+     
+          // 🗑️ Delete Student: Pure Firestore Direct Removal (No RTDB Delay)
+    window.deleteStudent = async function(admn) {
+      if (!admn) return;
+      window.showCustomConfirm(`Kya aap waqai Student ID: ${admn} ka saara data Firestore se mukammal delete karna chahte hain?`, async () => {
+        try {
+          // 🚀 1. Pure Firestore Deletions
+          await deleteDoc(doc(fsDb, "students", String(admn))).catch(() => {});
+          await deleteDoc(doc(fsDb, "users", String(admn))).catch(() => {});
+          await deleteDoc(doc(fsDb, "fees_matrix", String(admn))).catch(() => {});
+          await deleteDoc(doc(fsDb, "daily_claims", String(admn))).catch(() => {});
 
-        // 🚀 2. Invalidate Local AccuEngine Cache
-        if (window.AccuEngine) {
-          await window.AccuEngine.invalidate("students", admn);
-          await window.AccuEngine.invalidate("fees_matrix", admn);
+          // 🚀 2. Local Memory & Cache Cleanup
+          if (window.MM_STORE && window.MM_STORE.students) {
+            delete window.MM_STORE.students[admn];
+          }
+          if (window.MM_STORE && window.MM_STORE.users) {
+            delete window.MM_STORE.users[admn];
+          }
+          if (typeof inMemoryStudentsData !== "undefined" && inMemoryStudentsData) {
+            delete inMemoryStudentsData[admn];
+          }
+          delete cachedUsersMap[admn];
+
+          const Sentinel = window.Igris || window.AccuEngine;
+          if (Sentinel && typeof Sentinel.invalidate === "function") {
+            await Sentinel.invalidate("students", admn);
+            await Sentinel.invalidate("users", admn);
+            await Sentinel.invalidate("fees_matrix", admn);
+            await Sentinel.invalidate("daily_claims", admn);
+          }
+
+          window.closeModal("removeStudentModal");
+          window.closeModal("studentProfileModal");
+
+          if(currentRole === "admin") renderAdminStudentsDirectory();
+          if(currentRole === "teacher") loadTeacherStudentsDirectory();
+
+          window.showCustomAlert(`✔ Student ${admn} Firestore se mukammal remove ho chuka hai.`);
+        } catch(err) {
+          window.showCustomAlert("Error deleting student: " + err.message);
         }
-        delete inMemoryStudentsData[admn];
-
-        // 🚀 3. Trigger RTDB Kill-Switch
-        await set(ref(db, `user_status/${admn}`), "deleted").catch(() => {});
-        
-        alert("Student record and all related data removed successfully.");
-
-        window.closeModal("removeStudentModal");
-        window.closeModal("studentProfileModal");
-        if(currentRole === "admin") renderAdminStudentsDirectory();
-      }
+      });
     };
+
 
 
       window.exportFullDatabaseJson = async function() {
@@ -14350,35 +14589,53 @@ if (perms.photo && window.croppedPhotosMap["sUpdatePhotoInput"]) {
         document.getElementById("tMyProfLockedBanner").style.display = anyAllowed ? "none" : "block";
       };
 
+            // 👩‍🏫 Teacher Self-Profile Update (100% Pure Firestore Save)
       window.saveTeacherSelfProfileUpdate = function() {
         const btn = document.getElementById("tMyProfSaveBtn");
         runWithBtnSpinner(btn, "💾 Save Profile Changes", async () => {
           const oldUser = localStorage.getItem("loggedUser");
           if (!oldUser) return;
 
-          const tObj = await safeDataFetch(`teachers/${oldUser}`) || {};
-          const uObj = await safeDataFetch(`users/${oldUser}`) || {};
+          let tObj = (window.MM_STORE && window.MM_STORE.teachers && window.MM_STORE.teachers[oldUser]) || {};
+          if (Object.keys(tObj).length === 0) {
+            tObj = await safeDataFetch(`teachers/${oldUser}`) || {};
+          }
+
+          let uObj = (window.MM_STORE && window.MM_STORE.users && window.MM_STORE.users[oldUser]) || {};
+          if (Object.keys(uObj).length === 0) {
+            uObj = await safeDataFetch(`users/${oldUser}`) || {};
+          }
+
           const permData = (await safeDataFetch(`teacher_permissions/${oldUser}`)) || (await safeDataFetch(`teacher_permissions/ALL`)) || {};
           const profPerms = permData.profile || {};
 
           let targetUser = oldUser;
           if (profPerms.username) {
             const newU = document.getElementById("tMyProfUserInput").value.trim();
-            if (!newU) { alert("Username cannot be empty."); return; }
+            if (!newU) { 
+              window.showCustomAlert("Username khaali nahi ho sakta."); 
+              return; 
+            }
             targetUser = newU;
           }
 
           const updatedTeacher = { ...tObj, username: targetUser };
-          const updatedUser = { ...uObj };
+          const updatedUser = { ...uObj, role: "teacher", username: targetUser };
 
           if (profPerms.name) {
             const n = document.getElementById("tMyProfNameInput").value.trim();
-            if (!n) { alert("Name cannot be empty."); return; }
+            if (!n) { 
+              window.showCustomAlert("Name khaali nahi ho sakta."); 
+              return; 
+            }
             updatedTeacher.name = n;
           }
           if (profPerms.password) {
             const p = document.getElementById("tMyProfPassInput").value.trim();
-            if (!p) { alert("Password cannot be empty."); return; }
+            if (!p) { 
+              window.showCustomAlert("Password khaali nahi ho sakta."); 
+              return; 
+            }
             updatedUser.password = p;
             localStorage.setItem("loggedPass", p);
           }
@@ -14386,40 +14643,63 @@ if (perms.photo && window.croppedPhotosMap["sUpdatePhotoInput"]) {
             updatedTeacher.phone = document.getElementById("tMyProfPhoneInput").value.trim();
           }
           if (profPerms.email) {
-            updatedTeacher.email = document.getElementById("tMyProfEmailInput").value.trim();
+            const em = document.getElementById("tMyProfEmailInput").value.trim();
+            updatedTeacher.email = em;
+            updatedUser.email = em;
           }
           if (profPerms.photo && window.croppedPhotosMap["tMyProfPhotoInput"]) {
-            const croppedData = window.croppedPhotosMap["tMyProfPhotoInput"];
-            updatedTeacher.photo = await window.saveMediaToFirestore("teacher_photos", targetUser, croppedData, { name: updatedTeacher.name });
+            updatedTeacher.photo = window.croppedPhotosMap["tMyProfPhotoInput"];
             delete window.croppedPhotosMap["tMyProfPhotoInput"];
           }
 
-          const updates = {};
-          if (targetUser !== oldUser) {
-            updates[`teachers/${oldUser}`] = null;
-            updates[`users/${oldUser}`] = null;
-            localStorage.setItem("loggedUser", targetUser);
-          }
-                   updatedUser.email = updatedTeacher.email || "";
-          updates[`teachers/${targetUser}`] = updatedTeacher;
-          updates[`users/${targetUser}`] = updatedUser;
-          await setDoc(doc(fsDb, "users", String(targetUser)), { email: updatedTeacher.email || "" }, { merge: true });
+          updatedTeacher.updatedAt = new Date().toISOString();
+          updatedUser.updatedAt = new Date().toISOString();
 
-          if (typeof window.encodeEmailKey === "function") {
-            if (tObj.email && tObj.email !== updatedTeacher.email) {
-              updates[`email_lookup/${window.encodeEmailKey(tObj.email)}`] = null;
+          try {
+            // 🚀 1. Pure Firestore Writes
+            if (targetUser !== oldUser) {
+              await deleteDoc(doc(fsDb, "teachers", String(oldUser))).catch(() => {});
+              await deleteDoc(doc(fsDb, "users", String(oldUser))).catch(() => {});
+              if (window.MM_STORE && window.MM_STORE.teachers) {
+                delete window.MM_STORE.teachers[oldUser];
+              }
+              localStorage.setItem("loggedUser", targetUser);
             }
-            if (updatedTeacher.email) {
-              updates[`email_lookup/${window.encodeEmailKey(updatedTeacher.email)}`] = String(targetUser);
-            }
-          }
 
-          await update(ref(db), updates);
-          alert("✔ Your Teacher Profile has been updated!");
-          await window.loadTeacherMyProfileData();
-          window.refreshTeacherDashboardData();
+            await setDoc(doc(fsDb, "teachers", String(targetUser)), updatedTeacher, { merge: true });
+            await setDoc(doc(fsDb, "users", String(targetUser)), updatedUser, { merge: true });
+
+            // 🚀 2. Local Memory & IndexedDB Sync
+            if(window.MM_STORE && window.MM_STORE.teachers) {
+              window.MM_STORE.teachers[targetUser] = updatedTeacher;
+            }
+            if(window.MM_STORE && window.MM_STORE.users) {
+              window.MM_STORE.users[targetUser] = updatedUser;
+            }
+
+            const Sentinel = window.Igris || window.AccuEngine;
+            if (Sentinel && typeof Sentinel.setLocal === "function") {
+              await Sentinel.setLocal("teachers", targetUser, updatedTeacher);
+              await Sentinel.setLocal("users", targetUser, updatedUser);
+              if (targetUser !== oldUser) {
+                await Sentinel.invalidate("teachers", oldUser);
+                await Sentinel.invalidate("users", oldUser);
+              }
+            }
+
+            await window.loadTeacherMyProfileData();
+            if (typeof window.renderTeacherboardCardsTable === "function") {
+              window.renderTeacherboardCardsTable();
+            }
+
+            window.showCustomAlert("✔ Aapki Teacher Profile Firestore me successfully update ho gayi hai!");
+
+          } catch (err) {
+            window.showCustomAlert("Error saving teacher profile: " + err.message);
+          }
         });
       };
+
 
       // Interactive Teacher Points Line Chart Engine
       window.setTeacherGraphRange = function(mode, btnEl) {
