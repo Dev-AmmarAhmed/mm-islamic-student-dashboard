@@ -1,6 +1,6 @@
 /**
  * ====================================================================
- * MMASSISTANT AI v15.0 (UNIVERSAL RESOLVER + MARKDOWN FORMATTER)
+ * MMASSISTANT AI v16.0 (FLAGSHIP LLAMA-3.3 70B • AUTO-FAILOVER ENGINE)
  * M.M ISLAMIC ENGLISH SCHOOL ERP
  * ====================================================================
  */
@@ -22,7 +22,15 @@
 
   const STORAGE_KEY = "mm_assistant_chat_history_v1";
 
-  // 2D AI Sparkle SVG
+  // Top Active Conversational Models on Groq
+  const CANDIDATE_MODELS = [
+    "llama-3.3-70b-versatile",
+    "llama-3.2-3b-preview",
+    "llama-3.2-1b-preview",
+    "mixtral-8x7b-32768"
+  ];
+
+  // 2D AI Sparkle Vector
   const AI_SPARKLE_SVG = `
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M12 2C12 7.52285 7.52285 12 2 12C7.52285 12 12 16.4771 12 22C12 16.4771 16.4771 12 22 12C16.4771 12 12 7.52285 12 2Z" fill="url(#sparkleGrad)" />
@@ -49,9 +57,7 @@
     </svg>
   `;
 
-  // ----------------------------------------------------
-  // CLEAN MARKDOWN TO HTML CONVERTER (NO MORE RAW ASTERISKS)
-  // ----------------------------------------------------
+  // Markdown Formatter for clean UI
   function formatMarkdown(text) {
     if (!text) return "";
     let safe = text
@@ -59,13 +65,8 @@
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
 
-    // Bold (**word**)
     safe = safe.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
-
-    // Bullet points (* item or - item)
     safe = safe.replace(/^[\*\-]\s+(.*)$/gim, "<span style='display:block; padding-left:12px;'>• $1</span>");
-
-    // Numbered lists (1. item)
     safe = safe.replace(/^(\d+)\.\s+(.*)$/gim, "<span style='display:block; padding-left:12px;'><b>$1.</b> $2</span>");
 
     return safe;
@@ -139,7 +140,7 @@
   }
 
   // ----------------------------------------------------
-  // 2. CHAT STORAGE & RENDERING (WITH HTML MARKDOWN PARSING)
+  // 2. CHAT STORAGE & RENDERING
   // ----------------------------------------------------
   function getHistory() {
     try {
@@ -182,10 +183,10 @@
 
     history.forEach((m) => {
       const isUser = m.role === "user";
-      const formattedContent = isUser ? m.text : formatMarkdown(m.text);
+      const formatted = isUser ? m.text : formatMarkdown(m.text);
       box.innerHTML += `
         <div style="display:flex; flex-direction:column; align-items:${isUser ? 'flex-end' : 'flex-start'};">
-          <div style="max-width:88%; padding:12px 16px; border-radius:${isUser ? '18px 18px 4px 18px' : '18px 18px 18px 4px'}; background:${isUser ? 'linear-gradient(135deg, #10b981 0%, #047857 100%)' : 'rgba(255,255,255,0.06)'}; color:${isUser ? '#ffffff' : 'var(--text-color, #f8fafc)'}; border:1px solid ${isUser ? 'transparent' : 'var(--border-color, #1e293b)'}; font-size:13px; font-weight:600; line-height:1.6; white-space:pre-wrap; word-break:break-word; box-shadow:0 2px 8px rgba(0,0,0,0.05);">${formattedContent}</div>
+          <div style="max-width:88%; padding:12px 16px; border-radius:${isUser ? '18px 18px 4px 18px' : '18px 18px 18px 4px'}; background:${isUser ? 'linear-gradient(135deg, #10b981 0%, #047857 100%)' : 'rgba(255,255,255,0.06)'}; color:${isUser ? '#ffffff' : 'var(--text-color, #f8fafc)'}; border:1px solid ${isUser ? 'transparent' : 'var(--border-color, #1e293b)'}; font-size:13px; font-weight:600; line-height:1.6; white-space:pre-wrap; word-break:break-word; box-shadow:0 2px 8px rgba(0,0,0,0.05);">${formatted}</div>
           <span style="font-size:9.5px; color:var(--text-muted, #64748b); margin-top:3px; padding:0 4px;">${m.time}</span>
         </div>
       `;
@@ -194,22 +195,21 @@
   }
 
   // ----------------------------------------------------
-  // 3. UNIVERSAL IGRIS CONTEXT HARVESTER
+  // 3. IGRIS HARDWARE CACHE SLICER
   // ----------------------------------------------------
   async function buildContextSlice(userQuery, recentHistoryText) {
     const Sentinel = window.Igris || window.AccuEngine;
     const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
     const now = new Date();
-    const currentMonth = months[now.getMonth()]; // Dynamically picks October, etc.
+    const currentMonth = months[now.getMonth()];
     const todayDay = now.getDate();
 
-    // 🏫 Master School Information
     const context = {
       institution_profile: {
         name: "M.M ISLAMIC ENGLISH SCHOOL",
         full_address: "46/K/05 (Room No 5, Line K, Plot No 46), Road No 04, Shivaji Nagar, Govandi, Mumbai - 400043, Maharashtra.",
         landmarks: "S.N. Hospital aur Honest Life English School ke bazu me, Sufi Dairy ke paas.",
-        affiliation_standards: "Approved English Medium Islamic & Modern Curriculum. Currently operating Nursery to Class 5th (Vision & setup up to Class 10th).",
+        affiliation_standards: "Approved English Medium Islamic & Modern Curriculum. Currently operating Nursery to Class 5th (Vision up to Class 10th).",
         principal: {
           name: "Saba Teacher (Saba Parveen)",
           designation: "Principal / Head of Institution",
@@ -241,10 +241,11 @@
         total_teachers: teachers.length
       };
 
-      // Directory of all teachers with Phone & Leave count
       const allLeaves = Object.values(leavesMap || {}).filter(Boolean);
-      context.teachers_directory = teachers.map(t => {
-        const teacherLeaves = allLeaves.filter(l => String(l.admn || l.teacherId || l.name).toLowerCase() === String(t.name || t.id).toLowerCase());
+      context.teachers_directory = teachers.map((t) => {
+        const teacherLeaves = allLeaves.filter(
+          (l) => String(l.admn || l.teacherId || l.name).toLowerCase() === String(t.name || t.id).toLowerCase()
+        );
         return {
           name: t.name || "Teacher",
           phone: t.phone || t.mobile || t.whatsapp || t.contact || "Not updated",
@@ -258,18 +259,22 @@
       const qRaw = userQuery + " " + recentHistoryText;
       const q = qRaw.toLowerCase().replace(/[^a-z0-9\s]/g, " ");
 
-      // 🔍 1. PHONE NUMBER SEARCH (Check if user typed a phone number)
+      // 🔍 1. Phone Number Search
       const phoneMatch = qRaw.match(/\b\d{10}\b/);
       if (phoneMatch) {
         const searchedPhone = phoneMatch[0];
         if (searchedPhone === "7302132270" || searchedPhone === "9322298658") {
           context.phone_lookup_result = `Yeh number Principal Saba Teacher ka hai (${searchedPhone}).`;
         } else {
-          const matchedTeacherPhone = context.teachers_directory.find(t => String(t.phone).replace(/\D/g, "").includes(searchedPhone));
+          const matchedTeacherPhone = context.teachers_directory.find((t) =>
+            String(t.phone).replace(/\D/g, "").includes(searchedPhone)
+          );
           if (matchedTeacherPhone) {
             context.phone_lookup_result = `Yeh number Teacher ${matchedTeacherPhone.name} ka hai (Class ${matchedTeacherPhone.assignedClass}).`;
           } else {
-            const matchedStudentPhone = students.find(s => String(s.phone || s.parentPhone).replace(/\D/g, "").includes(searchedPhone));
+            const matchedStudentPhone = students.find((s) =>
+              String(s.phone || s.parentPhone).replace(/\D/g, "").includes(searchedPhone)
+            );
             if (matchedStudentPhone) {
               context.phone_lookup_result = `Yeh number student ${matchedStudentPhone.name} (Class ${matchedStudentPhone.class}, Admn ${matchedStudentPhone.admn}) ka hai.`;
             } else {
@@ -279,26 +284,27 @@
         }
       }
 
-      // 🔍 2. ADMISSION NUMBER / ID SEARCH (e.g., "admn 153", "153")
+      // 🔍 2. Admission Number Search
       const admnMatches = qRaw.match(/(?:admn|admission|roll|id)?\s*#?\s*(\d{1,4})\b/i);
       let targetStudentByAdmn = null;
-      if (admnMatches && admnMatches[1] && parseInt(admnMatches[1]) < 5000) {
+      if (admnMatches && admnMatches[1] && parseInt(admnMatches[1], 10) < 5000) {
         const searchedAdmn = admnMatches[1];
-        targetStudentByAdmn = students.find(s => String(s.admn) === searchedAdmn);
+        targetStudentByAdmn = students.find((s) => String(s.admn) === searchedAdmn);
       }
 
-      // 🔍 3. NAME SEARCH (Students & Teachers)
+      // 🔍 3. Student Name Search
       const matchedStudents = [];
       for (const st of students) {
         const sName = (st.name || "").toLowerCase();
         if (!sName) continue;
-        const parts = sName.split(" ").filter(p => p.length >= 3);
-        const nameMatches = parts.some(p => q.includes(p));
+        const parts = sName.split(" ").filter((p) => p.length >= 3);
+        const nameMatches = parts.some((p) => q.includes(p));
 
         if (nameMatches || (targetStudentByAdmn && String(st.admn) === String(targetStudentByAdmn.admn))) {
-          // Fetch exact student attendance and fee status
-          const studentAttDoc = (await Sentinel.fetch(`attendance/${st.admn}_${currentMonth}`)) || 
-                                (await Sentinel.fetch(`attendance/${st.admn}/${currentMonth}`)) || {};
+          const studentAttDoc =
+            (await Sentinel.fetch(`attendance/${st.admn}_${currentMonth}`)) ||
+            (await Sentinel.fetch(`attendance/${st.admn}/${currentMonth}`)) ||
+            {};
           const stFees = feesMap[st.admn] || {};
 
           matchedStudents.push({
@@ -306,11 +312,12 @@
             class: st.class,
             admn: st.admn,
             phone: st.phone || st.parentPhone || st.mobile || "Not updated",
-            attendance_october: studentAttDoc,
+            attendance_month: currentMonth,
+            attendance_record: studentAttDoc,
             fees_status: {
               september: stFees["September"]?.paid ? "Paid" : "Unpaid",
               october: stFees["October"]?.paid ? "Paid" : "Unpaid",
-              due_amount: st.customFee || 500
+              monthly_fee: st.customFee || 500
             }
           });
           if (matchedStudents.length >= 6) break;
@@ -321,11 +328,12 @@
         context.queried_students = matchedStudents;
       }
 
-      // 💳 4. UNPAID FEES LIST GENERATOR
+      // 💳 4. Fees Analysis
       if (/(fee|unpaid|pending|paid|due|rupaye|paisa|list)/i.test(q)) {
-        let unpaidCount = 0, totalDues = 0;
+        let unpaidCount = 0;
+        let totalDues = 0;
         const unpaidList = [];
-        students.forEach(st => {
+        students.forEach((st) => {
           const isPaid = feesMap[st.admn] && feesMap[st.admn][currentMonth] && feesMap[st.admn][currentMonth].paid;
           const feeVal = parseFloat(st.customFee || 500);
           if (!isPaid) {
@@ -339,7 +347,7 @@
           month: currentMonth,
           total_unpaid_students: unpaidCount,
           total_due_rupees: totalDues,
-          unpaid_student_names: unpaidList.slice(0, 40)
+          unpaid_student_names: unpaidList.slice(0, 45)
         };
       }
 
@@ -350,46 +358,10 @@
   }
 
   // ----------------------------------------------------
-  // 4. CHAT MODEL WHITELIST
-  // ----------------------------------------------------
-  let memoizedLiveModel = null;
-
-  async function getLiveActiveModel(apiKey) {
-    if (memoizedLiveModel) return memoizedLiveModel;
-
-    const res = await fetch("https://api.groq.com/openai/v1/models", {
-      headers: { "Authorization": "Bearer " + apiKey }
-    });
-
-    if (!res.ok) throw new Error("API Key verification failed.");
-
-    const json = await res.json();
-    const rawIds = (json.data || []).map(m => m.id);
-
-    const trustedWhitelist = [
-      "llama-3.3-70b-versatile",
-      "qwen-2.5-32b",
-      "llama-3.1-8b-instant",
-      "mixtral-8x7b-32768"
-    ];
-
-    for (const m of trustedWhitelist) {
-      if (rawIds.includes(m)) {
-        memoizedLiveModel = m;
-        return memoizedLiveModel;
-      }
-    }
-
-    memoizedLiveModel = rawIds.find(id => id.includes("llama-3") && !id.includes("guard")) || "llama-3.1-8b-instant";
-    return memoizedLiveModel;
-  }
-
-  // ----------------------------------------------------
-  // 5. INFERENCE DISPATCHER
+  // 4. AUTO-FAILOVER INFERENCE ENGINE
   // ----------------------------------------------------
   async function callGroqDirect(userPrompt, verifiedContext) {
     const apiKey = getSecureKey();
-    const activeModel = await getLiveActiveModel(apiKey);
 
     const systemPrompt = `Aap M.M ISLAMIC ENGLISH SCHOOL ke official smart assistant (MMAssistant) hain.
 Aap school Administrator / Principal (Saba Teacher / Saba Parveen) se mukhatib hain.
@@ -398,55 +370,62 @@ COMPLETE SCHOOL DATABASE & CONTEXT:
 ${verifiedContext}
 
 OPERATING RULES:
-1. FORMALITIES & TRUTH:
-   - Kabhi mat bolein ki "Database me address/principal ka record nahi hai". Saara data upar context me maujood hai.
-   - Address: 46/K/05 (Room No 5, Line K, Plot No 46), Road No 04, Shivaji Nagar, Govandi, Mumbai - 400043 (Landmark: SN Hospital & Honest Life English School ke bazu me, Sufi Dairy ke paas).
-   - Principal: Saba Teacher (Saba Parveen). Degrees: D.Ed, B.Ed, LLB. Numbers: 7302132270 / 9322298658.
-2. PHONE NUMBER LOOKUP:
-   - Agar user koi phone number type kare, "phone_lookup_result" check karke batayein wo kiska number hai.
-   - Agar kisi teacher ka number maangein, "teachers_directory" se unka number dein (e.g. Bushra Teacher: 88796 69303).
-3. STUDENT / ADMISSION NUMBER LOOKUP:
-   - Agar user "Admn 153" ya kisi ka naam puche, "queried_students" check karein aur unka naam, class, contact number, attendance, aur fees status seedha batayein.
-4. TONE & FORMAT:
-   - Aam bol-chal ki Roman Urdu me direct jawab dein.
-   - Point-to-point rahein, koi faltu excuses na dein.`;
+1. Address: 46/K/05 (Room No 5, Line K, Plot No 46), Road No 04, Shivaji Nagar, Govandi, Mumbai - 400043 (Landmark: SN Hospital & Honest Life English School ke bazu me, Sufi Dairy ke paas).
+2. Principal: Saba Teacher (Saba Parveen). Degrees: D.Ed, B.Ed, LLB. Numbers: 7302132270 / 9322298658.
+3. Phone lookup: Agar phone number pucha jaye ya type kiya jaye, exact person ka naam aur role batayein. Teachers directory se teacher ka contact number dein (e.g. Bushra Teacher: 88796 69303).
+4. Student lookup: Admission number (jaise Admn 153) ya naam se exact student ki class, phone number, attendance aur fees status dein.
+5. Answer naturally and respectfully in Roman Urdu or simple English without technical excuses.`;
 
     const rawHistory = getHistory();
-    const recentMessages = rawHistory.slice(-4).map(m => ({
+    const recentMessages = rawHistory.slice(-4).map((m) => ({
       role: m.role === "user" ? "user" : "assistant",
       content: m.text
     }));
 
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer " + apiKey
-      },
-      body: JSON.stringify({
-        model: activeModel,
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...recentMessages,
-          { role: "user", content: userPrompt }
-        ],
-        temperature: 0.1,
-        max_tokens: 500
-      })
-    });
+    const messages = [
+      { role: "system", content: systemPrompt },
+      ...recentMessages,
+      { role: "user", content: userPrompt }
+    ];
 
-    if (!response.ok) {
-      memoizedLiveModel = null;
-      const err = await response.json().catch(() => ({}));
-      throw new Error(err.error?.message || `HTTP ${response.status}`);
+    let lastError = null;
+
+    // 🚀 Auto-Failover Loop: Tries models in order until one succeeds
+    for (const modelName of CANDIDATE_MODELS) {
+      try {
+        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + apiKey
+          },
+          body: JSON.stringify({
+            model: modelName,
+            messages: messages,
+            temperature: 0.15,
+            max_tokens: 550
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          return data.choices[0].message.content.trim();
+        }
+
+        const errData = await response.json().catch(() => ({}));
+        lastError = errData.error?.message || `HTTP ${response.status}`;
+        console.warn(`Model [${modelName}] failed: ${lastError}. Trying next candidate...`);
+      } catch (err) {
+        lastError = err.message;
+        console.warn(`Network fail on [${modelName}]: ${lastError}`);
+      }
     }
 
-    const data = await response.json();
-    return data.choices[0].message.content.trim();
+    throw new Error(lastError || "All Groq models failed.");
   }
 
   // ----------------------------------------------------
-  // 6. CONTROLLER API
+  // 5. PUBLIC CONTROLLER API
   // ----------------------------------------------------
   window.MMAssistant = {
     open: function () {
@@ -486,7 +465,7 @@ OPERATING RULES:
       btn.innerText = "Thinking...";
 
       try {
-        const recentHist = getHistory().slice(-4).map(m => m.text).join(" ");
+        const recentHist = getHistory().slice(-4).map((m) => m.text).join(" ");
         const contextSlice = await buildContextSlice(text, recentHist);
         const aiReply = await callGroqDirect(text, contextSlice);
         saveMessage("assistant", aiReply);
