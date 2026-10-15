@@ -7295,13 +7295,14 @@ isAdminLbEditMode = false;
     });
 
 
-          // 🏆 Teacher Dashboard: Class Students Leaderboard
+       
+          // 🏆 Teacher Dashboard: Class Students Leaderboard (Strict: 1 Star = 10 Points)
     window.loadTeacherLeaderboard = function() {
       const container = document.getElementById("leaderboardListContainer");
       if (!container) return;
 
       const students = getLiveStudents().filter(s => cleanClassStr(s.class) === cleanClassStr(assignedClass));
-      students.sort((a, b) => (b.points || 0) - (a.points || 0));
+      students.sort((a, b) => (Number(b.points) || 0) - (Number(a.points) || 0));
 
       if (students.length === 0) {
         container.innerHTML = `<p style="padding:14px; font-size:12px; color:var(--text-muted); text-align:center;">No students registered in Class ${assignedClass}</p>`;
@@ -7310,8 +7311,8 @@ isAdminLbEditMode = false;
 
       let html = "";
       students.forEach((st, idx) => {
-        const pts = st.points || 0;
-        const stars = Math.floor(pts / 10);
+        const pts = Number(st.points) || 0;
+        const stars = Math.floor(pts / 10); // 10 Points pe 1 Star
         html += `
           <div class="lb-row">
             <div style="display:flex; align-items:center;">
@@ -7324,6 +7325,7 @@ isAdminLbEditMode = false;
       });
       container.innerHTML = html;
     };
+
 
     // 📋 Teacher Home Tab: Mentors Standing Cards
     window.renderTeacherboardCardsTable = async function() {
@@ -7400,15 +7402,22 @@ isAdminLbEditMode = false;
       await updateHeaderStarBadge();
     };
 
+          // 1 ⭐ = 10 Points Rule (Points / 10 = Stars)
     async function updateHeaderStarBadge() {
       const student = await getStudentRecord(currentStudentAdmn);
-      const pts = student ? (student.points || 0) : 0;
-      const stars = Math.floor(pts / 10);
+      const pts = student ? (Number(student.points) || 0) : 0;
+      const stars = Math.floor(pts / 10); // 10 Points = 1 Star, 20 Points = 2 Stars
       const iconEl = document.getElementById("studentStarIcon");
       const textEl = document.getElementById("studentStarText");
-      if(studentStarDisplayMode === "star") { iconEl.innerText = "⭐"; textEl.innerText = `${stars} Stars`; } 
-      else { iconEl.innerText = "🏆"; textEl.innerText = `${pts} Points`; }
+      if(studentStarDisplayMode === "star") { 
+        iconEl.innerText = "⭐"; 
+        textEl.innerText = `${stars} Stars`; 
+      } else { 
+        iconEl.innerText = "🏆"; 
+        textEl.innerText = `${pts} Points`; 
+      }
     }
+
 
        async function checkAndRenderDailyRewardStatus(student) {
       if(!student) return;
@@ -8412,12 +8421,14 @@ document.getElementById("hwTitleInput").value = "";
 
 
 
-          // ⭐ Award / Deduct Points to Students (Instant UI & Immediate Popup)
+      
+      
+          // ⭐ Award / Deduct Points to Students (Direct Points: 10 Points = 1 Star)
     addSafeListener("submitPerformPointsBtn", "click", () => {
       const btn = document.getElementById("submitPerformPointsBtn");
       const admn = document.getElementById("performStudentSelect").value;
       const ptsVal = document.getElementById("performPointsInput").value.trim();
-      const pts = parseInt(ptsVal);
+      const pts = parseInt(ptsVal); // Seedha entered points add honge, koi * 10 nahi hoga
       const reasonTxt = document.getElementById("performReasonInput") ? document.getElementById("performReasonInput").value.trim() : 'Performance Points';
 
       if(!admn || isNaN(pts) || pts === 0) { 
@@ -8432,8 +8443,11 @@ document.getElementById("hwTitleInput").value = "";
           return;
         }
 
-        const newPts = (Number(st.points) || 0) + pts;
+        // Direct Points Addition (10 likha toh +10 hi add hoga)
+        const currentPoints = Number(st.points) || 0;
+        const newPts = currentPoints + pts;
         st.points = newPts;
+
 
         // 1. Local Memory me turant update
         if(window.MM_STORE && window.MM_STORE.students) {
@@ -8453,7 +8467,7 @@ document.getElementById("hwTitleInput").value = "";
         if (document.getElementById("performReasonInput")) document.getElementById("performReasonInput").value = "";
 
         // 3. Instant Popup Alert
-        window.showCustomAlert(`✔ Points Updated!\n${st.name}: ${pts >= 0 ? '+' : ''}${pts} PTS\nAb Total: ${newPts} PTS`);
+        window.showCustomAlert(`✔ Points Updated!\n${st.name}: ${pts >= 0 ? '+' : ''}${pts} PTS\nNow Total: ${newPts} PTS`);
 
         // 4. Background me Silent Save (UI wait nahi karega)
         try {
@@ -8528,7 +8542,7 @@ document.getElementById("hwTitleInput").value = "";
 
         // 2. Instant Popup Alert
         setTimeout(() => {
-          window.showCustomAlert(`✔ Points Updated!\n${t.name}: ${pts >= 0 ? '+' : ''}${pts} PTS\nAb Total: ${newPts} PTS`);
+          window.showCustomAlert(`✔ Points Updated!\n${t.name}: ${pts >= 0 ? '+' : ''}${pts} PTS\nNow Total: ${newPts} PTS`);
         }, 250);
 
         // 3. Background me Silent Save
