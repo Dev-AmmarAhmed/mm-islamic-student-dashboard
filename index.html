@@ -5608,49 +5608,75 @@ Exact Output JSON Format Required:
     };
 
     
-    
-           async function safeDataFetch(refPath) {
-      const Sentinel = window.Igris || window.AccuEngine;
-      
-      // 1. Local Igris cache check
-      if (Sentinel && typeof Sentinel.fetch === "function") {
-        const cached = await Sentinel.fetch(refPath);
-        if (cached && (typeof cached !== "object" || Object.keys(cached).length > 0)) {
-          return cached;
-        }
+
+        async function safeDataFetch(refPath) {
+    if (!refPath) return null;
+    const Sentinel = window.Igris || window.AccuEngine;
+
+    // 1. Local Igris cache check
+    if (Sentinel && typeof Sentinel.fetch === "function") {
+      const cached = await Sentinel.fetch(refPath);
+      if (cached !== null && cached !== undefined && (typeof cached !== "object" || Object.keys(cached).length > 0)) {
+        return cached;
       }
-
-      // 2. Firestore fallback if cache miss
-      try {
-        await window.ensureFirebaseAuth();
-        const parts = refPath.split("/");
-        const collectionName = parts[0];
-
-        if (parts.length === 1) {
-          const snap = await getDocs(collection(fsDb, collectionName));
-          const map = {};
-          snap.forEach(d => { map[d.id] = d.data(); });
-          
-          if (Sentinel && typeof Sentinel.setLocal === "function" && Object.keys(map).length > 0) {
-            for (const [k, v] of Object.entries(map)) {
-              await Sentinel.setLocal(collectionName, k, v);
-            }
-          }
-          return map;
-        } else if (parts.length === 2) {
-          const docSnap = await getDoc(doc(fsDb, collectionName, parts[1]));
-          const docData = docSnap.exists() ? docSnap.data() : null;
-          if (docData && Sentinel && typeof Sentinel.setLocal === "function") {
-            await Sentinel.setLocal(collectionName, parts[1], docData);
-          }
-          return docData;
-        }
-      } catch (err) {
-        console.warn("Firestore direct read error:", err);
-      }
-
-      return null;
     }
+
+    // 2. Firestore fallback if cache miss
+    try {
+      if (typeof window.ensureFirebaseAuth === "function") {
+        await window.ensureFirebaseAuth();
+      }
+      const parts = refPath.split("/");
+      const collectionName = parts[0];
+
+      if (parts.length === 1) {
+        const snap = await getDocs(collection(fsDb, collectionName));
+        const map = {};
+        snap.forEach(d => { map[d.id] = d.data(); });
+        if (Sentinel && typeof Sentinel.setLocal === "function" && Object.keys(map).length > 0) {
+          for (const [k, v] of Object.entries(map)) {
+            await Sentinel.setLocal(collectionName, k, v);
+          }
+        }
+        return map;
+      } else if (parts.length === 2) {
+        let docSnap = await getDoc(doc(fsDb, collectionName, parts[1]));
+        if (!docSnap.exists()) {
+          // Agar direct ID na mile, toh class filter check karo (study_material / homework)
+          const snapAll = await getDocs(collection(fsDb, collectionName));
+          const map = {};
+          snapAll.forEach(d => {
+            const data = d.data();
+            if (data.class === parts[1] || d.id.startsWith(parts[1] + "_")) {
+              map[d.id] = data;
+            }
+          });
+          if (Object.keys(map).length > 0) return map;
+        }
+        const docData = docSnap.exists() ? docSnap.data() : null;
+        if (docData && Sentinel && typeof Sentinel.setLocal === "function") {
+          await Sentinel.setLocal(collectionName, parts[1], docData);
+        }
+        return docData;
+      } else if (parts.length === 3) {
+        // e.g. attendance/1/September -> composite doc ID: 1_September
+        const compositeKey = `${parts[1]}_${parts[2]}`;
+        let docSnap = await getDoc(doc(fsDb, collectionName, compositeKey));
+        if (!docSnap.exists()) {
+          docSnap = await getDoc(doc(fsDb, collectionName, parts[2]));
+        }
+        if (docSnap.exists()) {
+          const docData = docSnap.data();
+          return docData.days || docData.schedule || docData;
+        }
+      }
+    } catch (err) {
+      console.warn("Firestore direct read error:", err);
+    }
+
+    return null;
+  }
+
 
 
 
@@ -5668,50 +5694,41 @@ Exact Output JSON Format Required:
       }
     }
 
+  // 🛡️ UNIVERSAL IGRIS BOOTSTRAPPER (PHASE 3 UNIFIED STORE)
+  window.ensureUniversalIgrisSync = async function(force = false) {
+    const Sentinel = window.Igris || window.AccuEngine;
+    if (!Sentinel || typeof Sentinel.checkAndSyncData !== "function") return false;
 
-        // 🛡️ UNIVERSAL IGRIS BOOTSTRAPPER (PHASE 2 UNIFIED STORE)
-    window.ensureUniversalIgrisSync = async function(force = false) {
-      const Sentinel = window.Igris || window.AccuEngine;
-      if (!Sentinel || typeof Sentinel.checkAndSyncData !== "function") return false;
-
-      try {
-        if (typeof window.ensureFirebaseAuth === "function") {
-          await window.ensureFirebaseAuth();
-        }
-
-        // Remote version vs local cache sync check
-        await Sentinel.checkAndSyncData(force);
-        
-        // Fetch all core collections from local IndexedDB cache
-        const [stMap, tchMap, feesMap, usersMap] = await Promise.all([
-          Sentinel.fetch("students") || {},
-          Sentinel.fetch("teachers") || {},
-          Sentinel.fetch("fees_matrix") || {},
-          Sentinel.fetch("users") || {}
-        ]);
-
-        // If cache had 0 students but user is online, trigger single force sync
-        if ((!stMap || Object.keys(stMap).length === 0) && navigator.onLine) {
-          console.log("⚠️ [Universal Igris] Cache was empty. Hydrating from Firestore...");
-          await Sentinel.checkAndSyncData(true);
-          const freshSt = await Sentinel.fetch("students") || {};
-          window.MM_STORE.students = freshSt;
-        } else {
-          window.MM_STORE.students = stMap || {};
-        }
-
-        window.MM_STORE.teachers = tchMap || {};
-        window.MM_STORE.fees_matrix = feesMap || {};
-        window.MM_STORE.users = usersMap || {};
-        cachedUsersMap = window.MM_STORE.users;
-
-        console.log(`✔ [Phase 2 Store] ${Object.keys(window.MM_STORE.students).length} Students loaded in unified memory.`);
-        return true;
-      } catch (err) {
-        console.error("❌ Universal Sync failed:", err);
-        return false;
+    try {
+      if (typeof window.ensureFirebaseAuth === "function") {
+        await window.ensureFirebaseAuth();
       }
-    };
+
+      // Sync local IndexedDB from Firestore
+      await Sentinel.checkAndSyncData(force);
+      
+      // Fetch fresh data from local cache into memory
+      const [stMap, tchMap, feesMap, usersMap] = await Promise.all([
+        Sentinel.fetch("students"),
+        Sentinel.fetch("teachers"),
+        Sentinel.fetch("fees_matrix"),
+        Sentinel.fetch("users")
+      ]);
+
+      window.MM_STORE.students = stMap || {};
+      window.MM_STORE.teachers = tchMap || {};
+      window.MM_STORE.fees_matrix = feesMap || {};
+      window.MM_STORE.users = usersMap || {};
+      cachedUsersMap = window.MM_STORE.users;
+
+      console.log(`✔ [Phase 3 Store] Hydrated: ${Object.keys(window.MM_STORE.students).length} Students, ${Object.keys(window.MM_STORE.teachers).length} Teachers.`);
+      return true;
+    } catch (err) {
+      console.error("❌ Universal Sync failed:", err);
+      return false;
+    }
+  };
+
 
 
              // 🛡️ UNIVERSAL ROLE HYDRATOR (PHASE 3 MASTER CONTROLLER)
@@ -6859,38 +6876,23 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
     };
 
 
-                      function renderDashboardForRole(role, aClass, sAdmn) {
-      currentRole = role;
-      window.attachSmartStudentsListener(role, sAdmn || localStorage.getItem("studentAdmn"));
+        function renderDashboardForRole(role, aClass, sAdmn) {
+    currentRole = role;
+    window.attachSmartStudentsListener(role, sAdmn || localStorage.getItem("studentAdmn"));
 
-                        
-               // 🛡️ GHOST LOGIN & PRIVILEGE ESCALATION FIX (Phase 1)
-      const loggedUser = localStorage.getItem("loggedUser");
-      const sessionToken = localStorage.getItem("sessionToken");
-      const claimedRole = localStorage.getItem("loggedRole");
-      
-      window.syncAuthSessionRole(role, loggedUser || sAdmn, aClass);
+    const loggedUser = localStorage.getItem("loggedUser");
+    window.syncAuthSessionRole(role, loggedUser || sAdmn, aClass);
 
-           if(loggedUser) {
-        // RTDB ka lightweight status flag check (Sirf 10-bytes)
-        onValue(ref(db, `user_status/${loggedUser}`), (snap) => {
-          const status = snap.val();
-          if(!snap.exists() || status === "deleted" || status === "inactive") {
-            return forceLogout("⚠️ ACCOUNT DELETED: Your account no longer exists or was removed by Admin.");
-          }
-        });
-      }
+    function forceLogout(msg) {
+      localStorage.removeItem("loggedUser");
+      localStorage.removeItem("loggedRole");
+      localStorage.removeItem("sessionToken");
+      localStorage.removeItem("assignedClass");
+      localStorage.removeItem("studentAdmn");
+      window.showCustomAlert(msg);
+      setTimeout(() => { window.location.reload(true); }, 3000);
+    }
 
-
-      function forceLogout(msg) {
-        localStorage.removeItem("loggedUser");
-        localStorage.removeItem("loggedRole");
-        localStorage.removeItem("sessionToken");
-        localStorage.removeItem("assignedClass");
-        localStorage.removeItem("studentAdmn");
-        window.showCustomAlert(msg);
-        setTimeout(() => { window.location.reload(true); }, 3000);
-      }
 
 
       // Split assigned classes by comma and pick the first one as default
@@ -9418,12 +9420,16 @@ card.innerHTML = `<img src="${avatarSrc}" onerror="this.src='${defaultAvatar}'" 
       }
     };
 
-
     const savedUser = localStorage.getItem("loggedUser");
     const savedRole = localStorage.getItem("loggedRole");
     const savedClass = localStorage.getItem("assignedClass");
     const savedAdmn = localStorage.getItem("studentAdmn");
-    if(savedUser && savedRole) { renderDashboardForRole(savedRole, savedClass, savedAdmn); }
+    if(savedUser && savedRole) {
+      renderDashboardForRole(savedRole, savedClass, savedAdmn);
+      if (typeof window.hydrateRoleDashboard === "function") {
+        window.hydrateRoleDashboard(savedRole, false);
+      }
+    }
 
     addSafeListener("generatePdfBtn", "click", () => {
       const btn = document.getElementById("generatePdfBtn");
