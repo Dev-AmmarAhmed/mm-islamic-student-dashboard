@@ -8091,45 +8091,81 @@ document.getElementById("hwTitleInput").value = "";
 
 
 
-    function populateDelTestStudentDropdown() {
-      const students = getLiveStudents().filter(s => cleanClassStr(s.class) === cleanClassStr(assignedClass));
+       // 🗑️ Delete Test Data: Direct Firestore Load & Delete (No RTDB)
+    window.populateDelTestStudentDropdown = function() {
+      let students = getLiveStudents();
+      if(currentRole === "teacher") {
+        students = students.filter(s => cleanClassStr(s.class) === cleanClassStr(assignedClass));
+      }
       const delSelect = document.getElementById("delTestStudentSelect");
       if(delSelect) {
-        delSelect.innerHTML = `<option value="">-- Select Student --</option>` + students.map(s => `<option value="${s.admn}">${s.name}</option>`).join("");
-      }
-    }
-
-    addSafeListener("loadStudentTestRecordsBtn", "click", () => {
-      const admn = document.getElementById("delTestStudentSelect").value;
-      if(!admn) { alert("Please select a student."); return; }
-      safeDataFetch(`tests/${admn}`).then(tests => {
-        const tbody = document.getElementById("delTestTableBody");
-        tbody.innerHTML = "";
-        if(tests && Object.keys(tests).length > 0) {
-          Object.entries(tests).forEach(([testKey, t]) => {
-            tbody.innerHTML += `<tr><td>${t.date}</td><td>${t.name}</td><td>${t.obtained} / ${t.total}</td><td><button class="btn-sm-del" onclick="window.deleteIndividualTestRecord('${admn}', '${testKey}')">Delete</button></td></tr>`;
-          });
-          document.getElementById("delTestDisplayArea").style.display = "block";
-        } else { alert("No test records found for this student."); document.getElementById("delTestDisplayArea").style.display = "none"; }
-      });
-    });
-
-
-          window.deleteIndividualTestRecord = async function(admn, testKey) {
-      if(confirm("Are you sure you want to delete this test record?")) {
-        const docKey = testKey.includes("_") ? testKey : `${admn}_${testKey}`;
-        // 🚀 Firestore + AccuEngine
-        await deleteDoc(doc(fsDb, "tests", docKey)).catch(() => {});
-        if (window.AccuEngine) {
-          await window.AccuEngine.invalidate("tests", docKey);
-          window.AccuEngine.bumpSyncVersion();
-        }
-        await remove(ref(db, `tests/${admn}/${testKey}`)).catch(() => {});
-
-        alert("✔ Test record deleted successfully.");
-        document.getElementById("loadStudentTestRecordsBtn").click();
+        delSelect.innerHTML = `<option value="">-- Select Student --</option>` + students.map(s => `<option value="${s.admn}">${s.name} (${s.admn}) - Class ${s.class}</option>`).join("");
       }
     };
+
+    window.loadStudentTestRecordsForDeletion = async function() {
+      const admn = document.getElementById("delTestStudentSelect").value;
+      if(!admn) { 
+        window.showCustomAlert("Please select a student."); 
+        return; 
+      }
+      
+      const tbody = document.getElementById("delTestTableBody");
+      tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:12px;">⏳ Loading test records from Firestore...</td></tr>`;
+      document.getElementById("delTestDisplayArea").style.display = "block";
+
+      try {
+        const snap = await getDocs(collection(fsDb, "tests"));
+        const records = [];
+        snap.forEach(d => {
+          const data = d.data();
+          if(String(data.admn) === String(admn) || d.id.startsWith(admn + "_")) {
+            records.push({ docId: d.id, ...data });
+          }
+        });
+
+        tbody.innerHTML = "";
+        if(records.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:12px; color:var(--text-muted);">No test records found for this student in Firestore.</td></tr>`;
+          return;
+        }
+
+        records.sort((a,b) => (b.date || "").localeCompare(a.date || ""));
+
+        records.forEach(t => {
+          tbody.innerHTML += `
+            <tr>
+              <td>${t.date || '-'}</td>
+              <td style="text-align:left; padding-left:8px; font-weight:700;">${t.name || 'Test'}</td>
+              <td><b>${t.obtained}</b> / ${t.total}</td>
+              <td><button class="btn-sm-del" onclick="window.deleteIndividualTestRecord('${admn}', '${t.docId}')">🗑️ Delete</button></td>
+            </tr>`;
+        });
+      } catch(err) {
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:12px; color:red;">Error loading records: ${err.message}</td></tr>`;
+      }
+    };
+
+    addSafeListener("loadStudentTestRecordsBtn", "click", window.loadStudentTestRecordsForDeletion);
+
+    window.deleteIndividualTestRecord = async function(admn, docId) {
+      window.showCustomConfirm("Are you sure you want to permanently delete this test record from Firestore?", async () => {
+        try {
+          await deleteDoc(doc(fsDb, "tests", String(docId)));
+          
+          const Sentinel = window.Igris || window.AccuEngine;
+          if (Sentinel && typeof Sentinel.invalidate === "function") {
+            await Sentinel.invalidate("tests", docId);
+          }
+
+          window.showCustomAlert("✔ Test record successfully deleted from Firestore.");
+          window.loadStudentTestRecordsForDeletion();
+        } catch (error) {
+          window.showCustomAlert("Error deleting test: " + error.message);
+        }
+      });
+    };
+
 
 
     addSafeListener("bulkContinueBtn", "click", () => {
@@ -8152,6 +8188,8 @@ document.getElementById("hwTitleInput").value = "";
       document.getElementById("bulkStep2").style.display = "block";
     });
 
+   
+          // 📝 Bulk Add Test Marks: Direct Firestore Save (No RTDB)
     addSafeListener("saveBulkTestMarksBtn", "click", () => {
       const btn = document.getElementById("saveBulkTestMarksBtn");
       runWithBtnSpinner(btn, "💾 Save All Marks & Points", async () => {
@@ -8159,32 +8197,74 @@ document.getElementById("hwTitleInput").value = "";
         const totalMarks = parseFloat(document.getElementById("bulkTotalMarksInput").value);
         const inputs = document.querySelectorAll(".bulk-obtained-input");
 
-        const todayStr = getTodayFormattedDate();
-        const updates = {};
-        const liveStudents = getLiveStudents();
+        if (!testName || isNaN(totalMarks) || totalMarks <= 0) {
+          window.showCustomAlert("Please enter valid Test Name and Total Marks.");
+          return;
+        }
 
-        inputs.forEach(inp => {
+        const todayStr = getTodayFormattedDate();
+        const liveStudents = getLiveStudents();
+        let savedCount = 0;
+
+        for (const inp of inputs) {
           const admn = inp.getAttribute("data-admn");
           const obtainedVal = inp.value.trim();
           if(obtainedVal !== "") {
             const obtained = parseFloat(obtainedVal);
-            const percentage = (obtained / totalMarks) * 100;
+            const percentage = ((obtained / totalMarks) * 100);
             let awardedPoints = 0;
-            if(percentage >= 95) awardedPoints = 100; else if(percentage >= 90) awardedPoints = 80; else if(percentage >= 70) awardedPoints = 50; else if(percentage >= 50) awardedPoints = 30; else if(percentage >= 30) awardedPoints = 10; else awardedPoints = -50;
+            if(percentage >= 95) awardedPoints = 100;
+            else if(percentage >= 90) awardedPoints = 80;
+            else if(percentage >= 70) awardedPoints = 50;
+            else if(percentage >= 50) awardedPoints = 30;
+            else if(percentage >= 30) awardedPoints = 10;
+            else awardedPoints = -50;
 
-            const testId = Date.now().toString() + Math.floor(Math.random() * 100);
-            updates[`tests/${admn}/${testId}`] = { name: testName, total: totalMarks, obtained: obtained, percentage: percentage.toFixed(1), awardedPoints: awardedPoints, date: todayStr };
+            const testId = Date.now().toString() + "_" + Math.floor(Math.random() * 1000);
+            const docId = `${admn}_${testId}`;
+            const testRecordObj = {
+              id: docId,
+              admn: String(admn),
+              testId: testId,
+              name: testName,
+              total: totalMarks,
+              obtained: obtained,
+              percentage: percentage.toFixed(1),
+              awardedPoints: awardedPoints,
+              date: todayStr,
+              createdAt: new Date().toISOString()
+            };
 
+            // 🚀 Direct Firestore save
+            await setDoc(doc(fsDb, "tests", docId), testRecordObj, { merge: true });
+
+            // 🚀 Update Student Points in Firestore & Memory
             const st = liveStudents.find(s => String(s.admn) === String(admn));
-            if(st) updates[`students/${admn}/points`] = (st.points || 0) + awardedPoints;
+            if(st) {
+              const newPts = (Number(st.points) || 0) + awardedPoints;
+              st.points = newPts;
+              if (window.MM_STORE && window.MM_STORE.students) {
+                window.MM_STORE.students[admn] = st;
+              }
+              await setDoc(doc(fsDb, "students", String(admn)), { points: newPts }, { merge: true });
+            }
+            savedCount++;
           }
-        });
-        await update(ref(db), updates);
-        await refreshAllTeacherData();
-        alert("Bulk Test Marks & Points saved successfully.");
+        }
+
+        if (savedCount === 0) {
+          window.showCustomAlert("Please enter marks for at least one student.");
+          return;
+        }
+
+        if (typeof window.loadTeacherLeaderboard === "function") window.loadTeacherLeaderboard();
+        if (typeof loadTeacherStudentsDirectory === "function") loadTeacherStudentsDirectory();
+
+        window.showCustomAlert(`✔ ${testName} marks successfully saved to Firestore for ${savedCount} students!`);
         window.closeModal("bulkAddTestModal");
       });
     });
+
 
       async function loadTeacherTodayAttendance() {
       const todayStr = getTodayFormattedDate();
@@ -8625,7 +8705,7 @@ document.getElementById("hwTitleInput").value = "";
 
 
 
-
+    // 📝 Single Add Test Marks: Direct Firestore Save (No RTDB)
     addSafeListener("saveTestDetailsBtn", "click", () => {
       const btn = document.getElementById("saveTestDetailsBtn");
       runWithBtnSpinner(btn, "Save Test Details", async () => {
@@ -8633,14 +8713,24 @@ document.getElementById("hwTitleInput").value = "";
         const testName = document.getElementById("testNameInput").value.trim();
         const total = parseFloat(document.getElementById("testTotalMarksInput").value);
         const obtained = parseFloat(document.getElementById("testObtainedMarksInput").value);
-        if(!admn || !testName || isNaN(total) || isNaN(obtained) || total <= 0) { alert("Please fill all valid test details."); return; }
+        if(!admn || !testName || isNaN(total) || isNaN(obtained) || total <= 0) { 
+          window.showCustomAlert("Please fill all valid test details."); 
+          return; 
+        }
 
         const percentage = (obtained / total) * 100;
         let awardedPoints = 0;
-        if(percentage >= 95) awardedPoints = 100; else if(percentage >= 90) awardedPoints = 80; else if(percentage >= 70) awardedPoints = 50; else if(percentage >= 50) awardedPoints = 30; else if(percentage >= 30) awardedPoints = 10; else awardedPoints = -50;
+        if(percentage >= 95) awardedPoints = 100; 
+        else if(percentage >= 90) awardedPoints = 80; 
+        else if(percentage >= 70) awardedPoints = 50; 
+        else if(percentage >= 50) awardedPoints = 30; 
+        else if(percentage >= 30) awardedPoints = 10; 
+        else awardedPoints = -50;
 
-               const testId = Date.now().toString();
+        const testId = Date.now().toString();
+        const docId = `${admn}_${testId}`;
         const testObj = { 
+          id: docId,
           name: testName, 
           total: total, 
           obtained: obtained, 
@@ -8648,59 +8738,35 @@ document.getElementById("hwTitleInput").value = "";
           awardedPoints: awardedPoints, 
           date: getTodayFormattedDate(),
           admn: String(admn),
-          testId: testId
+          testId: testId,
+          createdAt: new Date().toISOString()
         };
 
         const st = await getStudentRecord(admn);
-        const newPts = (st ? (st.points || 0) : 0) + awardedPoints;
+        const newPts = (st ? (Number(st.points) || 0) : 0) + awardedPoints;
 
-        // 🚀 1. Immediate Local Cache Update
-        if (st) {
-          st.points = newPts;
-          inMemoryStudentsData[admn] = st;
-          if (window.AccuEngine) {
-            await window.AccuEngine.setLocal("students", admn, st);
-            const cachedTests = (await window.AccuEngine.fetch(`tests/${admn}`)) || {};
-            cachedTests[testId] = testObj;
-            await window.AccuEngine.setLocal("tests", admn, cachedTests);
-          }
-        }
-
-        const offlineTestPayload = {
-          testDocId: `${admn}_${testId}`,
-          testData: testObj,
-          admn: admn,
-          newPoints: newPts
-        };
-
-        // 🚀 2. Online vs Offline Sync Handling
-        if (navigator.onLine) {
-          try {
-            await set(ref(db, `tests/${admn}/${testId}`), testObj);
-            await update(ref(db, `students/${admn}`), { points: newPts });
-            await setDoc(doc(fsDb, "tests", `${admn}_${testId}`), testObj, { merge: true });
-            await setDoc(doc(fsDb, "students", String(admn)), { points: newPts }, { merge: true });
-            alert(`✔ Test Marks & Points saved successfully!`);
-                   } catch (e) {
-            if (window.AccuEngine) {
-              await window.AccuEngine.queueOfflineAction("offline_test", offlineTestPayload);
-              window.AccuEngine.triggerBackgroundSync();
+        // 🚀 Direct Firestore Save
+        try {
+          await setDoc(doc(fsDb, "tests", docId), testObj, { merge: true });
+          if (st) {
+            st.points = newPts;
+            if (window.MM_STORE && window.MM_STORE.students) {
+              window.MM_STORE.students[admn] = st;
             }
-            alert("⚡ Marks saved offline. Will automatically sync to the server once online.");
+            await setDoc(doc(fsDb, "students", String(admn)), { points: newPts }, { merge: true });
           }
-        } else {
-          if (window.AccuEngine) {
-            await window.AccuEngine.queueOfflineAction("offline_test", offlineTestPayload);
-            window.AccuEngine.triggerBackgroundSync();
-          }
-          alert("⚡ Offline Mode: Test marks and points saved locally!");
+          window.showCustomAlert(`✔ Test marks & points saved directly to Firestore!`);
+          document.getElementById("testNameInput").value = "";
+          document.getElementById("testTotalMarksInput").value = "";
+          document.getElementById("testObtainedMarksInput").value = "";
+        } catch(err) {
+          window.showCustomAlert("Error saving test: " + err.message);
         }
-
 
         await refreshAllTeacherData();
-
- });
+      });
     });
+
 
     addSafeListener("trackTestRecordBtn", "click", () => {
       const btn = document.getElementById("trackTestRecordBtn");
@@ -10070,16 +10136,7 @@ document.getElementById("hwTitleInput").value = "";
       let testsData = {};
       let myAttempted = {};
 
-      try {
-        const [testsSnap, attemptsSnap] = await Promise.all([
-          get(ref(db, `online_tests/${classKey}`)),
-          get(ref(db, `student_test_attempts/${currentStudentAdmn}`))
-        ]);
-        if(testsSnap.exists()) testsData = testsSnap.val();
-        if(attemptsSnap.exists()) myAttempted = attemptsSnap.val();
-      } catch (e) {
-        console.warn("RTDB tests load error:", e);
-      }
+      
 
       container.innerHTML = "";
 
@@ -10195,120 +10252,148 @@ document.getElementById("hwTitleInput").value = "";
       window.openModal("studentLiveTestModal");
     };
 
-             window.submitStudentLiveTest = async function() {
+           
+          // 📝 Student Online Test Submission (Live Check: Green = Sahi, Red = Galat, Auto-Save Firestore)
+    window.submitStudentLiveTest = async function() {
       if(!currentLiveTestObj) return;
       if(activeLiveTestTimer) clearInterval(activeLiveTestTimer);
 
-            const btn = document.getElementById("submitStudentTestBtn");
-      runWithBtnSpinner(btn, "🚀 Submit Test", async () => {
+      const btn = document.getElementById("submitStudentTestBtn");
+      runWithBtnSpinner(btn, "🚀 Checking & Submitting...", async () => {
         let obtainedMarks = 0;
-
-        const totalMarks = currentLiveTestObj.totalMarks;
-        const marksPerQ = currentLiveTestObj.marksPerQ;
-        
+        const totalMarks = Number(currentLiveTestObj.totalMarks) || 0;
+        const marksPerQ = Number(currentLiveTestObj.marksPerQ) || 0;
         const studentSelections = {};
 
-        // Visual Validation Loop
+        // 1. Live Checking Loop: Right = Green, Wrong Selection = Red
         currentLiveTestObj.questions.forEach((qObj, idx) => {
           const selectedOpt = document.querySelector(`input[name="live_q_opt_${idx}"]:checked`);
-          const correctOpt = qObj.correct;
+          const correctOpt = Number(qObj.correct);
+          const selectedVal = selectedOpt ? parseInt(selectedOpt.value) : null;
           
-          studentSelections[idx] = selectedOpt ? parseInt(selectedOpt.value) : null;
-          
-          document.querySelectorAll(`input[name="live_q_opt_${idx}"]`).forEach(inp => inp.disabled = true);
-          
-          const correctLabel = document.getElementById(`live_opt_lbl_${idx}_${correctOpt}`);
-          if(correctLabel) correctLabel.classList.add("correct");
+          studentSelections[idx] = selectedVal;
 
-          if(selectedOpt) {
-            const selectedVal = parseInt(selectedOpt.value);
+          // Sare inputs disable karein taaki user badal na sake
+          document.querySelectorAll(`input[name="live_q_opt_${idx}"]`).forEach(inp => inp.disabled = true);
+
+          // Sahi answer ko hamesha GREEN karein
+          const correctLabel = document.getElementById(`live_opt_lbl_${idx}_${correctOpt}`);
+          if(correctLabel) {
+            correctLabel.classList.add("correct");
+            correctLabel.style.backgroundColor = "rgba(34, 197, 94, 0.22)";
+            correctLabel.style.borderColor = "#16a34a";
+            correctLabel.style.color = "#16a34a";
+            correctLabel.style.fontWeight = "800";
+          }
+
+          // Student ka check
+          if(selectedVal !== null) {
             if(selectedVal === correctOpt) {
               obtainedMarks += marksPerQ;
             } else {
+              // Agar student ne galat select kiya to uska option RED karein
               const wrongLabel = document.getElementById(`live_opt_lbl_${idx}_${selectedVal}`);
-              if(wrongLabel) wrongLabel.classList.add("wrong");
+              if(wrongLabel) {
+                wrongLabel.classList.add("wrong");
+                wrongLabel.style.backgroundColor = "rgba(239, 68, 68, 0.22)";
+                wrongLabel.style.borderColor = "#dc2626";
+                wrongLabel.style.color = "#dc2626";
+                wrongLabel.style.fontWeight = "800";
+              }
             }
           }
         });
-        
-        const percentage = ((obtainedMarks / totalMarks) * 100).toFixed(1);
+
+        const percentage = totalMarks > 0 ? ((obtainedMarks / totalMarks) * 100).toFixed(1) : 0;
         let awardedPoints = 0;
-        if(percentage >= 95) awardedPoints = 100; else if(percentage >= 90) awardedPoints = 80; else if(percentage >= 70) awardedPoints = 50; else if(percentage >= 50) awardedPoints = 30; else if(percentage >= 30) awardedPoints = 10; else awardedPoints = -50;
+        if(percentage >= 95) awardedPoints = 100;
+        else if(percentage >= 90) awardedPoints = 80;
+        else if(percentage >= 70) awardedPoints = 50;
+        else if(percentage >= 50) awardedPoints = 30;
+        else if(percentage >= 30) awardedPoints = 10;
+        else awardedPoints = -50;
 
-        // NEW CACHE LOGIC: Cache till test expiration instead of 24h
-        const expiryTime = new Date(currentLiveTestObj.expiry).getTime();
-        const cacheData = { 
-            answers: studentSelections, 
-            testData: currentLiveTestObj, 
-            expiryTime: expiryTime 
-        };
-        localStorage.setItem(`test_cache_${currentLiveTestObj.id}_${currentStudentAdmn}`, JSON.stringify(cacheData));
-
-              const testTitle = currentLiveTestObj.title || currentLiveTestObj.testName || "Online Test";
+        const testTitle = currentLiveTestObj.title || currentLiveTestObj.testName || "Online Test";
+        const testRecordDocId = `${currentStudentAdmn}_${currentLiveTestObj.id}`;
         const attemptKey = `${currentLiveTestObj.id}_${currentStudentAdmn}`;
-        const offlineRecordId = `${currentStudentAdmn}_${Date.now()}`;
-        
+
+        const testRecordObj = {
+          id: testRecordDocId,
+          admn: String(currentStudentAdmn),
+          testId: String(currentLiveTestObj.id),
+          name: `[Online] ${testTitle}`,
+          subject: currentLiveTestObj.subject || "-",
+          total: totalMarks,
+          obtained: obtainedMarks,
+          percentage: percentage,
+          awardedPoints: awardedPoints,
+          date: getTodayFormattedDate(),
+          answers: studentSelections,
+          submittedAt: new Date().toISOString()
+        };
+
         const attemptObj = {
           id: attemptKey,
-          testId: currentLiveTestObj.id,
-          admn: currentStudentAdmn,
+          testId: String(currentLiveTestObj.id),
+          admn: String(currentStudentAdmn),
           title: testTitle,
           obtained: obtainedMarks,
           total: totalMarks,
           percentage: percentage,
           date: getTodayFormattedDate(),
-          updatedAt: new Date().toISOString()
+          answers: studentSelections,
+          submittedAt: new Date().toISOString()
         };
 
-        const testRecordObj = {
-          id: offlineRecordId,
-          admn: currentStudentAdmn,
-          name: `[Online] ${testTitle}`,
-          total: totalMarks,
-          obtained: obtainedMarks,
-          percentage: percentage,
-          awardedPoints: awardedPoints,
-          date: getTodayFormattedDate()
-        };
+        // 🚀 Direct Firestore Save (Purely Firestore, No RTDB for test results)
+        try {
+          await setDoc(doc(fsDb, "tests", testRecordDocId), testRecordObj, { merge: true });
+          await setDoc(doc(fsDb, "test_attempts", attemptKey), attemptObj, { merge: true });
 
-        const student = await getStudentRecord(currentStudentAdmn);
-        const newPts = (student ? (student.points || 0) : 0) + awardedPoints;
-
-        // 🚀 Firestore + AccuEngine (Attempts, Tests & Points)
-        await setDoc(doc(fsDb, "test_attempts", attemptKey), attemptObj, { merge: true });
-        await setDoc(doc(fsDb, "tests", offlineRecordId), testRecordObj, { merge: true });
-        await setDoc(doc(fsDb, "students", String(currentStudentAdmn)), { points: newPts }, { merge: true });
-
-        if (window.AccuEngine) {
-          await window.AccuEngine.setLocal("test_attempts", attemptKey, attemptObj);
-          await window.AccuEngine.setLocal("tests", offlineRecordId, testRecordObj);
-          if (student) {
+          const student = await getStudentRecord(currentStudentAdmn);
+          if(student) {
+            const newPts = (Number(student.points) || 0) + awardedPoints;
             student.points = newPts;
-            await window.AccuEngine.setLocal("students", currentStudentAdmn, student);
+            if (window.MM_STORE && window.MM_STORE.students) {
+              window.MM_STORE.students[currentStudentAdmn] = student;
+            }
+            await setDoc(doc(fsDb, "students", String(currentStudentAdmn)), { points: newPts }, { merge: true });
+            if (typeof updateHeaderStarBadge === "function") updateHeaderStarBadge();
           }
-          window.AccuEngine.bumpSyncVersion();
+        } catch(err) {
+          console.warn("Firestore test submit error:", err);
         }
 
-        const updates = {};
-        updates[`student_test_attempts/${currentStudentAdmn}/${currentLiveTestObj.id}`] = attemptObj;
-        updates[`test_attempts/${currentLiveTestObj.id}/${currentStudentAdmn}`] = attemptObj;
-        updates[`tests/${currentStudentAdmn}/${Date.now()}`] = testRecordObj;
-        updates[`students/${currentStudentAdmn}/points`] = newPts;
-        await update(ref(db), updates).catch(() => {});
+        // Local cache for review
+        const cacheData = {
+          answers: studentSelections,
+          testData: currentLiveTestObj,
+          expiryTime: currentLiveTestObj.expiry ? new Date(currentLiveTestObj.expiry).getTime() : Date.now() + 86400000
+        };
+        localStorage.setItem(`test_cache_${currentLiveTestObj.id}_${currentStudentAdmn}`, JSON.stringify(cacheData));
 
-        
-        // Notification triggered strictly once
-        await window.pushAppNotification(currentStudentAdmn, "Test Submitted ✅", `You scored ${obtainedMarks}/${totalMarks} in ${currentLiveTestObj.title}.`, "test_submitted");
-        
-        document.getElementById("submitStudentTestBtn").style.display = "none";
-        document.getElementById("liveTestTimerBox").innerText = "Finished";
-        
+        // Submit button hide karein
+        if (btn) btn.style.display = "none";
+        const timerBox = document.getElementById("liveTestTimerBox");
+        if(timerBox) timerBox.innerText = "Completed";
+
+        // Score summary banner show karein
         const summaryBox = document.getElementById("testResultSummaryBox");
-        summaryBox.style.display = "block";
-        document.getElementById("resultMarksText").innerText = `Score: ${obtainedMarks} / ${totalMarks}`;
-        document.getElementById("resultFeedbackText").innerHTML = `You earned ${awardedPoints >= 0 ? '+' : ''}${awardedPoints} Points.<br><br><button class="btn-primary btn-blue" onclick="window.viewStudentTestResult('${currentLiveTestObj.id}')" style="margin-top:10px; padding:10px; font-size:12px;">👁 View Result</button>`;
-        
-        refreshStudentDashboard();
+        if(summaryBox) {
+          summaryBox.style.display = "block";
+          const marksText = document.getElementById("resultMarksText");
+          if(marksText) marksText.innerText = `Score: ${obtainedMarks} / ${totalMarks} (${percentage}%)`;
+          const feedbackText = document.getElementById("resultFeedbackText");
+          if(feedbackText) {
+            feedbackText.innerHTML = `Points: <b>${awardedPoints >= 0 ? '+' : ''}${awardedPoints} PTS</b><br><span style="color:#16a34a; font-weight:800;">🟢 Green = Right Answer</span> | <span style="color:#dc2626; font-weight:800;">🔴 Red = Your Wrong Selection</span><br><div style="font-size:12px; color:var(--text-muted); margin-top:6px;">Aap niche scroll karke sabhi questions aur unke sahi answers check kar sakte hain.</div>`;
+          }
+        }
+
+        // Modal ko upar scroll karein taaki student ko turant score dikhe
+        const modalContent = document.querySelector("#studentLiveTestModal .modal-body");
+        if(modalContent) modalContent.scrollTo({ top: 0, behavior: 'smooth' });
+
+        if(typeof refreshStudentDashboard === "function") refreshStudentDashboard();
       });
     };
 
