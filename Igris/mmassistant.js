@@ -1,6 +1,6 @@
 /**
  * ====================================================================
- * MMASSISTANT AI v22.0 (TOUCH SEND FIXED • GEMINI TRIPLE AUTO-FALLBACK)
+ * MMASSISTANT AI v22.0 (MULTI-MODEL FAILOVER • ZERO SERVER-BUSY LOCK)
  * M.M ISLAMIC ENGLISH SCHOOL ERP
  * ====================================================================
  */
@@ -19,11 +19,11 @@
     }
   }
 
-  // 🚀 Triple Fallback Models (Agar ek busy ho toh dusra instant chalega)
+  // 🚀 Priority Order: 2.0-flash (fastest/smartest) -> 1.5-flash-8b (zero traffic lock) -> 1.5-flash
   const GEMINI_MODELS = [
-    "gemini-1.5-flash",
     "gemini-2.0-flash",
     "gemini-1.5-flash-8b",
+    "gemini-1.5-flash",
     "gemini-flash-latest"
   ];
 
@@ -31,7 +31,6 @@
   const CHATS_STORAGE_KEY = "mm_assistant_all_sessions_v1";
   const ACTIVE_SESSION_KEY = "mm_assistant_active_session_id_v1";
 
-  // 2D AI Sparkle Vector
   const AI_SPARKLE_SVG = `
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M12 2C12 7.52285 7.52285 12 2 12C7.52285 12 12 16.4771 12 22C12 16.4771 16.4771 12 22 12C16.4771 12 12 7.52285 12 2Z" fill="url(#sparkleGrad)" />
@@ -61,7 +60,6 @@
     </svg>
   `;
 
-  // Markdown Formatter
   function formatMarkdown(text) {
     if (!text) return "";
     let safe = text
@@ -80,9 +78,6 @@
     return safe;
   }
 
-  // ----------------------------------------------------
-  // MULTI-SESSION STORAGE MANAGEMENT
-  // ----------------------------------------------------
   function getAllSessions() {
     try {
       const data = localStorage.getItem(CHATS_STORAGE_KEY);
@@ -168,9 +163,6 @@
     renderMessages();
   }
 
-  // ----------------------------------------------------
-  // FULL-SCREEN UI & DRAWER INJECTION
-  // ----------------------------------------------------
   function injectChatUI() {
     if (document.getElementById("mmAssistantOverlay")) return;
 
@@ -183,7 +175,6 @@
     `;
 
     overlay.innerHTML = `
-      <!-- TOP NAVIGATION BAR -->
       <div style="background: #111827; height: 60px; padding: 0 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #1f2937; z-index: 20;">
         <div style="display: flex; align-items: center; gap: 12px;">
           <button type="button" id="mmBtnHamburger" title="Open Chat List" style="background: transparent; border: none; color: #f3f4f6; padding: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
@@ -200,7 +191,6 @@
         </button>
       </div>
 
-      <!-- QUICK TOP PROMPT CHIPS -->
       <div style="display: flex; gap: 8px; overflow-x: auto; padding: 10px 16px; background: #0c1220; border-bottom: 1px solid #1f2937; scrollbar-width: none;">
         <div class="class-chip mm-chip" style="margin:0; padding:6px 14px; font-size:11.5px; cursor:pointer; white-space:nowrap;" data-query="School ka address, timings aur principal details batao">🏫 School Details</div>
         <div class="class-chip mm-chip" style="margin:0; padding:6px 14px; font-size:11.5px; cursor:pointer; white-space:nowrap;" data-query="Is app me kaunse features hain aur fees kaise enter karein?">📱 App Manual</div>
@@ -208,16 +198,13 @@
         <div class="class-chip mm-chip" style="margin:0; padding:6px 14px; font-size:11.5px; cursor:pointer; white-space:nowrap;" data-query="Is month kitne bachon ki fees pending hai list do">💳 Unpaid Fees</div>
       </div>
 
-      <!-- MAIN MESSAGES CONTAINER -->
       <div id="mmMessagesList" style="flex: 1; overflow-y: auto; padding: 18px 16px; display: flex; flex-direction: column; gap: 14px; -webkit-overflow-scrolling: touch;"></div>
 
-      <!-- FIXED POWERED BY GOOGLE GEMINI BADGE -->
       <div style="text-align: center; font-size: 10.5px; font-weight: 700; color: #94a3b8; padding: 6px 0 4px 0; background: #111827; border-top: 1px solid rgba(255,255,255,0.05); letter-spacing: 0.3px; display: flex; align-items: center; justify-content: center; gap: 6px;">
         <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#38bdf8; box-shadow: 0 0 6px #38bdf8;"></span>
         • Powered by Google Gemini
       </div>
 
-      <!-- BOTTOM INPUT BAR (SEND BUTTON FIXED FOR TOUCH & CLICK) -->
       <div style="padding: 10px 16px 16px 16px; background: #111827; display: flex; align-items: center; gap: 10px; border-top: 1px solid #1f2937;">
         <input 
           type="search" 
@@ -237,34 +224,28 @@
           type="button"
           id="mmSendBtn" 
           class="btn-primary btn-green" 
-          style="width: auto; padding: 13px 20px; margin: 0; border-radius: 16px; font-size: 14px; font-weight: 700; cursor: pointer; user-select: none; -webkit-user-select: none;">
+          style="width: auto; padding: 13px 20px; margin: 0; border-radius: 16px; font-size: 14px; font-weight: 700; cursor: pointer; user-select: none;">
           Send ➔
         </button>
       </div>
 
-      <!-- SIDEBAR DRAWER -->
       <div id="mmSidebarDrawer" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.65); backdrop-filter: blur(4px); z-index: 100100;">
         <div style="width: 290px; height: 100%; background: #0f172a; border-right: 1px solid #1e293b; display: flex; flex-direction: column; animation: slideInLeft 0.25s ease-out forwards;">
-          
           <div style="padding: 18px 16px; border-bottom: 1px solid #1e293b; display: flex; align-items: center; justify-content: space-between;">
             <span style="font-size: 15px; font-weight: 800; color: #f8fafc;">Conversations</span>
             <button id="mmBtnNewChat" style="background: #059669; color: white; border: none; padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer;">
               + New Chat
             </button>
           </div>
-
           <div id="mmDrawerSessionList" style="flex: 1; overflow-y: auto; padding: 12px 10px; display: flex; flex-direction: column; gap: 8px;"></div>
-
           <div style="padding: 16px; border-top: 1px solid #1e293b; text-align: center; background: #0b1120;">
             <a href="javascript:void(0)" id="mmLinkDrawerTerms" style="color: #38bdf8; font-size: 12.5px; font-weight: 700; text-decoration: underline; letter-spacing: 0.2px;">
               Terms and Conditions
             </a>
           </div>
-
         </div>
       </div>
 
-      <!-- LONG PRESS ACTION DROPDOWN -->
       <div id="mmLongPressMenu" style="display: none; position: fixed; background: #1e293b; border: 1px solid #334155; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); z-index: 100102; width: 150px; overflow: hidden;">
         <div id="mmBtnDeleteFromMenu" style="display: flex; align-items: center; gap: 10px; padding: 12px 16px; cursor: pointer; color: #ef4444; font-size: 13.5px; font-weight: 700;">
           ${RED_TRASH_SVG}
@@ -272,15 +253,12 @@
         </div>
       </div>
 
-      <!-- TERMS MODAL -->
       <div id="mmTermsModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(6px); z-index: 100110; align-items: center; justify-content: center; padding: 20px;">
         <div style="width: 100%; max-width: 460px; background: #111827; border: 1.5px solid #1f2937; border-radius: 20px; padding: 22px; box-shadow: 0 20px 50px rgba(0,0,0,0.7); display: flex; flex-direction: column; gap: 14px; color: #f3f4f6;">
-          
           <div style="display: flex; align-items: center; gap: 10px;">
             <div style="font-size: 24px;">🛡️</div>
             <h3 style="margin: 0; font-size: 17px; font-weight: 800; color: #ffffff;">Terms & Data Sharing Disclosure</h3>
           </div>
-
           <div style="font-size: 13px; line-height: 1.6; color: #9ca3af; background: #0f172a; padding: 14px; border-radius: 12px; border: 1px solid #1e293b; max-height: 220px; overflow-y: auto;">
             <p style="margin: 0 0 10px 0; color: #e5e7eb; font-weight: 600;">
               Notice Regarding Artificial Intelligence (AI) Usage:
@@ -289,14 +267,12 @@
             <br><br>
             This data sharing is strictly utilized to provide accurate assistant capabilities, deep institutional analysis, and continuous performance improvements. Local cache remains protected through encrypted device hardware sentinel.
           </div>
-
           <div id="mmConsentCheckboxWrapper" style="display: flex; align-items: center; gap: 10px; margin-top: 4px;">
             <input type="checkbox" id="mmConsentCheckbox" style="width: 18px; height: 18px; cursor: pointer; accent-color: #059669;">
             <label for="mmConsentCheckbox" style="font-size: 13px; font-weight: 700; color: #f3f4f6; cursor: pointer;">
               Allow data sharing with Google Gemini
             </label>
           </div>
-
           <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px;">
             <button type="button" id="mmBtnCloseTermsViewOnly" style="display: none; padding: 10px 20px; background: #1f2937; color: #e5e7eb; border: 1px solid #374151; border-radius: 12px; font-size: 13px; font-weight: 700; cursor: pointer;">
               Close
@@ -305,7 +281,6 @@
               Continue
             </button>
           </div>
-
         </div>
       </div>
     `;
@@ -315,37 +290,32 @@
     const input = document.getElementById("mmInputBox");
     const sendBtn = document.getElementById("mmSendBtn");
 
-    // 🚀 FIXED: Guaranteed Trigger for Click & Mobile Touch
-    function triggerSend() {
+    function doSubmit() {
       window.MMAssistant.submitMessage();
-      setTimeout(() => {
-        input.focus();
-      }, 50);
+      setTimeout(() => input.focus(), 60);
     }
 
     sendBtn.onclick = (e) => {
       e.preventDefault();
-      triggerSend();
+      doSubmit();
     };
 
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        triggerSend();
+        doSubmit();
       }
     });
 
     document.getElementById("mmBtnCloseFull").onclick = window.MMAssistant.close;
 
-    // Chips
     overlay.querySelectorAll(".mm-chip").forEach((chip) => {
       chip.onclick = () => {
         input.value = chip.getAttribute("data-query");
-        triggerSend();
+        doSubmit();
       };
     });
 
-    // Drawer
     document.getElementById("mmBtnHamburger").onclick = () => {
       renderSidebarList();
       document.getElementById("mmSidebarDrawer").style.display = "block";
@@ -366,7 +336,6 @@
       input.focus();
     };
 
-    // Terms Modal
     const checkbox = document.getElementById("mmConsentCheckbox");
     const acceptBtn = document.getElementById("mmBtnAcceptTerms");
 
@@ -431,9 +400,6 @@
     modal.style.display = "flex";
   }
 
-  // ----------------------------------------------------
-  // SESSIONS & LONG-PRESS
-  // ----------------------------------------------------
   let targetDeleteSessionId = null;
   let longPressTimer = null;
 
@@ -511,9 +477,6 @@
     };
   }
 
-  // ----------------------------------------------------
-  // MESSAGES RENDERING
-  // ----------------------------------------------------
   function renderMessages() {
     const box = document.getElementById("mmMessagesList");
     if (!box) return;
@@ -523,7 +486,12 @@
     if (messages.length === 0) {
       box.innerHTML = `
         <div style="text-align:center; padding:40px 16px; color:#94a3b8; margin: auto;">
-          <div style="display:flex; justify-content:center; margin-bottom:14px;">${BIG_SPARKLE_SVG}</div>
+          <div style="display:flex; justify-content:center; margin-bottom:14px;">
+            <svg width="56" height="56" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 2C12 7.52285 7.52285 12 2 12C7.52285 12 12 16.4771 12 22C12 16.4771 16.4771 12 22 12C16.4771 12 12 7.52285 12 2Z" fill="url(#bGrad)" />
+              <defs><linearGradient id="bGrad" x1="2" y1="2" x2="22" y2="22"><stop stop-color="#38bdf8"/><stop offset="1" stop-color="#a855f7"/></linearGradient></defs>
+            </svg>
+          </div>
           <div style="font-size:19px; font-weight:900; color:#f8fafc; margin-bottom:8px;">Assalamualaikum</div>
           <div style="font-size:13px; font-weight:600; line-height:1.6; max-width:440px; margin:0 auto; color:#94a3b8;">
             Welcome to MMAssistant. Ask me anything about student records, teacher contacts, fee status, portal navigation, or study help.
@@ -546,9 +514,6 @@
     box.scrollTop = box.scrollHeight;
   }
 
-  // ----------------------------------------------------
-  // IGRIS DATA HARVESTER
-  // ----------------------------------------------------
   async function buildContextSlice(userQuery, recentHistoryText) {
     if (localStorage.getItem(TERMS_STORAGE_KEY) !== "true") {
       return "{}";
@@ -633,7 +598,6 @@
       const qRaw = userQuery + " " + recentHistoryText;
       const q = qRaw.toLowerCase().replace(/[^a-z0-9\s]/g, " ");
 
-      // Phone Number Lookup
       const phoneMatch = qRaw.match(/\b\d{10}\b/);
       if (phoneMatch) {
         const searchedPhone = phoneMatch[0];
@@ -658,7 +622,6 @@
         }
       }
 
-      // Admission Number Search
       const admnMatches = qRaw.match(/(?:admn|admission|roll|id)?\s*#?\s*(\d{1,4})\b/i);
       let targetStudentByAdmn = null;
       if (admnMatches && admnMatches[1] && parseInt(admnMatches[1], 10) < 5000) {
@@ -666,7 +629,6 @@
         targetStudentByAdmn = students.find((s) => String(s.admn) === searchedAdmn);
       }
 
-      // Student Search & Fees
       const matchedStudents = [];
       for (const st of students) {
         const sName = (st.name || "").toLowerCase();
@@ -704,7 +666,6 @@
         context.queried_students = matchedStudents;
       }
 
-      // Fees Summary
       if (/(fee|unpaid|pending|paid|due|rupaye|paisa|list)/i.test(q)) {
         let unpaidCount = 0;
         let totalDues = 0;
@@ -733,9 +694,6 @@
     }
   }
 
-  // ----------------------------------------------------
-  // GEMINI INFERENCE (AUTO-FALLBACK ENGINE • NO SERVER BUSY ERROR)
-  // ----------------------------------------------------
   async function callGeminiWithFallback(userPrompt, verifiedContext) {
     const apiKey = getGeminiKey();
 
@@ -752,10 +710,9 @@ Aapka dimaag ek tajurbekaar School Owner, Principal aur Operations Manager ki ta
      * Exam Marksheet / Report Card auto-generator PDF.
 2. COMPLETENESS & ZERO CUT-OFF:
    - Jawab poora likhein, kabhi beech me mat rokein.
-   - List ya number dete waqt aakhri hisse tak saaf mukammal karein.
 3. APP NAVIGATION & MANUAL:
    - "app_user_guide" se step-by-step guidance dein.
-   - Fees bharni ho toh 'Entry' tab me jakar '+ ADD FEES ENTRY' karein. Unpaid list ke liye 'Total Due Fees' box par 3 baar lagatar tap (Triple Tap) karein.
+   - Fees lene ke liye 'Entry' tab me jakar '+ ADD FEES ENTRY' karein. Unpaid list ke liye 'Total Due Fees' box par 3 baar lagatar tap (Triple Tap) karein.
 4. SCHOOL, PRINCIPAL & TEACHERS:
    - Address: 46/K/05 (Room No 5, Line K, Plot No 46), Road No 04, Shivaji Nagar, Govandi, Mumbai - 400043.
    - Landmarks: S.N. Hospital aur Honest Life English School ke bazu me, Sufi Dairy ke paas.
@@ -795,13 +752,16 @@ ${verifiedContext}`;
 
     let lastError = null;
 
-    // 🚀 Multi-Model Auto-Fallback: Agar ek model busy ho, turant dusra chalega!
+    // 🚀 Multi-Model Auto-Fallback Engine
     for (const modelName of GEMINI_MODELS) {
       try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
         const response = await fetch(url, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": apiKey
+          },
           body: JSON.stringify(payload)
         });
 
@@ -823,9 +783,6 @@ ${verifiedContext}`;
     throw new Error(lastError || "Google Gemini is currently busy. Please retry in a moment.");
   }
 
-  // ----------------------------------------------------
-  // PUBLIC CONTROLLER API
-  // ----------------------------------------------------
   window.MMAssistant = {
     open: function () {
       injectChatUI();
