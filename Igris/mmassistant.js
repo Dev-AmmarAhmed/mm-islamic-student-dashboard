@@ -1,6 +1,6 @@
 /**
  * ====================================================================
- * MMASSISTANT AI v21.0 (PRO MANAGER ENGINE • ANTI-KEYBOARD DISMISS • 2500 TOKENS)
+ * MMASSISTANT AI v22.0 (TOUCH SEND FIXED • GEMINI TRIPLE AUTO-FALLBACK)
  * M.M ISLAMIC ENGLISH SCHOOL ERP
  * ====================================================================
  */
@@ -19,7 +19,14 @@
     }
   }
 
-  const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent";
+  // 🚀 Triple Fallback Models (Agar ek busy ho toh dusra instant chalega)
+  const GEMINI_MODELS = [
+    "gemini-1.5-flash",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash-8b",
+    "gemini-flash-latest"
+  ];
+
   const TERMS_STORAGE_KEY = "mm_gemini_terms_accepted_v1";
   const CHATS_STORAGE_KEY = "mm_assistant_all_sessions_v1";
   const ACTIVE_SESSION_KEY = "mm_assistant_active_session_id_v1";
@@ -54,9 +61,7 @@
     </svg>
   `;
 
-  // ----------------------------------------------------
-  // ROBUST FULL MARKDOWN PARSER (Clean Headings, Hr, Bold, Bullets)
-  // ----------------------------------------------------
+  // Markdown Formatter
   function formatMarkdown(text) {
     if (!text) return "";
     let safe = text
@@ -64,21 +69,12 @@
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
 
-    // Horizontal Rule (---)
     safe = safe.replace(/^---$/gim, "<hr style='border:none; border-top:1px solid rgba(255,255,255,0.12); margin:12px 0;'>");
-
-    // Headings (###, ##, #)
     safe = safe.replace(/^###\s+(.*)$/gim, "<div style='font-size:14px; font-weight:800; color:#38bdf8; margin:10px 0 4px 0;'>$1</div>");
     safe = safe.replace(/^##\s+(.*)$/gim, "<div style='font-size:15px; font-weight:800; color:#ffffff; margin:12px 0 6px 0;'>$1</div>");
     safe = safe.replace(/^#\s+(.*)$/gim, "<div style='font-size:16px; font-weight:900; color:#ffffff; margin:14px 0 8px 0;'>$1</div>");
-
-    // Bold (**word**)
     safe = safe.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
-
-    // Bullet points (* or -)
     safe = safe.replace(/^[\*\-]\s+(.*)$/gim, "<span style='display:block; padding-left:14px; margin:3px 0;'>• $1</span>");
-
-    // Numbered lists (1. Item)
     safe = safe.replace(/^(\d+)\.\s+(.*)$/gim, "<span style='display:block; padding-left:14px; margin:3px 0;'><b>$1.</b> $2</span>");
 
     return safe;
@@ -221,12 +217,12 @@
         • Powered by Google Gemini
       </div>
 
-      <!-- BOTTOM INPUT BAR (ANTI-AUTOFILL & KEYBOARD LOCK) -->
+      <!-- BOTTOM INPUT BAR (SEND BUTTON FIXED FOR TOUCH & CLICK) -->
       <div style="padding: 10px 16px 16px 16px; background: #111827; display: flex; align-items: center; gap: 10px; border-top: 1px solid #1f2937;">
         <input 
           type="search" 
           id="mmInputBox" 
-          name="school_assistant_query_box"
+          name="assistant_search_input"
           placeholder="Ask MMAssistant anything..." 
           autocomplete="off" 
           autocorrect="off" 
@@ -238,9 +234,10 @@
           style="flex: 1; padding: 13px 18px; font-size: 14px; font-weight: 600; border: 1.5px solid #059669; border-radius: 16px; background: #1f2937; color: #ffffff; outline: none; -webkit-appearance: none;">
         
         <button 
+          type="button"
           id="mmSendBtn" 
           class="btn-primary btn-green" 
-          style="width: auto; padding: 13px 20px; margin: 0; border-radius: 16px; font-size: 14px; font-weight: 700; cursor: pointer;">
+          style="width: auto; padding: 13px 20px; margin: 0; border-radius: 16px; font-size: 14px; font-weight: 700; cursor: pointer; user-select: none; -webkit-user-select: none;">
           Send ➔
         </button>
       </div>
@@ -318,19 +315,23 @@
     const input = document.getElementById("mmInputBox");
     const sendBtn = document.getElementById("mmSendBtn");
 
-    // 🚀 PREVENT KEYBOARD FROM DISMISSING ON CLICK/TOUCH
-    sendBtn.addEventListener("mousedown", (e) => e.preventDefault());
-    sendBtn.addEventListener("touchstart", (e) => e.preventDefault(), { passive: false });
-    sendBtn.onclick = () => {
+    // 🚀 FIXED: Guaranteed Trigger for Click & Mobile Touch
+    function triggerSend() {
       window.MMAssistant.submitMessage();
-      input.focus();
+      setTimeout(() => {
+        input.focus();
+      }, 50);
+    }
+
+    sendBtn.onclick = (e) => {
+      e.preventDefault();
+      triggerSend();
     };
 
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        window.MMAssistant.submitMessage();
-        input.focus();
+        triggerSend();
       }
     });
 
@@ -340,12 +341,11 @@
     overlay.querySelectorAll(".mm-chip").forEach((chip) => {
       chip.onclick = () => {
         input.value = chip.getAttribute("data-query");
-        window.MMAssistant.submitMessage();
-        input.focus();
+        triggerSend();
       };
     });
 
-    // Drawer toggles
+    // Drawer
     document.getElementById("mmBtnHamburger").onclick = () => {
       renderSidebarList();
       document.getElementById("mmSidebarDrawer").style.display = "block";
@@ -366,7 +366,7 @@
       input.focus();
     };
 
-    // Terms
+    // Terms Modal
     const checkbox = document.getElementById("mmConsentCheckbox");
     const acceptBtn = document.getElementById("mmBtnAcceptTerms");
 
@@ -432,7 +432,7 @@
   }
 
   // ----------------------------------------------------
-  // DRAWER SESSIONS & LONG-PRESS
+  // SESSIONS & LONG-PRESS
   // ----------------------------------------------------
   let targetDeleteSessionId = null;
   let longPressTimer = null;
@@ -704,7 +704,7 @@
         context.queried_students = matchedStudents;
       }
 
-      // Fees Summary (Full list)
+      // Fees Summary
       if (/(fee|unpaid|pending|paid|due|rupaye|paisa|list)/i.test(q)) {
         let unpaidCount = 0;
         let totalDues = 0;
@@ -734,9 +734,9 @@
   }
 
   // ----------------------------------------------------
-  // GEMINI FLASH INFERENCE (HIGH CAPACITY • 2500 TOKENS • RETRY LOGIC)
+  // GEMINI INFERENCE (AUTO-FALLBACK ENGINE • NO SERVER BUSY ERROR)
   // ----------------------------------------------------
-  async function callGeminiFlash(userPrompt, verifiedContext) {
+  async function callGeminiWithFallback(userPrompt, verifiedContext) {
     const apiKey = getGeminiKey();
 
     const systemPrompt = `Aap M.M ISLAMIC ENGLISH SCHOOL ke official smart collaborator (MMAssistant) hain.
@@ -788,17 +788,18 @@ ${verifiedContext}`;
       },
       contents: contents,
       generationConfig: {
-        temperature: 0.45,       // Perfect balance for sharp management thought
-        maxOutputTokens: 2500    // Raised from 750 to 2500 so answers NEVER cut off!
+        temperature: 0.45,
+        maxOutputTokens: 2500
       }
     };
 
-    // Auto-retry helper on temporary Google 503 / spikes
-    let attempts = 0;
-    while (attempts < 2) {
-      attempts++;
+    let lastError = null;
+
+    // 🚀 Multi-Model Auto-Fallback: Agar ek model busy ho, turant dusra chalega!
+    for (const modelName of GEMINI_MODELS) {
       try {
-        const response = await fetch(`${GEMINI_ENDPOINT}?key=${apiKey}`, {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+        const response = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
@@ -811,20 +812,15 @@ ${verifiedContext}`;
         }
 
         const errData = await response.json().catch(() => ({}));
-        if (response.status === 503 || errData.error?.message?.includes("high demand")) {
-          console.warn("Spike detected, retrying in 1s...");
-          await new Promise(r => setTimeout(r, 1000));
-          continue;
-        }
-
-        throw new Error(errData.error?.message || `HTTP ${response.status}`);
+        lastError = errData.error?.message || `HTTP ${response.status}`;
+        console.warn(`Gemini Model [${modelName}] failed: ${lastError}. Trying backup model...`);
       } catch (err) {
-        if (attempts >= 2) throw err;
-        await new Promise(r => setTimeout(r, 1000));
+        lastError = err.message;
+        console.warn(`Network fail on [${modelName}]: ${lastError}`);
       }
     }
 
-    throw new Error("Gemini server busy. Please retry.");
+    throw new Error(lastError || "Google Gemini is currently busy. Please retry in a moment.");
   }
 
   // ----------------------------------------------------
@@ -877,7 +873,7 @@ ${verifiedContext}`;
       try {
         const recentHist = getActiveMessages().slice(-5).map((m) => m.text).join(" ");
         const contextSlice = await buildContextSlice(text, recentHist);
-        const aiReply = await callGeminiFlash(text, contextSlice);
+        const aiReply = await callGeminiWithFallback(text, contextSlice);
         saveMessageToActive("assistant", aiReply);
         renderMessages();
       } catch (err) {
@@ -887,7 +883,7 @@ ${verifiedContext}`;
       } finally {
         btn.disabled = false;
         btn.innerText = "Send ➔";
-        input.focus(); // Keep keyboard open!
+        input.focus();
       }
     }
   };
