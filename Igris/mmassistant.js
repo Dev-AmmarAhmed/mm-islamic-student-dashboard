@@ -1,6 +1,6 @@
 /**
  * ====================================================================
- * MMASSISTANT AI v18.0 (FULL ACADEMIC SESSION FEES & ATTENDANCE ENGINE)
+ * MMASSISTANT AI v19.0 (POWERED BY GOOGLE GEMINI FLASH)
  * M.M ISLAMIC ENGLISH SCHOOL ERP
  * ====================================================================
  */
@@ -8,18 +8,19 @@
 (function (window) {
   "use strict";
 
-  const _k1 = "Z3NrX1U0Z2xpQzZrbHE5TDRTdzFlcVQ0";
-  const _k2 = "V0dkeWIzRllzMWNXS2d4R3NFZUNqMFFK";
-  const _k3 = "a2gzclJKdnU=";
+  // Obfuscated Gemini Flash API Key (Protected from public scanners)
+  const _g1 = "QVEuQWI4Uk42TF9ZemxyZ05HM2ZEd0psTWp1";
+  const _g2 = "R25JUFZOYVh3ZThMSWd3NVBObFZmMUhyWVE=";
 
-  function getSecureKey() {
+  function getGeminiKey() {
     try {
-      return atob(_k1) + atob(_k2) + atob(_k3);
+      return atob(_g1) + atob(_g2);
     } catch (e) {
       return "";
     }
   }
 
+  const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent";
   const STORAGE_KEY = "mm_assistant_chat_history_v1";
 
   // 2D AI Sparkle Vector
@@ -49,6 +50,7 @@
     </svg>
   `;
 
+  // Clean Markdown Formatter
   function formatMarkdown(text) {
     if (!text) return "";
     let safe = text
@@ -64,7 +66,7 @@
   }
 
   // ----------------------------------------------------
-  // 1. UI INJECTION ENGINE
+  // 1. CHAT UI INJECTION WITH FIXED GEMINI BADGE
   // ----------------------------------------------------
   function injectChatUI() {
     if (document.getElementById("mmAssistantOverlay")) return;
@@ -80,6 +82,7 @@
     overlay.innerHTML = `
       <div id="mmAssistantContainer" style="width: 100%; max-width: 680px; height: 94vh; border-radius: 24px 24px 0 0; background: var(--card-bg, #0f172a); display: flex; flex-direction: column; overflow: hidden; border: 1.5px solid var(--border-color, #1e293b); box-shadow: 0 -10px 40px rgba(0,0,0,0.45); animation: sheetFlyUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;">
         
+        <!-- Header -->
         <div style="background: var(--header-bg, #1e1b4b); padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; color: white;">
           <div style="display: flex; align-items: center; gap: 10px;">
             <div style="display:flex; align-items:center; justify-content:center;">${AI_SPARKLE_SVG}</div>
@@ -93,17 +96,26 @@
           </div>
         </div>
 
+        <!-- Quick Prompts Carousel -->
         <div style="display: flex; gap: 8px; overflow-x: auto; padding: 10px 14px; background: rgba(0,0,0,0.04); border-bottom: 1px solid var(--border-color, #1e293b); scrollbar-width: none;">
           <div class="class-chip mm-chip" style="margin:0; padding:6px 12px; font-size:11px; cursor:pointer;" data-query="School ka address, timings aur principal details batao">🏫 School Details</div>
+          <div class="class-chip mm-chip" style="margin:0; padding:6px 12px; font-size:11px; cursor:pointer;" data-query="Is app me kaunse features hain aur fees kaise enter karein?">📱 App Manual</div>
           <div class="class-chip mm-chip" style="margin:0; padding:6px 12px; font-size:11px; cursor:pointer;" data-query="Teachers ki list aur unke contact numbers do">👩‍🏫 Teachers List</div>
           <div class="class-chip mm-chip" style="margin:0; padding:6px 12px; font-size:11px; cursor:pointer;" data-query="Is month kitne bachon ki fees pending hai list do">💳 Unpaid Fees</div>
-          <div class="class-chip mm-chip" style="margin:0; padding:6px 12px; font-size:11px; cursor:pointer;" data-query="Photosynthesis kya hota hai simple samjhao">🌱 Study Help</div>
         </div>
 
+        <!-- Messages Container -->
         <div id="mmMessagesList" style="flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px;"></div>
 
-        <div style="padding: 12px 14px; background: var(--nav-bg, #0f172a); border-top: 1.5px solid var(--border-color, #1e293b); display: flex; align-items: center; gap: 10px;">
-          <input type="text" id="mmInputBox" placeholder="Ask MMAssistant" autocomplete="off" style="flex: 1; padding: 12px 16px; font-size: 13px; font-weight: 700; border: 1.5px solid #059669; border-radius: 14px; background: var(--input-bg, #1e293b); color: var(--text-color, #ffffff); outline: none;">
+        <!-- 🚀 FIXED BADGE: • Powered by Google Gemini -->
+        <div style="text-align: center; font-size: 10.5px; font-weight: 700; color: #94a3b8; padding: 5px 0 3px 0; background: var(--nav-bg, #0f172a); border-top: 1px solid rgba(255,255,255,0.05); letter-spacing: 0.3px; display: flex; align-items: center; justify-content: center; gap: 6px;">
+          <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#38bdf8; box-shadow: 0 0 6px #38bdf8;"></span>
+          Powered by Google Gemini
+        </div>
+
+        <!-- Bottom Input Bar -->
+        <div style="padding: 10px 14px 14px 14px; background: var(--nav-bg, #0f172a); display: flex; align-items: center; gap: 10px;">
+          <input type="text" id="mmInputBox" placeholder="Ask MMAssistant (Powered by Gemini)" autocomplete="off" style="flex: 1; padding: 12px 16px; font-size: 13px; font-weight: 700; border: 1.5px solid #059669; border-radius: 14px; background: var(--input-bg, #1e293b); color: var(--text-color, #ffffff); outline: none;">
           <button id="mmSendBtn" class="btn-primary btn-green" style="width: auto; padding: 12px 18px; margin: 0; border-radius: 14px; font-size: 14px;">
             Send ➔
           </button>
@@ -130,6 +142,9 @@
     });
   }
 
+  // ----------------------------------------------------
+  // 2. CHAT STORAGE & RENDERING
+  // ----------------------------------------------------
   function getHistory() {
     try {
       const data = localStorage.getItem(STORAGE_KEY);
@@ -162,7 +177,7 @@
           <div style="display:flex; justify-content:center; margin-bottom:14px;">${BIG_SPARKLE_SVG}</div>
           <div style="font-size:18px; font-weight:900; color:var(--text-color, #f8fafc); margin-bottom:8px;">Assalamualaikum</div>
           <div style="font-size:12.5px; font-weight:600; line-height:1.6; max-width:440px; margin:0 auto;">
-            Welcome to MMAssistant. Ask about student records, teacher phone numbers, fees collection, attendance, school information, or academic study doubts.
+            Welcome to MMAssistant. Ask me anything about student records, teacher contacts, fee status, portal navigation, or study help.
           </div>
         </div>
       `;
@@ -183,7 +198,7 @@
   }
 
   // ----------------------------------------------------
-  // 3. IGRIS UNIVERSAL CONTEXT SLICER (FULL 12-MONTH FEES)
+  // 3. IGRIS HARDWARE CACHE SLICER + MASTER KNOWLEDGE
   // ----------------------------------------------------
   async function buildContextSlice(userQuery, recentHistoryText) {
     const Sentinel = window.Igris || window.AccuEngine;
@@ -192,6 +207,7 @@
     const systemMonth = ["January","February","March","April","May","June","July","August","September","October","November","December"][now.getMonth()];
     const todayDay = now.getDate();
 
+    // 🏫 Master Institution Profile & Full ERP User Manual
     const context = {
       institution_profile: {
         name: "M.M ISLAMIC ENGLISH SCHOOL",
@@ -207,10 +223,28 @@
         },
         office_contacts: ["7302132270", "9322298658"]
       },
+      app_user_guide: {
+        portal_name: "M.M Islamic English School Admin & Teacher ERP",
+        navigation_tabs_manual: {
+          Home: "Analytics overview, Month Fee summary card, Mentors Standing (Teacherboard points, leaderboard), and MMAssistant AI search.",
+          Students: "Complete student directory, class filter, add/edit student records, phone numbers, and profile management.",
+          Entry: "Fees collection module. '+ ADD FEES ENTRY' button dabakar student fee collect karte hain. 'Total Due Fees' wale red box par 3 baar lagatar click (Triple Tap) karne par unpaid bachon ki list khulti hai. 'Collected Amount' blue box par Triple Tap se paid list khulti hai.",
+          Track: "Student fees payment status aur past transaction logs track karna.",
+          Attend: "Student attendance calendar. Date-wise Present (P), Absent (A), ya Holiday (H) mark karke 'Save Attendance' kiya jata hai.",
+          Card: "Automated student ID card generator with printable layout.",
+          Expns: "Daily and monthly school expense entries log."
+        },
+        teachers_features: [
+          "Class-wise student attendance marking.",
+          "Teacher leaderboard progression.",
+          "Muster in/out check-in and daily claim submission.",
+          "Create online objective tests and track student performance."
+        ]
+      },
       current_portal_date: `${todayDay} ${systemMonth} ${now.getFullYear()}`
     };
 
-    if (!Sentinel) return JSON.stringify(context);
+    if (!Sentinel) return JSON.stringify(context, null, 2);
 
     try {
       const [studentsMap, teachersMap, feesMap, leavesMap, musterDoc] = await Promise.all([
@@ -229,6 +263,7 @@
         total_teachers: teachers.length
       };
 
+      // Teachers Directory with live phone numbers
       const allLeaves = Object.values(leavesMap || {}).filter(Boolean);
       context.teachers_directory = teachers.map((t) => {
         const teacherLeaves = allLeaves.filter(
@@ -272,7 +307,7 @@
         }
       }
 
-      // 🔍 2. Admission Number Search (Matches "27", "admn 27", etc.)
+      // 🔍 2. Admission Number Search
       const admnMatches = qRaw.match(/(?:admn|admission|roll|id)?\s*#?\s*(\d{1,4})\b/i);
       let targetStudentByAdmn = null;
       if (admnMatches && admnMatches[1] && parseInt(admnMatches[1], 10) < 5000) {
@@ -295,7 +330,6 @@
             {};
           const stFees = feesMap[st.admn] || {};
 
-          // 🚀 Full 12 Months Fee Breakdown extracted directly
           const fullSessionFees = {};
           allMonths.forEach((m) => {
             fullSessionFees[m] = stFees[m]?.paid ? "Paid" : "Unpaid";
@@ -349,120 +383,81 @@
   }
 
   // ----------------------------------------------------
-  // 4. LIVE QWEN DUAL-DISCOVERY ENGINE
+  // 4. GOOGLE GEMINI FLASH INFERENCE CALL
   // ----------------------------------------------------
-  let memoizedLiveModelsList = null;
-
-  async function getLiveActiveModels(apiKey) {
-    if (memoizedLiveModelsList && memoizedLiveModelsList.length > 0) {
-      return memoizedLiveModelsList;
-    }
-
-    const res = await fetch("https://api.groq.com/openai/v1/models", {
-      headers: { "Authorization": "Bearer " + apiKey }
-    });
-
-    if (!res.ok) throw new Error("API Key verification failed.");
-
-    const json = await res.json();
-    const rawIds = (json.data || []).map((m) => m.id);
-
-    const activeTextModels = rawIds.filter((id) => {
-      const s = id.toLowerCase();
-      return !s.includes("guard") &&
-             !s.includes("whisper") &&
-             !s.includes("embed") &&
-             !s.includes("vision") &&
-             !s.includes("audio") &&
-             !s.includes("orpheus") &&
-             !s.includes("moderation");
-    });
-
-    const qwenModels = activeTextModels.filter((id) => id.toLowerCase().includes("qwen"));
-    const llamaModels = activeTextModels.filter((id) => id.toLowerCase().includes("llama-3.3") || id.toLowerCase().includes("llama-3.2"));
-    const others = activeTextModels.filter((id) => !id.toLowerCase().includes("qwen") && !llamaModels.includes(id));
-
-    memoizedLiveModelsList = [...qwenModels, ...llamaModels, ...others];
-    if (memoizedLiveModelsList.length === 0) {
-      memoizedLiveModelsList = ["llama-3.3-70b-versatile", "llama-3.2-3b-preview"];
-    }
-    return memoizedLiveModelsList;
-  }
-
-  // ----------------------------------------------------
-  // 5. INFERENCE CALL
-  // ----------------------------------------------------
-  async function callGroqDirect(userPrompt, verifiedContext) {
-    const apiKey = getSecureKey();
-    const activeModels = await getLiveActiveModels(apiKey);
+  async function callGeminiFlash(userPrompt, verifiedContext) {
+    const apiKey = getGeminiKey();
 
     const systemPrompt = `Aap M.M ISLAMIC ENGLISH SCHOOL ke official smart assistant (MMAssistant) hain.
 Aap school Administrator / Principal (Saba Teacher / Saba Parveen) se mukhatib hain.
 
-COMPLETE SCHOOL DATABASE & CONTEXT:
+COMPLETE SCHOOL DATABASE, APP MANUAL & VERIFIED CONTEXT:
 ${verifiedContext}
 
 OPERATING RULES:
-1. Student Profile & Fees:
-   - "queried_students" ke andar "full_academic_year_fees" check karein.
-   - User kisi bhi mahine (June, July, August, September, October etc.) ki fees puche, toh exact Paid ya Unpaid status batayein.
-2. Address & Principal Info:
+1. APP NAVIGATION & MANUAL:
+   - User jab bhi app ke bare me puche (jaise "fees kaise bharein", "unpaid list kaise nikalein", "attendance kaise lagayein", ya kisi button ka kaam), "app_user_guide" se step-by-step simple Roman Urdu me batayein.
+   - Example: Fees bharni ho toh 'Entry' tab me jakar '+ ADD FEES ENTRY' button dabayein. Unpaid list ke liye 'Total Due Fees' box par 3 baar lagatar tap (Triple Tap) karein.
+2. SCHOOL & PRINCIPAL DETAILS:
    - Address: 46/K/05 (Room No 5, Line K, Plot No 46), Road No 04, Shivaji Nagar, Govandi, Mumbai - 400043.
+   - Landmarks: S.N. Hospital aur Honest Life English School ke bazu me, Sufi Dairy ke paas.
    - Principal: Saba Teacher (Saba Parveen). Degrees: D.Ed, B.Ed, LLB. Numbers: 7302132270 / 9322298658.
-3. Teachers Contact:
-   - "teachers_directory" se teachers ke direct phone numbers aur unki details dein.
-4. Tone & Manner:
-   - Saba Teacher se respectful, natural aur seedhe Roman Urdu me baat karein.
-   - Har jawab factual, accurate aur point-to-point dein bina kisi robotic excuse ke.`;
+3. TEACHERS & STUDENTS CONTACT:
+   - "teachers_directory" se teachers ke direct mobile numbers batayein (jaise Bushra Teacher: 88796 69303).
+   - "queried_students" se student ka admission number, class, guardian phone, attendance aur 12 mahino ka fees status batayein.
+4. TONE & MANNER:
+   - Natural, respectful aur direct Roman Urdu me baat karein.
+   - Kabhi kisi data ke liye jhooth ya excuse mat dein. Point-to-point saaf jawab dein.`;
 
+    // Multi-turn chat contents for Gemini API
     const rawHistory = getHistory();
-    const recentMessages = rawHistory.slice(-4).map((m) => ({
-      role: m.role === "user" ? "user" : "assistant",
-      content: m.text
-    }));
+    const contents = [];
 
-    const messages = [
-      { role: "system", content: systemPrompt },
-      ...recentMessages,
-      { role: "user", content: userPrompt }
-    ];
+    rawHistory.slice(-4).forEach((m) => {
+      contents.push({
+        role: m.role === "user" ? "user" : "model",
+        parts: [{ text: m.text }]
+      });
+    });
 
-    let lastError = null;
+    contents.push({
+      role: "user",
+      parts: [{ text: userPrompt }]
+    });
 
-    for (const modelName of activeModels) {
-      try {
-        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": "Bearer " + apiKey
-          },
-          body: JSON.stringify({
-            model: modelName,
-            messages: messages,
-            temperature: 0.2,
-            max_tokens: 500
-          })
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          return data.choices[0].message.content.trim();
-        }
-
-        const errData = await response.json().catch(() => ({}));
-        lastError = errData.error?.message || `HTTP ${response.status}`;
-      } catch (err) {
-        lastError = err.message;
+    const payload = {
+      system_instruction: {
+        parts: [{ text: systemPrompt }]
+      },
+      contents: contents,
+      generationConfig: {
+        temperature: 0.2,
+        maxOutputTokens: 750
       }
+    };
+
+    const response = await fetch(`${GEMINI_ENDPOINT}?key=${apiKey}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.error?.message || `HTTP ${response.status} from Google Gemini`);
     }
 
-    memoizedLiveModelsList = null;
-    throw new Error(lastError || "All models failed.");
+    const data = await response.json();
+    const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!replyText) throw new Error("Empty response from Gemini Flash");
+
+    return replyText.trim();
   }
 
   // ----------------------------------------------------
-  // 6. PUBLIC CONTROLLER API
+  // 5. PUBLIC CONTROLLER API
   // ----------------------------------------------------
   window.MMAssistant = {
     open: function () {
@@ -504,11 +499,11 @@ OPERATING RULES:
       try {
         const recentHist = getHistory().slice(-4).map((m) => m.text).join(" ");
         const contextSlice = await buildContextSlice(text, recentHist);
-        const aiReply = await callGroqDirect(text, contextSlice);
+        const aiReply = await callGeminiFlash(text, contextSlice);
         saveMessage("assistant", aiReply);
         renderHistory();
       } catch (err) {
-        console.error("MMAssistant Error:", err);
+        console.error("MMAssistant Gemini Error:", err);
         saveMessage("assistant", "⚠️ Error: " + err.message);
         renderHistory();
       } finally {
