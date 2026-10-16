@@ -1,6 +1,6 @@
 /**
  * ====================================================================
- * MMASSISTANT AI v20.0 (FULL-SCREEN PRO UI • TERMS GATE • GEMINI FLASH)
+ * MMASSISTANT AI v21.0 (PRO MANAGER ENGINE • ANTI-KEYBOARD DISMISS • 2500 TOKENS)
  * M.M ISLAMIC ENGLISH SCHOOL ERP
  * ====================================================================
  */
@@ -24,7 +24,7 @@
   const CHATS_STORAGE_KEY = "mm_assistant_all_sessions_v1";
   const ACTIVE_SESSION_KEY = "mm_assistant_active_session_id_v1";
 
-  // 2D AI Sparkle SVG
+  // 2D AI Sparkle Vector
   const AI_SPARKLE_SVG = `
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M12 2C12 7.52285 7.52285 12 2 12C7.52285 12 12 16.4771 12 22C12 16.4771 16.4771 12 22 12C16.4771 12 12 7.52285 12 2Z" fill="url(#sparkleGrad)" />
@@ -37,7 +37,6 @@
     </svg>
   `;
 
-  // Hamburger SVG
   const HAMBURGER_SVG = `
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
       <line x1="3" y1="12" x2="21" y2="12"></line>
@@ -46,7 +45,6 @@
     </svg>
   `;
 
-  // Red Trash SVG
   const RED_TRASH_SVG = `
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <polyline points="3 6 5 6 21 6"></polyline>
@@ -56,7 +54,9 @@
     </svg>
   `;
 
-  // Markdown Parser
+  // ----------------------------------------------------
+  // ROBUST FULL MARKDOWN PARSER (Clean Headings, Hr, Bold, Bullets)
+  // ----------------------------------------------------
   function formatMarkdown(text) {
     if (!text) return "";
     let safe = text
@@ -64,9 +64,23 @@
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
 
+    // Horizontal Rule (---)
+    safe = safe.replace(/^---$/gim, "<hr style='border:none; border-top:1px solid rgba(255,255,255,0.12); margin:12px 0;'>");
+
+    // Headings (###, ##, #)
+    safe = safe.replace(/^###\s+(.*)$/gim, "<div style='font-size:14px; font-weight:800; color:#38bdf8; margin:10px 0 4px 0;'>$1</div>");
+    safe = safe.replace(/^##\s+(.*)$/gim, "<div style='font-size:15px; font-weight:800; color:#ffffff; margin:12px 0 6px 0;'>$1</div>");
+    safe = safe.replace(/^#\s+(.*)$/gim, "<div style='font-size:16px; font-weight:900; color:#ffffff; margin:14px 0 8px 0;'>$1</div>");
+
+    // Bold (**word**)
     safe = safe.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
-    safe = safe.replace(/^[\*\-]\s+(.*)$/gim, "<span style='display:block; padding-left:12px;'>• $1</span>");
-    safe = safe.replace(/^(\d+)\.\s+(.*)$/gim, "<span style='display:block; padding-left:12px;'><b>$1.</b> $2</span>");
+
+    // Bullet points (* or -)
+    safe = safe.replace(/^[\*\-]\s+(.*)$/gim, "<span style='display:block; padding-left:14px; margin:3px 0;'>• $1</span>");
+
+    // Numbered lists (1. Item)
+    safe = safe.replace(/^(\d+)\.\s+(.*)$/gim, "<span style='display:block; padding-left:14px; margin:3px 0;'><b>$1.</b> $2</span>");
+
     return safe;
   }
 
@@ -194,7 +208,7 @@
       <div style="display: flex; gap: 8px; overflow-x: auto; padding: 10px 16px; background: #0c1220; border-bottom: 1px solid #1f2937; scrollbar-width: none;">
         <div class="class-chip mm-chip" style="margin:0; padding:6px 14px; font-size:11.5px; cursor:pointer; white-space:nowrap;" data-query="School ka address, timings aur principal details batao">🏫 School Details</div>
         <div class="class-chip mm-chip" style="margin:0; padding:6px 14px; font-size:11.5px; cursor:pointer; white-space:nowrap;" data-query="Is app me kaunse features hain aur fees kaise enter karein?">📱 App Manual</div>
-        <div class="class-chip mm-chip" style="margin:0; padding:6px 14px; font-size:11.5px; cursor:pointer; white-space:nowrap;" data-query="Teachers ki list aur unke contact numbers do">👩‍🏫 Teachers List</div>
+        <div class="class-chip mm-chip" style="margin:0; padding:6px 14px; font-size:11.5px; cursor:pointer; white-space:nowrap;" data-query="Is app me kis cheez ki kami lag rahi hai? Manager analysis do">📊 App Gap Analysis</div>
         <div class="class-chip mm-chip" style="margin:0; padding:6px 14px; font-size:11.5px; cursor:pointer; white-space:nowrap;" data-query="Is month kitne bachon ki fees pending hai list do">💳 Unpaid Fees</div>
       </div>
 
@@ -207,15 +221,31 @@
         • Powered by Google Gemini
       </div>
 
-      <!-- BOTTOM INPUT BAR -->
+      <!-- BOTTOM INPUT BAR (ANTI-AUTOFILL & KEYBOARD LOCK) -->
       <div style="padding: 10px 16px 16px 16px; background: #111827; display: flex; align-items: center; gap: 10px; border-top: 1px solid #1f2937;">
-        <input type="text" id="mmInputBox" placeholder="Ask MMAssistant anything..." autocomplete="off" style="flex: 1; padding: 13px 18px; font-size: 14px; font-weight: 600; border: 1.5px solid #059669; border-radius: 16px; background: #1f2937; color: #ffffff; outline: none;">
-        <button id="mmSendBtn" class="btn-primary btn-green" style="width: auto; padding: 13px 20px; margin: 0; border-radius: 16px; font-size: 14px; font-weight: 700;">
+        <input 
+          type="search" 
+          id="mmInputBox" 
+          name="school_assistant_query_box"
+          placeholder="Ask MMAssistant anything..." 
+          autocomplete="off" 
+          autocorrect="off" 
+          autocapitalize="sentences" 
+          spellcheck="false" 
+          data-lpignore="true" 
+          data-form-type="other"
+          enterkeyhint="send"
+          style="flex: 1; padding: 13px 18px; font-size: 14px; font-weight: 600; border: 1.5px solid #059669; border-radius: 16px; background: #1f2937; color: #ffffff; outline: none; -webkit-appearance: none;">
+        
+        <button 
+          id="mmSendBtn" 
+          class="btn-primary btn-green" 
+          style="width: auto; padding: 13px 20px; margin: 0; border-radius: 16px; font-size: 14px; font-weight: 700; cursor: pointer;">
           Send ➔
         </button>
       </div>
 
-      <!-- SIDEBAR DRAWER (CHAT SESSIONS) -->
+      <!-- SIDEBAR DRAWER -->
       <div id="mmSidebarDrawer" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.65); backdrop-filter: blur(4px); z-index: 100100;">
         <div style="width: 290px; height: 100%; background: #0f172a; border-right: 1px solid #1e293b; display: flex; flex-direction: column; animation: slideInLeft 0.25s ease-out forwards;">
           
@@ -228,7 +258,6 @@
 
           <div id="mmDrawerSessionList" style="flex: 1; overflow-y: auto; padding: 12px 10px; display: flex; flex-direction: column; gap: 8px;"></div>
 
-          <!-- DRAWER FOOTER: TERMS AND CONDITIONS BLUE TEXT -->
           <div style="padding: 16px; border-top: 1px solid #1e293b; text-align: center; background: #0b1120;">
             <a href="javascript:void(0)" id="mmLinkDrawerTerms" style="color: #38bdf8; font-size: 12.5px; font-weight: 700; text-decoration: underline; letter-spacing: 0.2px;">
               Terms and Conditions
@@ -246,7 +275,7 @@
         </div>
       </div>
 
-      <!-- TERMS & CONDITIONS MODAL -->
+      <!-- TERMS MODAL -->
       <div id="mmTermsModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(6px); z-index: 100110; align-items: center; justify-content: center; padding: 20px;">
         <div style="width: 100%; max-width: 460px; background: #111827; border: 1.5px solid #1f2937; border-radius: 20px; padding: 22px; box-shadow: 0 20px 50px rgba(0,0,0,0.7); display: flex; flex-direction: column; gap: 14px; color: #f3f4f6;">
           
@@ -264,7 +293,6 @@
             This data sharing is strictly utilized to provide accurate assistant capabilities, deep institutional analysis, and continuous performance improvements. Local cache remains protected through encrypted device hardware sentinel.
           </div>
 
-          <!-- CONSENT CHECKBOX ROW -->
           <div id="mmConsentCheckboxWrapper" style="display: flex; align-items: center; gap: 10px; margin-top: 4px;">
             <input type="checkbox" id="mmConsentCheckbox" style="width: 18px; height: 18px; cursor: pointer; accent-color: #059669;">
             <label for="mmConsentCheckbox" style="font-size: 13px; font-weight: 700; color: #f3f4f6; cursor: pointer;">
@@ -272,7 +300,6 @@
             </label>
           </div>
 
-          <!-- ACTIONS -->
           <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px;">
             <button type="button" id="mmBtnCloseTermsViewOnly" style="display: none; padding: 10px 20px; background: #1f2937; color: #e5e7eb; border: 1px solid #374151; border-radius: 12px; font-size: 13px; font-weight: 700; cursor: pointer;">
               Close
@@ -288,22 +315,37 @@
 
     document.body.appendChild(overlay);
 
-    // Event Bindings
-    document.getElementById("mmBtnCloseFull").onclick = window.MMAssistant.close;
-    document.getElementById("mmSendBtn").onclick = window.MMAssistant.submitMessage;
-    document.getElementById("mmInputBox").addEventListener("keypress", (e) => {
-      if (e.key === "Enter") window.MMAssistant.submitMessage();
+    const input = document.getElementById("mmInputBox");
+    const sendBtn = document.getElementById("mmSendBtn");
+
+    // 🚀 PREVENT KEYBOARD FROM DISMISSING ON CLICK/TOUCH
+    sendBtn.addEventListener("mousedown", (e) => e.preventDefault());
+    sendBtn.addEventListener("touchstart", (e) => e.preventDefault(), { passive: false });
+    sendBtn.onclick = () => {
+      window.MMAssistant.submitMessage();
+      input.focus();
+    };
+
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        window.MMAssistant.submitMessage();
+        input.focus();
+      }
     });
+
+    document.getElementById("mmBtnCloseFull").onclick = window.MMAssistant.close;
 
     // Chips
     overlay.querySelectorAll(".mm-chip").forEach((chip) => {
       chip.onclick = () => {
-        document.getElementById("mmInputBox").value = chip.getAttribute("data-query");
+        input.value = chip.getAttribute("data-query");
         window.MMAssistant.submitMessage();
+        input.focus();
       };
     });
 
-    // Hamburger & Drawer
+    // Drawer toggles
     document.getElementById("mmBtnHamburger").onclick = () => {
       renderSidebarList();
       document.getElementById("mmSidebarDrawer").style.display = "block";
@@ -321,9 +363,10 @@
       document.getElementById("mmSidebarDrawer").style.display = "none";
       renderMessages();
       hideLongPressMenu();
+      input.focus();
     };
 
-    // Terms Modal Events
+    // Terms
     const checkbox = document.getElementById("mmConsentCheckbox");
     const acceptBtn = document.getElementById("mmBtnAcceptTerms");
 
@@ -346,19 +389,18 @@
       localStorage.setItem(TERMS_STORAGE_KEY, "true");
       document.getElementById("mmTermsModal").style.display = "none";
       renderMessages();
+      input.focus();
     };
 
-    // Drawer Terms Link (View Only)
     document.getElementById("mmLinkDrawerTerms").onclick = () => {
       document.getElementById("mmSidebarDrawer").style.display = "none";
-      showTermsModal(true); // view-only mode
+      showTermsModal(true);
     };
 
     document.getElementById("mmBtnCloseTermsViewOnly").onclick = () => {
       document.getElementById("mmTermsModal").style.display = "none";
     };
 
-    // Close long press menu on outside click
     document.addEventListener("click", (e) => {
       if (!e.target.closest("#mmLongPressMenu")) {
         hideLongPressMenu();
@@ -366,9 +408,6 @@
     });
   }
 
-  // ----------------------------------------------------
-  // TERMS MODAL CONTROLLER
-  // ----------------------------------------------------
   function showTermsModal(viewOnly = false) {
     const modal = document.getElementById("mmTermsModal");
     const checkRow = document.getElementById("mmConsentCheckboxWrapper");
@@ -393,7 +432,7 @@
   }
 
   // ----------------------------------------------------
-  // SIDEBAR SESSIONS & LONG-PRESS HANDLER
+  // DRAWER SESSIONS & LONG-PRESS
   // ----------------------------------------------------
   let targetDeleteSessionId = null;
   let longPressTimer = null;
@@ -432,14 +471,12 @@
         <div style="font-size: 10.5px; color: #64748b;">${s.createdAt || ''}</div>
       `;
 
-      // Click to switch session
       item.onclick = () => {
         localStorage.setItem(ACTIVE_SESSION_KEY, s.id);
         document.getElementById("mmSidebarDrawer").style.display = "none";
         renderMessages();
       };
 
-      // Long press handler for Delete dropdown
       function triggerLongPress(e) {
         targetDeleteSessionId = s.id;
         const menu = document.getElementById("mmLongPressMenu");
@@ -510,10 +547,9 @@
   }
 
   // ----------------------------------------------------
-  // IGRIS DATA HARVESTER (PROTECTED BY TERMS GATE)
+  // IGRIS DATA HARVESTER
   // ----------------------------------------------------
   async function buildContextSlice(userQuery, recentHistoryText) {
-    // 🚨 DATA PROTECTION CHECK: Only harvest data if Terms are accepted
     if (localStorage.getItem(TERMS_STORAGE_KEY) !== "true") {
       return "{}";
     }
@@ -597,7 +633,7 @@
       const qRaw = userQuery + " " + recentHistoryText;
       const q = qRaw.toLowerCase().replace(/[^a-z0-9\s]/g, " ");
 
-      // 🔍 1. Phone Number Search
+      // Phone Number Lookup
       const phoneMatch = qRaw.match(/\b\d{10}\b/);
       if (phoneMatch) {
         const searchedPhone = phoneMatch[0];
@@ -622,7 +658,7 @@
         }
       }
 
-      // 🔍 2. Admission Number Search
+      // Admission Number Search
       const admnMatches = qRaw.match(/(?:admn|admission|roll|id)?\s*#?\s*(\d{1,4})\b/i);
       let targetStudentByAdmn = null;
       if (admnMatches && admnMatches[1] && parseInt(admnMatches[1], 10) < 5000) {
@@ -630,7 +666,7 @@
         targetStudentByAdmn = students.find((s) => String(s.admn) === searchedAdmn);
       }
 
-      // 🔍 3. Student Name Search & 12-Month Fees Matrix
+      // Student Search & Fees
       const matchedStudents = [];
       for (const st of students) {
         const sName = (st.name || "").toLowerCase();
@@ -668,7 +704,7 @@
         context.queried_students = matchedStudents;
       }
 
-      // 💳 4. Fees Summary
+      // Fees Summary (Full list)
       if (/(fee|unpaid|pending|paid|due|rupaye|paisa|list)/i.test(q)) {
         let unpaidCount = 0;
         let totalDues = 0;
@@ -687,7 +723,7 @@
           month: systemMonth,
           total_unpaid_students: unpaidCount,
           total_due_rupees: totalDues,
-          unpaid_student_names: unpaidList.slice(0, 45)
+          unpaid_student_names: unpaidList.slice(0, 50)
         };
       }
 
@@ -698,36 +734,43 @@
   }
 
   // ----------------------------------------------------
-  // GEMINI FLASH INFERENCE
+  // GEMINI FLASH INFERENCE (HIGH CAPACITY • 2500 TOKENS • RETRY LOGIC)
   // ----------------------------------------------------
   async function callGeminiFlash(userPrompt, verifiedContext) {
     const apiKey = getGeminiKey();
 
-    const systemPrompt = `Aap M.M ISLAMIC ENGLISH SCHOOL ke official smart assistant (MMAssistant) hain.
-Aap school Administrator / Principal (Saba Teacher / Saba Parveen) se mukhatib hain.
+    const systemPrompt = `Aap M.M ISLAMIC ENGLISH SCHOOL ke official smart collaborator (MMAssistant) hain.
+Aap school Administrator / Principal (Saba Teacher / Saba Parveen) ke strategic partner, advisor aur school manager hain.
 
-COMPLETE SCHOOL DATABASE, APP MANUAL & VERIFIED CONTEXT:
-${verifiedContext}
-
-OPERATING RULES:
-1. APP NAVIGATION & MANUAL:
-   - User jab bhi app ke bare me puche, "app_user_guide" se step-by-step simple Roman Urdu me guide karein.
-   - Example: Fees lene ke liye 'Entry' tab me jakar '+ ADD FEES ENTRY' button dabayein. Unpaid list ke liye 'Total Due Fees' box par 3 baar lagatar click (Triple Tap) karein.
-2. SCHOOL & PRINCIPAL DETAILS:
+Aapka dimaag ek tajurbekaar School Owner, Principal aur Operations Manager ki tarah chalna chahiye:
+1. SHARP MANAGEMENT ANALYSIS:
+   - Agar Admin pooche ki "Is app me kis cheez ki kami lag rahi hai?", toh ek sharp school manager ki tarah solid aur practical gap analysis dein:
+     * Parent Portal / Parent App ki zaroorat (taaki parents ghar baithe homework aur fee receipt dekh sakein).
+     * Online Payment Gateway (UPI / Razorpay integration) taaki fees direct bank account me aaye.
+     * Automated WhatsApp Fee & Attendance Reminders (parents ko automatic message).
+     * Bus / Van Transport GPS tracking module.
+     * Exam Marksheet / Report Card auto-generator PDF.
+2. COMPLETENESS & ZERO CUT-OFF:
+   - Jawab poora likhein, kabhi beech me mat rokein.
+   - List ya number dete waqt aakhri hisse tak saaf mukammal karein.
+3. APP NAVIGATION & MANUAL:
+   - "app_user_guide" se step-by-step guidance dein.
+   - Fees bharni ho toh 'Entry' tab me jakar '+ ADD FEES ENTRY' karein. Unpaid list ke liye 'Total Due Fees' box par 3 baar lagatar tap (Triple Tap) karein.
+4. SCHOOL, PRINCIPAL & TEACHERS:
    - Address: 46/K/05 (Room No 5, Line K, Plot No 46), Road No 04, Shivaji Nagar, Govandi, Mumbai - 400043.
    - Landmarks: S.N. Hospital aur Honest Life English School ke bazu me, Sufi Dairy ke paas.
    - Principal: Saba Teacher (Saba Parveen). Degrees: D.Ed, B.Ed, LLB. Numbers: 7302132270 / 9322298658.
-3. TEACHERS & STUDENTS CONTACT:
-   - "teachers_directory" se teachers ke direct mobile numbers batayein (e.g. Bushra Teacher: 88796 69303).
-   - "queried_students" se student ka admission number, class, guardian phone, attendance aur 12 mahino ka fees status batayein.
-4. TONE & MANNER:
-   - Natural, respectful aur direct Roman Urdu me baat karein.
-   - Factually accurate rahein aur bina kisi faltu bahane ke saaf jawab dein.`;
+   - Teachers Directory se teacher ka contact number batayein (e.g. Bushra Teacher: 88796 69303).
+5. TONE:
+   - Respectful, authoritative, intelligent aur natural Roman Urdu me baat karein.
+
+COMPLETE LIVE CONTEXT:
+${verifiedContext}`;
 
     const rawHistory = getActiveMessages();
     const contents = [];
 
-    rawHistory.slice(-4).forEach((m) => {
+    rawHistory.slice(-5).forEach((m) => {
       contents.push({
         role: m.role === "user" ? "user" : "model",
         parts: [{ text: m.text }]
@@ -745,29 +788,43 @@ OPERATING RULES:
       },
       contents: contents,
       generationConfig: {
-        temperature: 0.2,
-        maxOutputTokens: 750
+        temperature: 0.45,       // Perfect balance for sharp management thought
+        maxOutputTokens: 2500    // Raised from 750 to 2500 so answers NEVER cut off!
       }
     };
 
-    const response = await fetch(`${GEMINI_ENDPOINT}?key=${apiKey}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(payload)
-    });
+    // Auto-retry helper on temporary Google 503 / spikes
+    let attempts = 0;
+    while (attempts < 2) {
+      attempts++;
+      try {
+        const response = await fetch(`${GEMINI_ENDPOINT}?key=${apiKey}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
 
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      throw new Error(errData.error?.message || `HTTP ${response.status} from Google Gemini`);
+        if (response.ok) {
+          const data = await response.json();
+          const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (replyText) return replyText.trim();
+        }
+
+        const errData = await response.json().catch(() => ({}));
+        if (response.status === 503 || errData.error?.message?.includes("high demand")) {
+          console.warn("Spike detected, retrying in 1s...");
+          await new Promise(r => setTimeout(r, 1000));
+          continue;
+        }
+
+        throw new Error(errData.error?.message || `HTTP ${response.status}`);
+      } catch (err) {
+        if (attempts >= 2) throw err;
+        await new Promise(r => setTimeout(r, 1000));
+      }
     }
 
-    const data = await response.json();
-    const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!replyText) throw new Error("Empty response from Gemini Flash");
-
-    return replyText.trim();
+    throw new Error("Gemini server busy. Please retry.");
   }
 
   // ----------------------------------------------------
@@ -779,10 +836,9 @@ OPERATING RULES:
       const overlay = document.getElementById("mmAssistantOverlay");
       overlay.style.display = "flex";
 
-      // 🚨 First time Terms Gate Check
       const hasAccepted = localStorage.getItem(TERMS_STORAGE_KEY) === "true";
       if (!hasAccepted) {
-        showTermsModal(false); // First time consent mode
+        showTermsModal(false);
       }
 
       renderMessages();
@@ -806,7 +862,6 @@ OPERATING RULES:
       const text = input.value.trim();
       if (!text) return;
 
-      // Agar terms accept nahi hain toh pehle terms dikhao
       if (localStorage.getItem(TERMS_STORAGE_KEY) !== "true") {
         showTermsModal(false);
         return;
@@ -820,7 +875,7 @@ OPERATING RULES:
       btn.innerText = "Thinking...";
 
       try {
-        const recentHist = getActiveMessages().slice(-4).map((m) => m.text).join(" ");
+        const recentHist = getActiveMessages().slice(-5).map((m) => m.text).join(" ");
         const contextSlice = await buildContextSlice(text, recentHist);
         const aiReply = await callGeminiFlash(text, contextSlice);
         saveMessageToActive("assistant", aiReply);
@@ -832,8 +887,7 @@ OPERATING RULES:
       } finally {
         btn.disabled = false;
         btn.innerText = "Send ➔";
-        const inp = document.getElementById("mmInputBox");
-        if (inp) inp.focus();
+        input.focus(); // Keep keyboard open!
       }
     }
   };
