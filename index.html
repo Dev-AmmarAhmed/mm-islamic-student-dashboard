@@ -8800,13 +8800,15 @@ document.getElementById("hwTitleInput").value = "";
       container.innerHTML = `<div style="text-align:center; padding:14px; font-weight:800; color:var(--text-muted);">⏳ Fetching applications...</div>`;
       
       try {
-        const leavesData = await safeDataFetch(`leave_applications/${admn}`);
-        container.innerHTML = "";
-        
-        if(!leavesData || Object.keys(leavesData).length === 0) {
-          container.innerHTML = `<div style="text-align:center; padding:14px; font-weight:700; color:var(--text-muted);">No leave applications found for this student.</div>`;
-          return;
-        }
+               const snap = await getDocs(collection(fsDb, "leaves"));
+        const leavesData = {};
+        snap.forEach(d => {
+            const dt = d.data();
+            if (String(dt.admn) === String(admn) || String(dt.userId) === String(admn)) {
+                leavesData[d.id] = dt;
+            }
+        });
+
 
         const leaveList = Object.values(leavesData).sort((a,b) => b.timestamp - a.timestamp);
         
@@ -12749,14 +12751,23 @@ window.checkMusterButtonStates();
         window.loadStudentLeaves();
     };
 
-    window.loadStudentLeaves = async function() {
+          window.loadStudentLeaves = async function() {
         const tbody = document.getElementById("sLeaveTableBody");
         if (!tbody) return;
         tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:12px;">⏳ Loading applications...</td></tr>`;
 
         try {
-            const leaves = await safeDataFetch(`leave_applications/${currentStudentAdmn}`) || {};
-            const leaveList = Object.values(leaves).sort((a, b) => b.timestamp - a.timestamp); 
+            const snap = await getDocs(collection(fsDb, "leaves"));
+            const leaveList = [];
+
+            snap.forEach(d => {
+                const data = d.data();
+                if (String(data.admn) === String(currentStudentAdmn) || String(data.userId) === String(currentStudentAdmn)) {
+                    leaveList.push({ id: d.id, ...data });
+                }
+            });
+
+            leaveList.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)); 
 
             tbody.innerHTML = "";
             if (leaveList.length === 0) {
@@ -12774,8 +12785,8 @@ window.checkMusterButtonStates();
                   statusHtml = `<span style="background:rgba(245, 158, 11, 0.15); color:#d97706; padding:4px 8px; border-radius:6px; font-size:10px; font-weight:800;">Pending ⏳</span>`;
                 }
 
-                let formattedDate = l.leaveDate;
-                if(l.leaveDate && l.leaveDate.includes("-")) {
+                let formattedDate = l.displayLeaveDate || l.leaveDate;
+                if(l.leaveDate && l.leaveDate.includes("-") && !l.displayLeaveDate) {
                    const parts = l.leaveDate.split("-");
                    formattedDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
                 }
@@ -12788,11 +12799,12 @@ window.checkMusterButtonStates();
                 </tr>`;
             });
         } catch(e) {
-            tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:red; padding:12px;">Failed to load data.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:red; padding:12px;">Failed to load applications.</td></tr>`;
         }
     };
 
-    // Load Teacher's Own Leaves ONLY ("My Leaves" Subtab)
+
+          // Load Teacher's Own Leaves ONLY ("My Leaves" Subtab - Firestore)
     window.loadTeacherMyLeaves = async function() {
         const tbody = document.getElementById("tMyLeaveTableBody");
         if (!tbody) return;
@@ -12802,8 +12814,17 @@ window.checkMusterButtonStates();
         tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:12px;">⏳ Loading your applications...</td></tr>`;
 
         try {
-            const leaves = await safeDataFetch(`teacher_leave_applications/${loggedUser}`) || {};
-            const leaveList = Object.values(leaves).sort((a, b) => b.timestamp - a.timestamp); 
+            const snap = await getDocs(collection(fsDb, "leaves"));
+            const leaveList = [];
+
+            snap.forEach(d => {
+                const data = d.data();
+                if ((String(data.admn) === String(loggedUser) || String(data.userId) === String(loggedUser)) && data.applicantRole === "teacher") {
+                    leaveList.push({ id: d.id, ...data });
+                }
+            });
+
+            leaveList.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)); 
 
             tbody.innerHTML = "";
             if (leaveList.length === 0) {
@@ -12835,9 +12856,10 @@ window.checkMusterButtonStates();
                 </tr>`;
             });
         } catch(e) {
-            tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:red; padding:12px;">Failed to load data.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:red; padding:12px;">Failed to load applications.</td></tr>`;
         }
     };
+
 
     window.openApplyLeaveModal = function() {
         document.getElementById("leaveTodayDate").value = getTodayFormattedDate();
@@ -12847,7 +12869,7 @@ window.checkMusterButtonStates();
         window.openModal("applyLeaveModal");
     };
 
-    document.addEventListener("click", (e) => {
+       document.addEventListener("click", (e) => {
         const submitLeaveBtn = e.target.closest("#submitLeaveBtn");
         if (submitLeaveBtn) {
             const modal = submitLeaveBtn.closest(".modal-body") || document;
@@ -12856,7 +12878,7 @@ window.checkMusterButtonStates();
             const msg = modal.querySelector("#leaveMessage").value.trim();
 
             if(!reqDate || !reason || !msg) {
-                alert("Please fill Leave Date, Reason, and Message.");
+                alert("Please fill in Leave Date, Reason, and Message.");
                 return;
             }
 
@@ -12867,91 +12889,68 @@ window.checkMusterButtonStates();
                 const displayLeaveDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
                 const adminNumber = "917302132270";
 
-                // Check if Teacher is applying or Student is applying
-                if (currentRole === "teacher") {
-                    const loggedUser = localStorage.getItem("loggedUser");
-                    const tData = await safeDataFetch(`teachers/${loggedUser}`) || {};
-                    const tName = tData.name || loggedUser;
-                    const tClass = tData.assignedClass || assignedClass;
+                const isTeacher = (currentRole === "teacher");
+                const loggedUser = localStorage.getItem("loggedUser");
 
-                    const leaveObj = {
-                        id: leaveId,
-                        admn: loggedUser,
-                        name: tName,
-                        class: tClass,
-                        applyDate: getTodayFormattedDate(),
-                        leaveDate: reqDate,
-                        displayLeaveDate: displayLeaveDate,
-                        reason: reason,
-                        message: msg,
-                        status: "Pending",
-                        timestamp: timestamp,
-                        applicantRole: "teacher"
-                    };
+                let applicantName = "Unknown";
+                let applicantClass = assignedClass;
+                let applicantId = isTeacher ? loggedUser : currentStudentAdmn;
 
-                                      // 🚀 Firestore + AccuEngine (Teacher Leave)
-                    await setDoc(doc(fsDb, "leaves", leaveId), leaveObj, { merge: true });
-                    if (window.AccuEngine) {
-                      await window.AccuEngine.setLocal("leaves", leaveId, leaveObj);
-                      window.AccuEngine.bumpSyncVersion();
-                    }
-                    await set(ref(db, `teacher_leave_applications/${loggedUser}/${leaveId}`), leaveObj).catch(() => {});
-  window.closeModal("applyLeaveModal");
-                    
-                    const waitingScreen = document.getElementById("leaveWaitingOverlay");
-                    if(waitingScreen) waitingScreen.style.display = "flex";
-
-                    const waText = `*TEACHER LEAVE APPLICATION* 👩‍🏫📅\n\n*Teacher:* ${tName}\n*Username:* ${loggedUser}\n*Assigned Class:* ${tClass}\n*Leave Date:* ${displayLeaveDate}\n*Reason:* ${reason}\n*Message:* ${msg}\n\n_Please check the Admin Dashboard (Teachers Sub-tab) to Approve or Deny._`;
-                    
-                    setTimeout(() => {
-                        if(waitingScreen) waitingScreen.style.display = "none";
-                        window.loadTeacherMyLeaves(); 
-                        window.open(`https://api.whatsapp.com/send?phone=${adminNumber}&text=${encodeURIComponent(waText)}`, "_blank");
-                    }, 2500);
-
+                if (isTeacher) {
+                    const tData = (window.MM_STORE && window.MM_STORE.teachers && window.MM_STORE.teachers[loggedUser]) || {};
+                    applicantName = tData.name || loggedUser;
+                    applicantClass = tData.assignedClass || assignedClass;
                 } else {
                     const student = await getStudentRecord(currentStudentAdmn);
-                    const stName = student ? student.name : "Unknown Student";
-                    const stClass = student ? student.class : "Unknown";
+                    applicantName = student ? student.name : "Unknown Student";
+                    applicantClass = student ? cleanClassStr(student.class) : cleanClassStr(assignedClass);
+                }
 
-                    const leaveObj = {
-                        id: leaveId,
-                        admn: currentStudentAdmn,
-                        name: stName,
-                        class: cleanClassStr(stClass),
-                        applyDate: getTodayFormattedDate(),
-                        leaveDate: reqDate,
-                        displayLeaveDate: displayLeaveDate,
-                        reason: reason,
-                        message: msg,
-                        status: "Pending",
-                        timestamp: timestamp,
-                        applicantRole: "student"
-                    };
+                const leaveObj = {
+                    id: leaveId,
+                    admn: String(applicantId),
+                    userId: String(applicantId),
+                    name: applicantName,
+                    class: String(applicantClass),
+                    applyDate: getTodayFormattedDate(),
+                    leaveDate: reqDate,
+                    displayLeaveDate: displayLeaveDate,
+                    reason: reason,
+                    message: msg,
+                    status: "Pending",
+                    timestamp: timestamp,
+                    applicantRole: isTeacher ? "teacher" : "student",
+                    createdAt: new Date().toISOString()
+                };
 
-                                        // 🚀 Firestore + AccuEngine (Student Leave)
+                try {
+                    // Direct Cloud Firestore Save
                     await setDoc(doc(fsDb, "leaves", leaveId), leaveObj, { merge: true });
-                    if (window.AccuEngine) {
-                      await window.AccuEngine.setLocal("leaves", leaveId, leaveObj);
-                      window.AccuEngine.bumpSyncVersion();
-                    }
-                    await set(ref(db, `leave_applications/${currentStudentAdmn}/${leaveId}`), leaveObj).catch(() => {});
-window.closeModal("applyLeaveModal");
+
+                    window.closeModal("applyLeaveModal");
                     
                     const waitingScreen = document.getElementById("leaveWaitingOverlay");
                     if(waitingScreen) waitingScreen.style.display = "flex";
 
-                    const waText = `*NEW LEAVE APPLICATION* 📅\n\n*Student:* ${stName}\n*Class:* ${stClass}\n*ID:* ${currentStudentAdmn}\n*Leave Date:* ${displayLeaveDate}\n*Reason:* ${reason}\n*Message:* ${msg}\n\n_Please check the Admin Dashboard to Approve or Deny._`;
+                    const waHeader = isTeacher ? "*TEACHER LEAVE APPLICATION* 👩‍🏫📅" : "*NEW LEAVE APPLICATION* 📅";
+                    const waText = `${waHeader}\n\n*Name:* ${applicantName}\n*Role:* ${isTeacher ? 'Teacher' : 'Student'}\n*ID:* ${applicantId}\n*Class:* ${applicantClass}\n*Leave Date:* ${displayLeaveDate}\n*Reason:* ${reason}\n*Message:* ${msg}\n\n_Please check the Admin Dashboard to review._`;
                     
                     setTimeout(() => {
                         if(waitingScreen) waitingScreen.style.display = "none";
-                        window.loadStudentLeaves(); 
+                        if (isTeacher) {
+                            window.loadTeacherMyLeaves();
+                        } else {
+                            window.loadStudentLeaves();
+                        }
                         window.open(`https://api.whatsapp.com/send?phone=${adminNumber}&text=${encodeURIComponent(waText)}`, "_blank");
-                    }, 2500);
+                    }, 2000);
+                } catch (err) {
+                    alert("Failed to submit leave application. Please check your connection.");
                 }
             });
         }
     });
+
 
     // --- 4. ADMIN & TEACHER LEAVE MANAGEMENT ENGINE ---
     let allLeavesCache = [];
@@ -13023,40 +13022,34 @@ window.closeModal("applyLeaveModal");
         window.renderLeaves();
     };
 
-    window.loadAllLeaves = async function() {
+          window.loadAllLeaves = async function() {
         const container = document.getElementById("leaveMgmtContainer");
         if (!container) return;
         container.innerHTML = `<div style="text-align:center; padding:14px; font-weight:800; color:var(--text-muted);">⏳ Fetching applications...</div>`;
         
         try {
-            if (currentRole === 'admin' && activeAdminLeaveSubTab === 'teacher') {
-                const tLeavesSnap = await safeDataFetch("teacher_leave_applications");
-                allTeacherLeavesCache = [];
-                if (tLeavesSnap) {
-                    Object.values(tLeavesSnap).forEach(teacherLeaves => {
-                        Object.values(teacherLeaves).forEach(leave => {
-                            allTeacherLeavesCache.push({ ...leave, applicantRole: 'teacher' });
-                        });
-                    });
+            const snap = await getDocs(collection(fsDb, "leaves"));
+            allLeavesCache = [];
+            allTeacherLeavesCache = [];
+
+            snap.forEach(d => {
+                const data = { id: d.id, ...d.data() };
+                if (data.applicantRole === "teacher") {
+                    allTeacherLeavesCache.push(data);
+                } else {
+                    allLeavesCache.push(data);
                 }
-                allTeacherLeavesCache.sort((a, b) => b.timestamp - a.timestamp);
-            } else {
-                const leavesSnap = await safeDataFetch("leave_applications");
-                allLeavesCache = [];
-                if (leavesSnap) {
-                    Object.values(leavesSnap).forEach(studentLeaves => {
-                        Object.values(studentLeaves).forEach(leave => {
-                            allLeavesCache.push({ ...leave, applicantRole: 'student' });
-                        });
-                    });
-                }
-                allLeavesCache.sort((a, b) => b.timestamp - a.timestamp);
-            }
+            });
+
+            allTeacherLeavesCache.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            allLeavesCache.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
             window.renderLeaves();
         } catch(e) {
-            container.innerHTML = `<div style="text-align:center; padding:14px; color:red;">Failed to load data.</div>`;
+            container.innerHTML = `<div style="text-align:center; padding:14px; color:red;">Failed to load applications.</div>`;
         }
     };
+
 
     window.renderLeaves = function() {
         const container = document.getElementById("leaveMgmtContainer");
@@ -13169,39 +13162,57 @@ window.closeModal("applyLeaveModal");
     };
 
 
+         
           window.updateLeaveStatus = async function(newStatus) {
         const leaveId = document.getElementById("laLeaveId").value;
         const admn = document.getElementById("laAdmn").value;
-        if(!leaveId || !admn) return;
+        if(!leaveId) return;
 
         try {
-            // 🚀 1. Update Firestore
+            // 1. Direct Firestore Update
             await setDoc(doc(fsDb, "leaves", leaveId), { status: newStatus }, { merge: true });
 
-            // 🚀 2. Update AccuEngine Local Cache
-            if (window.AccuEngine) {
-              const currentLeave = await window.AccuEngine.fetch("leaves");
-              if (currentLeave && currentLeave[leaveId]) {
-                currentLeave[leaveId].status = newStatus;
-                await window.AccuEngine.setLocal("leaves", leaveId, currentLeave[leaveId]);
-              }
-              window.AccuEngine.bumpSyncVersion();
+            // 2. In-App Notification (English)
+            if (typeof window.pushAppNotification === "function" && admn) {
+                const dateText = document.getElementById("laDate") ? document.getElementById("laDate").innerText : "your requested date";
+                await window.pushAppNotification(
+                    admn, 
+                    "Leave Status Updated", 
+                    `Your leave application for ${dateText} has been marked as: ${newStatus}`, 
+                    "leave_update", 
+                    { status: newStatus }
+                );
             }
 
-            const dbPath = currentActionLeaveRole === 'teacher' 
-                ? `teacher_leave_applications/${admn}/${leaveId}/status` 
-                : `leave_applications/${admn}/${leaveId}/status`;
-            await update(ref(db), { [dbPath]: newStatus }).catch(() => {});
-
-            await window.pushAppNotification(admn, "Leave Status Updated", `Your leave application for ${document.getElementById("laDate").innerText} is now: ${newStatus}`, "leave_update", { status: newStatus });
-
-            alert(`✔ Leave Application marked as ${newStatus}!`);
+            alert(`✔ Leave application status updated to: ${newStatus}`);
             window.closeModal("leaveActionModal");
-            window.loadAllLeaves(); 
+            if (typeof window.loadAllLeaves === "function") {
+                window.loadAllLeaves();
+            }
         } catch(e) {
-            alert("Error updating status.");
+            alert("Error updating leave status. Please try again.");
         }
     };
+
+    window.deleteLeaveApp = async function() {
+        const leaveId = document.getElementById("laLeaveId").value;
+        if(!leaveId) return;
+
+        if (confirm("Are you sure you want to permanently delete this leave application?")) {
+            try {
+                // Direct Firestore Delete
+                await deleteDoc(doc(fsDb, "leaves", leaveId));
+                alert("✔ Leave application deleted successfully.");
+                window.closeModal("leaveActionModal");
+                if (typeof window.loadAllLeaves === "function") {
+                    window.loadAllLeaves();
+                }
+            } catch(e) {
+                alert("Failed to delete application. Please try again.");
+            }
+        }
+    };
+
 
   
 
