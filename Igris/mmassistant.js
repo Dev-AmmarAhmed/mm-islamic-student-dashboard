@@ -1,6 +1,6 @@
 /**
  * ====================================================================
- * MMASSISTANT AI v17.0 (QWEN ENGINE PRIORITY + LIVE DISCOVERY)
+ * MMASSISTANT AI v18.0 (FULL ACADEMIC SESSION FEES & ATTENDANCE ENGINE)
  * M.M ISLAMIC ENGLISH SCHOOL ERP
  * ====================================================================
  */
@@ -49,7 +49,6 @@
     </svg>
   `;
 
-  // Markdown Formatter
   function formatMarkdown(text) {
     if (!text) return "";
     let safe = text
@@ -131,9 +130,6 @@
     });
   }
 
-  // ----------------------------------------------------
-  // 2. CHAT STORAGE & RENDERING
-  // ----------------------------------------------------
   function getHistory() {
     try {
       const data = localStorage.getItem(STORAGE_KEY);
@@ -187,13 +183,13 @@
   }
 
   // ----------------------------------------------------
-  // 3. IGRIS HARDWARE CACHE CONTEXT
+  // 3. IGRIS UNIVERSAL CONTEXT SLICER (FULL 12-MONTH FEES)
   // ----------------------------------------------------
   async function buildContextSlice(userQuery, recentHistoryText) {
     const Sentinel = window.Igris || window.AccuEngine;
-    const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+    const allMonths = ["June","July","August","September","October","November","December","January","February","March","April","May"];
     const now = new Date();
-    const currentMonth = months[now.getMonth()];
+    const systemMonth = ["January","February","March","April","May","June","July","August","September","October","November","December"][now.getMonth()];
     const todayDay = now.getDate();
 
     const context = {
@@ -201,7 +197,7 @@
         name: "M.M ISLAMIC ENGLISH SCHOOL",
         full_address: "46/K/05 (Room No 5, Line K, Plot No 46), Road No 04, Shivaji Nagar, Govandi, Mumbai - 400043, Maharashtra.",
         landmarks: "S.N. Hospital aur Honest Life English School ke bazu me, Sufi Dairy ke paas.",
-        affiliation_standards: "Approved English Medium Islamic & Modern Curriculum. Currently operating Nursery to Class 5th (Vision up to Class 10th).",
+        affiliation_standards: "Approved English Medium Islamic & Modern Curriculum. Operating Nursery to Class 5th (Vision up to Class 10th).",
         principal: {
           name: "Saba Teacher (Saba Parveen)",
           designation: "Principal / Head of Institution",
@@ -211,7 +207,7 @@
         },
         office_contacts: ["7302132270", "9322298658"]
       },
-      current_portal_date: `${todayDay} ${currentMonth} ${now.getFullYear()}`
+      current_portal_date: `${todayDay} ${systemMonth} ${now.getFullYear()}`
     };
 
     if (!Sentinel) return JSON.stringify(context);
@@ -222,7 +218,7 @@
         Sentinel.fetch("teachers") || {},
         Sentinel.fetch("fees_matrix") || {},
         Sentinel.fetch("leaves") || {},
-        Sentinel.fetch(`muster/${currentMonth}`) || {}
+        Sentinel.fetch(`muster/${systemMonth}`) || {}
       ]);
 
       const students = Object.values(studentsMap || {}).filter(Boolean);
@@ -276,7 +272,7 @@
         }
       }
 
-      // 🔍 2. Admission Number Search
+      // 🔍 2. Admission Number Search (Matches "27", "admn 27", etc.)
       const admnMatches = qRaw.match(/(?:admn|admission|roll|id)?\s*#?\s*(\d{1,4})\b/i);
       let targetStudentByAdmn = null;
       if (admnMatches && admnMatches[1] && parseInt(admnMatches[1], 10) < 5000) {
@@ -284,7 +280,7 @@
         targetStudentByAdmn = students.find((s) => String(s.admn) === searchedAdmn);
       }
 
-      // 🔍 3. Student Name Search
+      // 🔍 3. Student Name Search & 12-Month Fees Matrix
       const matchedStudents = [];
       for (const st of students) {
         const sName = (st.name || "").toLowerCase();
@@ -294,23 +290,26 @@
 
         if (nameMatches || (targetStudentByAdmn && String(st.admn) === String(targetStudentByAdmn.admn))) {
           const studentAttDoc =
-            (await Sentinel.fetch(`attendance/${st.admn}_${currentMonth}`)) ||
-            (await Sentinel.fetch(`attendance/${st.admn}/${currentMonth}`)) ||
+            (await Sentinel.fetch(`attendance/${st.admn}_${systemMonth}`)) ||
+            (await Sentinel.fetch(`attendance/${st.admn}/${systemMonth}`)) ||
             {};
           const stFees = feesMap[st.admn] || {};
+
+          // 🚀 Full 12 Months Fee Breakdown extracted directly
+          const fullSessionFees = {};
+          allMonths.forEach((m) => {
+            fullSessionFees[m] = stFees[m]?.paid ? "Paid" : "Unpaid";
+          });
 
           matchedStudents.push({
             name: st.name,
             class: st.class,
             admn: st.admn,
             phone: st.phone || st.parentPhone || st.mobile || "Not updated",
-            attendance_month: currentMonth,
+            attendance_month: systemMonth,
             attendance_record: studentAttDoc,
-            fees_status: {
-              september: stFees["September"]?.paid ? "Paid" : "Unpaid",
-              october: stFees["October"]?.paid ? "Paid" : "Unpaid",
-              monthly_fee: st.customFee || 500
-            }
+            monthly_fee_rate: st.customFee || 500,
+            full_academic_year_fees: fullSessionFees
           });
           if (matchedStudents.length >= 6) break;
         }
@@ -320,13 +319,13 @@
         context.queried_students = matchedStudents;
       }
 
-      // 💳 4. Fees Analysis
+      // 💳 4. Fees Summary
       if (/(fee|unpaid|pending|paid|due|rupaye|paisa|list)/i.test(q)) {
         let unpaidCount = 0;
         let totalDues = 0;
         const unpaidList = [];
         students.forEach((st) => {
-          const isPaid = feesMap[st.admn] && feesMap[st.admn][currentMonth] && feesMap[st.admn][currentMonth].paid;
+          const isPaid = feesMap[st.admn] && feesMap[st.admn][systemMonth] && feesMap[st.admn][systemMonth].paid;
           const feeVal = parseFloat(st.customFee || 500);
           if (!isPaid) {
             unpaidCount++;
@@ -336,7 +335,7 @@
         });
 
         context.fees_summary = {
-          month: currentMonth,
+          month: systemMonth,
           total_unpaid_students: unpaidCount,
           total_due_rupees: totalDues,
           unpaid_student_names: unpaidList.slice(0, 45)
@@ -350,7 +349,7 @@
   }
 
   // ----------------------------------------------------
-  // 4. LIVE QWEN-FIRST MODEL RESOLVER
+  // 4. LIVE QWEN DUAL-DISCOVERY ENGINE
   // ----------------------------------------------------
   let memoizedLiveModelsList = null;
 
@@ -368,7 +367,6 @@
     const json = await res.json();
     const rawIds = (json.data || []).map((m) => m.id);
 
-    // Filter out non-text/moderation models
     const activeTextModels = rawIds.filter((id) => {
       const s = id.toLowerCase();
       return !s.includes("guard") &&
@@ -380,18 +378,14 @@
              !s.includes("moderation");
     });
 
-    // 🚀 Sort by Priority: QWEN FIRST, then LLAMA-3.3, then others
     const qwenModels = activeTextModels.filter((id) => id.toLowerCase().includes("qwen"));
     const llamaModels = activeTextModels.filter((id) => id.toLowerCase().includes("llama-3.3") || id.toLowerCase().includes("llama-3.2"));
-    const otherModels = activeTextModels.filter((id) => !id.toLowerCase().includes("qwen") && !llamaModels.includes(id));
+    const others = activeTextModels.filter((id) => !id.toLowerCase().includes("qwen") && !llamaModels.includes(id));
 
-    memoizedLiveModelsList = [...qwenModels, ...llamaModels, ...otherModels];
-
+    memoizedLiveModelsList = [...qwenModels, ...llamaModels, ...others];
     if (memoizedLiveModelsList.length === 0) {
       memoizedLiveModelsList = ["llama-3.3-70b-versatile", "llama-3.2-3b-preview"];
     }
-
-    console.log("✔ [MMAssistant] Active Live Models (Qwen prioritized):", memoizedLiveModelsList);
     return memoizedLiveModelsList;
   }
 
@@ -409,11 +403,17 @@ COMPLETE SCHOOL DATABASE & CONTEXT:
 ${verifiedContext}
 
 OPERATING RULES:
-1. Address: 46/K/05 (Room No 5, Line K, Plot No 46), Road No 04, Shivaji Nagar, Govandi, Mumbai - 400043 (Landmark: SN Hospital & Honest Life English School ke bazu me, Sufi Dairy ke paas).
-2. Principal: Saba Teacher (Saba Parveen). Degrees: D.Ed, B.Ed, LLB. Numbers: 7302132270 / 9322298658.
-3. Phone lookup: Agar phone number pucha jaye ya type kiya jaye, exact person ka naam aur role batayein. Teachers directory se teacher ka contact number dein (e.g. Bushra Teacher: 88796 69303).
-4. Student lookup: Admission number (jaise Admn 153) ya naam se exact student ki class, phone number, attendance aur fees status dein.
-5. Answer naturally, respectfully and concisely in Roman Urdu, Hindi, or English without technical excuses or robotic preambles.`;
+1. Student Profile & Fees:
+   - "queried_students" ke andar "full_academic_year_fees" check karein.
+   - User kisi bhi mahine (June, July, August, September, October etc.) ki fees puche, toh exact Paid ya Unpaid status batayein.
+2. Address & Principal Info:
+   - Address: 46/K/05 (Room No 5, Line K, Plot No 46), Road No 04, Shivaji Nagar, Govandi, Mumbai - 400043.
+   - Principal: Saba Teacher (Saba Parveen). Degrees: D.Ed, B.Ed, LLB. Numbers: 7302132270 / 9322298658.
+3. Teachers Contact:
+   - "teachers_directory" se teachers ke direct phone numbers aur unki details dein.
+4. Tone & Manner:
+   - Saba Teacher se respectful, natural aur seedhe Roman Urdu me baat karein.
+   - Har jawab factual, accurate aur point-to-point dein bina kisi robotic excuse ke.`;
 
     const rawHistory = getHistory();
     const recentMessages = rawHistory.slice(-4).map((m) => ({
@@ -452,7 +452,6 @@ OPERATING RULES:
 
         const errData = await response.json().catch(() => ({}));
         lastError = errData.error?.message || `HTTP ${response.status}`;
-        console.warn(`Model [${modelName}] skipped: ${lastError}`);
       } catch (err) {
         lastError = err.message;
       }
@@ -463,7 +462,7 @@ OPERATING RULES:
   }
 
   // ----------------------------------------------------
-  // 6. CONTROLLER API
+  // 6. PUBLIC CONTROLLER API
   // ----------------------------------------------------
   window.MMAssistant = {
     open: function () {
