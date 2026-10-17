@@ -5611,66 +5611,44 @@ Exact Output JSON Format Required:
       window.renderAdminInteractiveTestTable("ALL");
     };
 
-       // Memory Cache for Tests and Attempts (prevents calling database repeatedly)
-    window.adminTestsCache = null;
-    window.adminAttemptsCache = null;
+     window.renderAdminInteractiveTestTable = async function(selectedClass) {
+ const thead = document.getElementById("adminInteractiveTestHead");
+ const tbody = document.getElementById("adminInteractiveTestBody");
+ if(!thead || !tbody) return;
 
-    window.renderAdminInteractiveTestTable = async function(selectedClass, forceRefresh = false) {
-      const thead = document.getElementById("adminInteractiveTestHead");
-      const tbody = document.getElementById("adminInteractiveTestBody");
-      if(!thead || !tbody) return;
+ tbody.innerHTML = `<tr><td colspan="7" style="padding: 14px; text-align: center;">⏳ Loading tests data from Realtime Database...</td></tr>`;
 
-      // 1. Agar cache khali hai ya forceRefresh manga hai tabhi network call karein
-      if (!window.adminTestsCache || !window.adminAttemptsCache || forceRefresh) {
-        tbody.innerHTML = `<tr><td colspan="7" style="padding: 14px; text-align: center;">⏳ Loading tests & attempts data...</td></tr>`;
+ let allTests = {};
+ let allAttempts = {};
 
-        let allTests = {};
-        const attemptsMap = {}; // testId -> Set of attempted student admn IDs
+ try {
+   const [testsSnap, attemptsSnap] = await Promise.all([
+     get(ref(db, "online_tests")),
+     get(ref(db, "test_attempts"))
+   ]);
+   if(testsSnap.exists()) allTests = testsSnap.val();
+   if(attemptsSnap.exists()) allAttempts = attemptsSnap.val();
+ } catch(e) {
+   console.warn("RTDB admin tests load error:", e);
+ }
 
-        try {
-          // Tests load (RTDB + Firestore dual compatibility)
-          const testsSnap = await get(ref(db, "online_tests")).catch(() => null);
-          if (testsSnap && testsSnap.exists()) {
-            allTests = testsSnap.val();
-          }
-
-          // Attempts direct Cloud Firestore collection se load karein
-          const attemptsSnap = await getDocs(collection(fsDb, "test_attempts")).catch(() => null);
-          if (attemptsSnap) {
-            attemptsSnap.forEach(d => {
-              const dt = d.data();
-              const tId = String(dt.testId || "");
-              const sAdmn = String(dt.admn || "");
-              if (tId && sAdmn) {
-                if (!attemptsMap[tId]) attemptsMap[tId] = new Set();
-                attemptsMap[tId].add(sAdmn);
-              }
-            });
-          }
-
-          window.adminTestsCache = allTests;
-          window.adminAttemptsCache = attemptsMap;
-        } catch(e) {
-          console.warn("Tests load error:", e);
-        }
-      }
-
-      const allTests = window.adminTestsCache || {};
-      const attemptsMap = window.adminAttemptsCache || {};
-      const allStudents = getLiveStudents();
+ const allStudents = getLiveStudents();
 
       let testsList = [];
+
+      // Collect tests class-wise or all
       const classesToProcess = selectedClass === "ALL" ? Object.keys(allTests) : [cleanClassStr(selectedClass)];
 
       classesToProcess.forEach(cls => {
         const classTests = allTests[cls] || {};
         Object.entries(classTests).forEach(([testId, testObj]) => {
           if(testObj) {
-            testsList.push({ ...testObj, class: cleanClassStr(cls), testId: testId });
+            testsList.push({ ...testObj, class: cls, testId: testId });
           }
         });
       });
 
+      // Sort class-wise order
       const stdOrder = ["Nursery", "Jr. KG", "Sr. KG", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"];
       testsList.sort((a, b) => {
         const idxA = stdOrder.indexOf(a.class) !== -1 ? stdOrder.indexOf(a.class) : 99;
@@ -5682,23 +5660,23 @@ Exact Output JSON Format Required:
         thead.innerHTML = `
           <tr>
             <th style="width: 40px;">Sr. No</th>
-            <th style="text-align: left; padding-left: 8px;">Test Name</th>
+            <th style="text-align: left; padding-left: 8px;">Test name</th>
             <th>Std</th>
-            <th>Subject</th>
-            <th>Questions</th>
-            <th>Student Attempted</th>
-            <th>Not Attempted</th>
+            <th>subject</th>
+            <th>no of questions</th>
+            <th>Student attempted</th>
+            <th>Not attempted</th>
           </tr>
         `;
       } else {
         thead.innerHTML = `
           <tr>
             <th style="width: 40px;">Sr. No</th>
-            <th style="text-align: left; padding-left: 8px;">Test Name</th>
-            <th>Subject</th>
-            <th>Questions</th>
-            <th>Student Attempted</th>
-            <th>Not Attempted</th>
+            <th style="text-align: left; padding-left: 8px;">Test name</th>
+            <th>subject</th>
+            <th>no of questions</th>
+            <th>Student attempted</th>
+            <th>Not attempted</th>
           </tr>
         `;
       }
@@ -5713,14 +5691,11 @@ Exact Output JSON Format Required:
       testsList.forEach((t, idx) => {
         const classStudents = allStudents.filter(s => cleanClassStr(s.class) === cleanClassStr(t.class));
         const totalStudentsCount = classStudents.length;
-
-        // Accurate Attempt Count from Firestore Set
-        const attemptedStudentsSet = attemptsMap[t.testId] || new Set();
+        
+        const testAttemptsData = allAttempts[t.testId] || {};
         let attemptedCount = 0;
         classStudents.forEach(st => {
-          if (attemptedStudentsSet.has(String(st.admn))) {
-            attemptedCount++;
-          }
+          if(testAttemptsData[st.admn]) attemptedCount++;
         });
         const notAttemptedCount = Math.max(0, totalStudentsCount - attemptedCount);
 
@@ -5728,43 +5703,43 @@ Exact Output JSON Format Required:
         const safeClass = t.class;
 
         const now = new Date().getTime();
-        const expiryTime = t.expiry ? new Date(t.expiry).getTime() : NaN;
-        const isExpired = !isNaN(expiryTime) && now > expiryTime;
-        const expBadge = isExpired 
-          ? `<span style="background: rgba(239, 68, 68, 0.15); color: #dc2626; border: 1px solid #ef4444; padding: 2px 6px; border-radius: 6px; font-size: 9px; font-weight: 800; margin-left: 6px;">Expired</span>`
-          : `<span style="background: rgba(34, 197, 94, 0.15); color: #16a34a; border: 1px solid #16a34a; padding: 2px 6px; border-radius: 6px; font-size: 9px; font-weight: 800; margin-left: 6px;">Active</span>`;
+ const expiryTime = t.expiry ? new Date(t.expiry).getTime() : NaN;
+ const isExpired = !isNaN(expiryTime) && now > expiryTime;
+ const expBadge = isExpired 
+   ? `<span style="background: rgba(239, 68, 68, 0.15); color: #dc2626; border: 1px solid #ef4444; padding: 2px 6px; border-radius: 6px; font-size: 9px; font-weight: 800; margin-left: 6px;">Expired</span>`
+   : `<span style="background: rgba(34, 197, 94, 0.15); color: #16a34a; border: 1px solid #16a34a; padding: 2px 6px; border-radius: 6px; font-size: 9px; font-weight: 800; margin-left: 6px;">Active</span>`;
 
-        if(selectedClass === "ALL") {
-          tbody.innerHTML += `
-            <tr>
-              <td><b>${idx + 1}</b></td>
-              <td style="text-align: left; padding-left: 8px; font-weight: 800; color: #0288d1; cursor: pointer; text-decoration: underline;" onclick="window.openAdminTestHistoryModal('${safeClass}', '${safeTestId}')">${t.title || t.testName || 'Test'} ${expBadge}</td>
-              <td><span class="class-badge" style="background:#0288d1; font-size:10px;">Class ${t.class}</span></td>
-              <td>${t.subject || '-'}</td>
-              <td><b>${t.numQuestions || (t.questions ? t.questions.length : 0)}</b></td>
-              <td><b style="color: #16a34a;">${attemptedCount}</b></td>
-              <td><b style="color: #dc2626;">${notAttemptedCount}</b></td>
-            </tr>
-          `;
-        } else {
-          tbody.innerHTML += `
-            <tr>
-              <td><b>${idx + 1}</b></td>
-              <td style="text-align: left; padding-left: 8px; font-weight: 800; color: #0288d1; cursor: pointer; text-decoration: underline;" onclick="window.openAdminTestHistoryModal('${safeClass}', '${safeTestId}')">${t.title || t.testName || 'Test'} ${expBadge}</td>
-              <td>${t.subject || '-'}</td>
-              <td><b>${t.numQuestions || (t.questions ? t.questions.length : 0)}</b></td>
-              <td><b style="color: #16a34a;">${attemptedCount}</b></td>
-              <td><b style="color: #dc2626;">${notAttemptedCount}</b></td>
-            </tr>
-          `;
-        }
+ if(selectedClass === "ALL") {
+ tbody.innerHTML += `
+ <tr>
+ <td><b>${idx + 1}</b></td>
+ <td style="text-align: left; padding-left: 8px; font-weight: 800; color: #0288d1; cursor: pointer; text-decoration: underline;" onclick="window.openAdminTestHistoryModal('${safeClass}', '${safeTestId}')">${t.title || t.testName || 'Test'} ${expBadge}</td>
+ <td><span class="class-badge" style="background:#0288d1; font-size:10px;">${t.class}</span></td>
+ <td>${t.subject || '-'}</td>
+ <td><b>${t.numQuestions || (t.questions ? t.questions.length : 0)}</b></td>
+ <td><b style="color: #16a34a;">${attemptedCount}</b></td>
+ <td><b style="color: #dc2626;">${notAttemptedCount}</b></td>
+ </tr>
+ `;
+ } else {
+ tbody.innerHTML += `
+ <tr>
+ <td><b>${idx + 1}</b></td>
+ <td style="text-align: left; padding-left: 8px; font-weight: 800; color: #0288d1; cursor: pointer; text-decoration: underline;" onclick="window.openAdminTestHistoryModal('${safeClass}', '${safeTestId}')">${t.title || t.testName || 'Test'} ${expBadge}</td>
+ <td>${t.subject || '-'}</td>
+ <td><b>${t.numQuestions || (t.questions ? t.questions.length : 0)}</b></td>
+ <td><b style="color: #16a34a;">${attemptedCount}</b></td>
+ <td><b style="color: #dc2626;">${notAttemptedCount}</b></td>
+ </tr>
+ `;
+ }
+
       });
     };
 
-
     
 
-         // ⚡ Universal Safe Data Fetch (Auto Unpacks Fees, Syllabus Config, Chapters & Progress)
+   // ⚡ Universal Safe Data Fetch (Auto Unpacks fees_matrix & fees_entries)
   async function safeDataFetch(refPath) {
     if (!refPath) return null;
     const Sentinel = window.Igris || window.AccuEngine;
@@ -5783,38 +5758,16 @@ Exact Output JSON Format Required:
         await window.ensureFirebaseAuth();
       }
       const parts = refPath.split("/");
-      let collectionName = parts[0];
+      const collectionName = parts[0];
 
-      // Alias resolution: enabled_syllabus points to syllabus_config
-      const targetCol = (collectionName === "enabled_syllabus") ? "syllabus_config" : collectionName;
-
-      // ─── 1 PART (e.g. "syllabus_chapters", "syllabus_progress", "teachers") ───
       if (parts.length === 1) {
-        const snap = await getDocs(collection(fsDb, targetCol));
+        const snap = await getDocs(collection(fsDb, collectionName));
         const map = {};
-
         snap.forEach(d => { 
           const dt = d.data();
-          if (targetCol === "fees_matrix") {
+          // Fees Matrix ke doc me se direct matrix extract karein
+          if (collectionName === "fees_matrix") {
             map[d.id] = dt.matrix || dt;
-          } else if (targetCol === "syllabus_config") {
-            map[d.id] = dt.subjects || dt;
-          } else if (targetCol === "syllabus_chapters") {
-            // Unpack class_subject docs into nested map[class][subject] = chapters
-            const clsKey = cleanClassStr(dt.class || d.id.split("_")[0]);
-            const subKey = dt.subject || d.id.split("_")[1];
-            if (clsKey && subKey) {
-              if (!map[clsKey]) map[clsKey] = {};
-              map[clsKey][subKey] = dt.chapters || [];
-            }
-          } else if (targetCol === "syllabus_progress") {
-            // Unpack admn_subject docs into nested map[admn][subject] = progress
-            const admnKey = String(dt.admn || d.id.split("_")[0]);
-            const subKey = dt.subject || d.id.split("_")[1];
-            if (admnKey && subKey) {
-              if (!map[admnKey]) map[admnKey] = {};
-              map[admnKey][subKey] = dt.progress || dt;
-            }
           } else {
             map[d.id] = dt;
           }
@@ -5826,54 +5779,9 @@ Exact Output JSON Format Required:
           }
         }
         return map;
-      } 
-      // ─── 2 PARTS (e.g. "syllabus_chapters/5", "syllabus_progress/101", "enabled_syllabus/5") ───
-      else if (parts.length === 2) {
-        const cleanSecond = cleanClassStr(parts[1]);
-
-        // A. Enabled Syllabus / Config by Class
-        if (targetCol === "syllabus_config") {
-          let docSnap = await getDoc(doc(fsDb, "syllabus_config", cleanSecond));
-          if (!docSnap.exists()) docSnap = await getDoc(doc(fsDb, "syllabus_config", parts[1]));
-          if (docSnap.exists()) {
-            const dt = docSnap.data();
-            return dt.subjects || dt;
-          }
-          return {};
-        }
-
-        // B. Syllabus Chapters by Class (e.g. syllabus_chapters/5)
-        if (targetCol === "syllabus_chapters") {
-          const snapAll = await getDocs(collection(fsDb, "syllabus_chapters"));
-          const map = {};
-          snapAll.forEach(d => {
-            const data = d.data();
-            const cls = cleanClassStr(data.class || d.id.split("_")[0]);
-            if (cls === cleanSecond || d.id.startsWith(cleanSecond + "_")) {
-              const sub = data.subject || d.id.split("_")[1];
-              if (sub) map[sub] = data.chapters || [];
-            }
-          });
-          return map;
-        }
-
-        // C. Syllabus Progress by Student (e.g. syllabus_progress/101)
-        if (targetCol === "syllabus_progress") {
-          const snapAll = await getDocs(collection(fsDb, "syllabus_progress"));
-          const map = {};
-          snapAll.forEach(d => {
-            const data = d.data();
-            const admn = String(data.admn || d.id.split("_")[0]);
-            if (admn === String(parts[1])) {
-              const sub = data.subject || d.id.split("_")[1];
-              if (sub) map[sub] = data.progress || data;
-            }
-          });
-          return map;
-        }
-
-        // D. Fees entries by Student (e.g. fees_entries/101)
-        if (targetCol === "fees_entries") {
+      } else if (parts.length === 2) {
+        // Kisi specific student ke fees_entries load karna (e.g. fees_entries/1)
+        if (collectionName === "fees_entries") {
           const snapAll = await getDocs(collection(fsDb, "fees_entries"));
           const map = {};
           snapAll.forEach(d => {
@@ -5885,10 +5793,10 @@ Exact Output JSON Format Required:
           return map;
         }
 
-        // E. General single document fetch
-        let docSnap = await getDoc(doc(fsDb, targetCol, parts[1]));
+        let docSnap = await getDoc(doc(fsDb, collectionName, parts[1]));
         if (!docSnap.exists()) {
-          const snapAll = await getDocs(collection(fsDb, targetCol));
+          // Agar direct ID na mile, toh class filter check karo
+          const snapAll = await getDocs(collection(fsDb, collectionName));
           const map = {};
           snapAll.forEach(d => {
             const data = d.data();
@@ -5900,35 +5808,21 @@ Exact Output JSON Format Required:
         }
 
         const docData = docSnap.exists() ? docSnap.data() : null;
-        if (docData && targetCol === "fees_matrix") {
+        if (docData && collectionName === "fees_matrix") {
           return docData.matrix || docData;
         }
         if (docData && Sentinel && typeof Sentinel.setLocal === "function") {
           await Sentinel.setLocal(collectionName, parts[1], docData);
         }
         return docData;
-      } 
-      // ─── 3 PARTS (e.g. "syllabus_chapters/5/Maths", "syllabus_progress/101/Science") ───
-      else if (parts.length === 3) {
-        const part1Clean = (targetCol === "syllabus_chapters") ? cleanClassStr(parts[1]) : parts[1];
-        const compositeKey = `${part1Clean}_${parts[2]}`;
-
-        let docSnap = await getDoc(doc(fsDb, targetCol, compositeKey));
+      } else if (parts.length === 3) {
+        const compositeKey = `${parts[1]}_${parts[2]}`;
+        let docSnap = await getDoc(doc(fsDb, collectionName, compositeKey));
         if (!docSnap.exists()) {
-          docSnap = await getDoc(doc(fsDb, targetCol, `${parts[1]}_${parts[2]}`));
+          docSnap = await getDoc(doc(fsDb, collectionName, parts[2]));
         }
-        if (!docSnap.exists()) {
-          docSnap = await getDoc(doc(fsDb, targetCol, parts[2]));
-        }
-
         if (docSnap.exists()) {
           const docData = docSnap.data();
-          if (targetCol === "syllabus_chapters") {
-            return docData.chapters || (Array.isArray(docData) ? docData : []);
-          }
-          if (targetCol === "syllabus_progress") {
-            return docData.progress || docData;
-          }
           return docData.days || docData.schedule || docData;
         }
       }
@@ -5938,7 +5832,6 @@ Exact Output JSON Format Required:
 
     return null;
   }
-
 
 
 
@@ -7815,19 +7708,19 @@ isAdminLbEditMode = false;
 
         claims[todayKey] = true;
 
-  
-                claims[todayKey] = true;
-
-        // 🚀 Firestore + Igris Only (No RTDB fallback)
         await setDoc(doc(fsDb, "daily_claims", String(student.admn)), { claims: claims, userId: String(student.admn) }, { merge: true });
         await setDoc(doc(fsDb, "students", String(student.admn)), { points: newPts }, { merge: true });
 
-        const Sentinel = window.Igris || window.AccuEngine;
-        if (Sentinel && typeof Sentinel.setLocal === "function") {
-          await Sentinel.setLocal("daily_claims", student.admn, claims);
-          await Sentinel.setLocal("students", student.admn, student);
-          if (typeof Sentinel.bumpSyncVersion === "function") Sentinel.bumpSyncVersion();
+        if (window.AccuEngine) {
+          await window.AccuEngine.setLocal("daily_claims", student.admn, claims);
+          await window.AccuEngine.setLocal("students", student.admn, student);
+          window.AccuEngine.bumpSyncVersion();
         }
+
+        await update(ref(db), {
+          [`daily_claims/${student.admn}/${todayKey}`]: true,
+          [`students/${student.admn}/points`]: newPts
+        }).catch(() => {});
 
         alert(`Congratulations! You have claimed +${pointsToAward} points for today.`);
         await refreshStudentDashboard();
@@ -7835,79 +7728,44 @@ isAdminLbEditMode = false;
     });
 
 
-          window.currentStudentPendingMonthsList = [];
-
-    async function calculateRealtimeStudentDues(student) {
+         async function calculateRealtimeStudentDues(student) {
       if(!student) return;
-      const rawMatrix = await safeDataFetch(`fees_matrix/${student.admn}`) || {};
-      const studentMatrix = rawMatrix.matrix || rawMatrix;
-      const struct = window.getFeeStructure(student.class) || {};
+      const studentMatrix = await safeDataFetch(`fees_matrix/${student.admn}`) || {};
+      const struct = window.getFeeStructure(student.class);
 
       let totalDue = 0;
       const pendingItems = [];
 
-      // Safe numeric fee rates (guaranteed no NaN)
-      const parsedCustom = student.customFee !== undefined && student.customFee !== null ? parseFloat(student.customFee) : NaN;
-      const monthlyRate = (!isNaN(parsedCustom) && parsedCustom > 0) ? parsedCustom : (Number(struct.rate) || 500);
-      const termRate = Number(struct.termRate) || 400;
-      const examRate = Number(struct.examRate) || 400;
+      const feeRate = student.customFee !== undefined ? parseFloat(student.customFee) : struct.rate;
 
-      // School academic session (June se current month tak evaluate karein)
-      const academicMonths = ["June", "July", "August", "September", "October", "November", "December", "January", "February", "March", "April", "May"];
-      const currentMonthName = getAutoMonthName();
-      const activeMonthsToEvaluate = [];
-      for(let m of academicMonths) { 
-        activeMonthsToEvaluate.push(m); 
-        if(m === currentMonthName) break; 
+      if (struct.type === "monthly") {
+        const academicMonths = ["June", "July", "August", "September", "October", "November", "December", "January", "February", "March", "April", "May"];
+        const currentMonthName = getAutoMonthName();
+        const activeMonthsToEvaluate = [];
+        for(let m of academicMonths) { activeMonthsToEvaluate.push(m); if(m === currentMonthName) break; }
+        activeMonthsToEvaluate.forEach(mName => {
+          if(!studentMatrix[mName] || !studentMatrix[mName].paid) { totalDue += feeRate; pendingItems.push(mName); }
+        });
+      } else {
+        struct.list.forEach(inst => {
+          if(!studentMatrix[inst] || !studentMatrix[inst].paid) { totalDue += feeRate; pendingItems.push(inst.replace("Installment", "Inst")); }
+        });
       }
 
-      // 1. Monthly fees check (June up to current month)
-      activeMonthsToEvaluate.forEach(mName => {
-        const isPaid = typeof window.getMatrixFeeRecord === "function"
-          ? !!window.getMatrixFeeRecord(studentMatrix, mName)
-          : !!(studentMatrix[mName] && (studentMatrix[mName].paid === true || studentMatrix[mName].paid === "true"));
-        if(!isPaid) { 
-          totalDue += monthlyRate; 
-          pendingItems.push(mName); 
-        }
-      });
 
-      // 2. Term / Exam heads check
-      const currentMonthIdx = academicMonths.indexOf(currentMonthName);
-      if (currentMonthIdx >= 3) { // September ya uske baad Term 1 & Exam 1 check karein
-        const term1Paid = typeof window.getMatrixFeeRecord === "function" ? !!window.getMatrixFeeRecord(studentMatrix, "1st Term") : !!studentMatrix["1st Term"]?.paid;
-        if (!term1Paid) { totalDue += termRate; pendingItems.push("1st Term"); }
-
-        const exam1Paid = typeof window.getMatrixFeeRecord === "function" ? !!window.getMatrixFeeRecord(studentMatrix, "1st Exam") : !!studentMatrix["1st Exam"]?.paid;
-        if (!exam1Paid) { totalDue += examRate; pendingItems.push("1st Exam"); }
-      }
-
-      if (currentMonthIdx >= 9) { // March ya uske baad Term 2 & Exam 2 check karein
-        const term2Paid = typeof window.getMatrixFeeRecord === "function" ? !!window.getMatrixFeeRecord(studentMatrix, "2nd Term") : !!studentMatrix["2nd Term"]?.paid;
-        if (!term2Paid) { totalDue += termRate; pendingItems.push("2nd Term"); }
-
-        const exam2Paid = typeof window.getMatrixFeeRecord === "function" ? !!window.getMatrixFeeRecord(studentMatrix, "2nd Exam") : !!studentMatrix["2nd Exam"]?.paid;
-        if (!exam2Paid) { totalDue += examRate; pendingItems.push("2nd Exam"); }
-      }
-
-      currentStudentTotalDueAmount = Math.round(totalDue);
-      window.currentStudentPendingMonthsList = pendingItems;
-
+      currentStudentTotalDueAmount = totalDue;
       const clearedBox = document.getElementById("sHomeDuesClearedBox");
       const pendingBox = document.getElementById("sHomeDuesPendingBox");
       if(!clearedBox || !pendingBox) return;
 
-      if(currentStudentTotalDueAmount <= 0) {
-        clearedBox.style.display = "block"; 
-        pendingBox.style.display = "none";
+      if(totalDue === 0) {
+        clearedBox.style.display = "block"; pendingBox.style.display = "none";
       } else {
-        clearedBox.style.display = "none"; 
-        pendingBox.style.display = "block";
-        document.getElementById("sHomeDueAmountText").innerText = `Fees Due: ₹${currentStudentTotalDueAmount}`;
+        clearedBox.style.display = "none"; pendingBox.style.display = "block";
+        document.getElementById("sHomeDueAmountText").innerText = `Fees Due: ₹${totalDue}`;
         document.getElementById("sHomeDueBreakdownText").innerText = `Pending: ${pendingItems.join(", ")} (Class ${student.class})`;
       }
     }
-
 
 
           async function refreshStudentDashboard() {
@@ -7982,34 +7840,19 @@ isAdminLbEditMode = false;
       }
     }
 
-       // Student Timetable Loader (Igris -> Firestore -> Igris)
+    // Student Timetable Loader
     window.loadStudentTimetable = async function(cls) {
       const tbody = document.getElementById("sHomeTimetableBody");
       const card = document.getElementById("sHomeTimetableCard");
       if(!tbody || !card) return;
 
-      const cleanCls = cleanClassStr(cls);
-      const scheduleList = await window.getTimetableFromIgrisOrFirestore(cleanCls);
+      const ttData = await safeDataFetch(`timetable/${cleanClassStr(cls)}`);
       tbody.innerHTML = "";
       
-      if(scheduleList && Array.isArray(scheduleList) && scheduleList.length > 0) {
-        const validRows = scheduleList.filter(r => r && (r.time || r.mon || r.tue || r.wed || r.thu || r.fri || r.sat));
-        if (validRows.length === 0) {
-          card.style.display = "none";
-          return;
-        }
-
+      if(ttData && Object.keys(ttData).length > 0) {
         let html = "";
-        validRows.forEach(row => {
-          html += `<tr>
-            <td style="font-weight:800; color:#0288d1;">${row.time || '-'}</td>
-            <td>${row.mon || '-'}</td>
-            <td>${row.tue || '-'}</td>
-            <td>${row.wed || '-'}</td>
-            <td>${row.thu || '-'}</td>
-            <td>${row.fri || '-'}</td>
-            <td>${row.sat || '-'}</td>
-          </tr>`;
+        Object.values(ttData).forEach(row => {
+          html += `<tr><td style="font-weight:800; color:#0288d1;">${row.time}</td><td style="font-weight:700;">${row.subject}</td><td>${row.mon || '-'}</td><td>${row.tue || '-'}</td><td>${row.wed || '-'}</td><td>${row.thu || '-'}</td><td>${row.fri || '-'}</td><td>${row.sat || '-'}</td></tr>`;
         });
         tbody.innerHTML = html;
         card.style.display = "block";
@@ -8017,9 +7860,11 @@ isAdminLbEditMode = false;
         card.style.display = "none";
       }
     };
-
-
-
+    addSafeListener("sViewAttendanceBtn", "click", () => {
+      const month = document.getElementById("sAttMonthSelect").value;
+      generateAttendanceReport(assignedClass, currentStudentAdmn, month, "sAttReportContent");
+      document.getElementById("sAttReportArea").style.display = "block";
+    });
 
       
            async function loadStudentStudyMaterials() {
@@ -8104,17 +7949,19 @@ isAdminLbEditMode = false;
           updatedAt: new Date().toISOString()
         };
 
-               // 1. Save metadata to Cloud Firestore (No RTDB fallback)
+        // 1. Save metadata to Cloud Firestore
         await setDoc(doc(fsDb, "homework", `${classKey}_${hwId}`), hwObj, { merge: true });
 
-        // 2. Save to Igris Local Cache
-        const Sentinel = window.Igris || window.AccuEngine;
-        if (Sentinel && typeof Sentinel.setLocal === "function") {
-          await Sentinel.setLocal("homework", `${classKey}_${hwId}`, hwObj);
-          if (typeof Sentinel.bumpSyncVersion === "function") {
-            Sentinel.bumpSyncVersion();
+        // 2. Save to AccuEngine Local Cache
+        if (window.AccuEngine) {
+          await window.AccuEngine.setLocal("homework", `${classKey}_${hwId}`, hwObj);
+          if (typeof window.AccuEngine.bumpSyncVersion === "function") {
+            window.AccuEngine.bumpSyncVersion();
           }
         }
+
+        // 3. Optional fallback
+        await set(ref(db, `homework/${classKey}/${hwId}`), hwObj).catch(() => {});
 
         alert("✔ Homework uploaded and synced successfully!");
 document.getElementById("hwTitleInput").value = ""; 
@@ -8299,91 +8146,32 @@ document.getElementById("hwTitleInput").value = "";
       window.loadTeacherStudyMaterials(selectedCls);
     });
 
-          window.openAdminTestHistoryModal = async function(cls, testId) {
+    window.openAdminTestHistoryModal = async function(cls, testId) {
       const cleanCls = cleanClassStr(cls);
+      const testObj = await safeDataFetch(`online_tests/${cleanCls}/${testId}`);
+      const attemptsData = await safeDataFetch(`test_attempts/${testId}`) || {};
+      const classStudents = getLiveStudents().filter(s => cleanClassStr(s.class) === cleanCls);
+
+      document.getElementById("adminTestModalTitle").innerText = testObj ? `📜 ${testObj.title}` : "📜 Test Attempts Details";
+      document.getElementById("adminTestModalSubtitle").innerText = `Class ${cleanCls} | Subject: ${testObj ? testObj.subject : '-'}`;
+
       const tbody = document.getElementById("adminTestAttemptsTableBody");
-      if (tbody) tbody.innerHTML = `<tr><td colspan="4" style="padding:14px; text-align:center;">⏳ Fetching student attempts from Firestore...</td></tr>`;
-
-      window.openModal("adminTestHistoryModal");
-
-      // 1. Test Object find karein (Pehle memory cache se, nahi to network se)
-      let testObj = null;
-      if (window.adminTestsCache && window.adminTestsCache[cleanCls] && window.adminTestsCache[cleanCls][testId]) {
-        testObj = window.adminTestsCache[cleanCls][testId];
-      } else {
-        try {
-          const snap = await get(ref(db, `online_tests/${cleanCls}/${testId}`)).catch(() => null);
-          if (snap && snap.exists()) testObj = snap.val();
-        } catch(e) {}
-      }
-
-      const modalTitle = document.getElementById("adminTestModalTitle");
-      const modalSubtitle = document.getElementById("adminTestModalSubtitle");
-      if (modalTitle) modalTitle.innerText = testObj ? `📜 ${testObj.title || testObj.testName || 'Test'}` : "📜 Test Attempts Details";
-      if (modalSubtitle) modalSubtitle.innerText = `Class ${cleanCls} | Subject: ${testObj ? (testObj.subject || '-') : '-'}`;
-
-      // 2. Attempts direct Cloud Firestore collection se load karein
-      const studentAttemptsMap = {};
-      try {
-        const attemptsSnap = await getDocs(collection(fsDb, "test_attempts"));
-        attemptsSnap.forEach(d => {
-          const dt = d.data();
-          if (String(dt.testId) === String(testId)) {
-            const admnKey = String(dt.admn || "");
-            if (admnKey) studentAttemptsMap[admnKey] = dt;
-          }
-        });
-      } catch (err) {
-        console.warn("Firestore test attempts read error:", err);
-      }
-
-      // 3. Class ke sabhi registered students ke sath match karein
-      let classStudents = getLiveStudents().filter(s => cleanClassStr(s.class) === cleanCls);
-      if (classStudents.length === 0) {
-        const freshSt = await safeDataFetch("students") || {};
-        if (window.MM_STORE) window.MM_STORE.students = freshSt;
-        classStudents = getLiveStudents().filter(s => cleanClassStr(s.class) === cleanCls);
-      }
-
-      classStudents.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-
-      if (!tbody) return;
       tbody.innerHTML = "";
 
       if(classStudents.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" style="padding:14px; text-align:center; color:var(--text-muted);">No students registered in Class ${cleanCls}.</td></tr>`;
-        return;
+        tbody.innerHTML = `<tr><td colspan="4" style="padding:14px; text-align:center;">No students registered in Class ${cleanCls}.</td></tr>`;
+      } else {
+        classStudents.forEach(st => {
+          const att = attemptsData[st.admn];
+          if(att) {
+            tbody.innerHTML += `<tr><td style="text-align:left; padding-left:10px; font-weight:800;">${st.name}</td><td><span style="background:rgba(34, 197, 94, 0.15); color:#16a34a; padding:4px 8px; border-radius:6px; font-size:10px; font-weight:800;">Completed ✔</span></td><td style="font-weight:900; color:#0288d1;">${att.obtained} / ${att.total}</td><td>${att.date || '-'}</td></tr>`;
+          } else {
+            tbody.innerHTML += `<tr><td style="text-align:left; padding-left:10px; font-weight:700; color:var(--text-muted);">${st.name}</td><td><span style="background:rgba(239, 68, 68, 0.15); color:#dc2626; padding:4px 8px; border-radius:6px; font-size:10px; font-weight:800;">Not Attempted</span></td><td>-</td><td>-</td></tr>`;
+          }
+        });
       }
-
-      let rowsHtml = "";
-      classStudents.forEach(st => {
-        const att = studentAttemptsMap[String(st.admn)];
-        if(att) {
-          const marksObtained = att.obtained !== undefined ? att.obtained : "-";
-          const marksTotal = att.total !== undefined ? att.total : (testObj ? testObj.totalMarks : "-");
-          const attemptDate = att.date || "-";
-
-          rowsHtml += `
-            <tr>
-              <td style="text-align:left; padding-left:10px; font-weight:800; color:var(--text-color);">${st.name}</td>
-              <td><span style="background:rgba(34, 197, 94, 0.15); color:#16a34a; padding:4px 8px; border-radius:6px; font-size:10px; font-weight:800;">Completed ✔</span></td>
-              <td style="font-weight:900; color:#0288d1;">${marksObtained} / ${marksTotal}</td>
-              <td style="font-size:11px; font-weight:700;">${attemptDate}</td>
-            </tr>`;
-        } else {
-          rowsHtml += `
-            <tr>
-              <td style="text-align:left; padding-left:10px; font-weight:700; color:var(--text-muted);">${st.name}</td>
-              <td><span style="background:rgba(239, 68, 68, 0.15); color:#dc2626; padding:4px 8px; border-radius:6px; font-size:10px; font-weight:800;">Not Attempted</span></td>
-              <td style="color:var(--text-muted);">-</td>
-              <td style="color:var(--text-muted);">-</td>
-            </tr>`;
-        }
-      });
-
-      tbody.innerHTML = rowsHtml;
+      window.openModal("adminTestHistoryModal");
     };
-
 
 
         
@@ -8553,21 +8341,19 @@ document.getElementById("hwTitleInput").value = "";
 
 
                  // Delete Study Material Function
-      window.deleteStudyMaterial = async function(classKey, matKey) {
+     window.deleteStudyMaterial = async function(classKey, matKey) {
       window.showCustomConfirm("Are you sure you want to permanently delete this study material?", async () => {
         try {
           const docKey = matKey.includes("_") ? matKey : `${classKey}_${matKey}`;
-          // 🚀 Firestore Delete (No RTDB fallback)
           await deleteDoc(doc(fsDb, "study_material", docKey)).catch(() => {});
           
-          const Sentinel = window.Igris || window.AccuEngine;
-          if (Sentinel && typeof Sentinel.invalidate === "function") {
-            await Sentinel.invalidate("study_material", docKey);
-            if (typeof Sentinel.bumpSyncVersion === "function") {
-              Sentinel.bumpSyncVersion();
+          if (window.AccuEngine) {
+            await window.AccuEngine.invalidate("study_material", docKey);
+            if (typeof window.AccuEngine.bumpSyncVersion === "function") {
+              window.AccuEngine.bumpSyncVersion();
             }
           }
-
+          await remove(ref(db, `study_material/${classKey}/${matKey}`)).catch(() => {});
           alert("✔ Study material deleted successfully!");
           
           const selectEl = document.getElementById("matAdminManageClassSelectTab");
@@ -8579,30 +8365,28 @@ document.getElementById("hwTitleInput").value = "";
       });
     };
 
-          window.toggleStudyMaterialVisibility = async function(classKey, matKey, currentlyHidden) {
+    window.toggleStudyMaterialVisibility = async function(classKey, matKey, currentlyHidden) {
       const newState = !currentlyHidden;
       const docKey = matKey.includes("_") ? matKey : `${classKey}_${matKey}`;
       
-      // 🚀 Firestore Update (No RTDB fallback)
       await setDoc(doc(fsDb, "study_material", docKey), { isHidden: newState }, { merge: true }).catch(() => {});
       
-      const Sentinel = window.Igris || window.AccuEngine;
-      if (Sentinel && typeof Sentinel.fetch === "function") {
-        const item = await Sentinel.fetch(`study_material/${classKey}`);
+      if (window.AccuEngine) {
+        const item = await window.AccuEngine.fetch(`study_material/${classKey}`);
         if (item && item[matKey]) {
           item[matKey].isHidden = newState;
-          await Sentinel.setLocal("study_material", docKey, item[matKey]);
-          if (typeof Sentinel.bumpSyncVersion === "function") {
-            Sentinel.bumpSyncVersion();
+          await window.AccuEngine.setLocal("study_material", docKey, item[matKey]);
+          if (typeof window.AccuEngine.bumpSyncVersion === "function") {
+            window.AccuEngine.bumpSyncVersion();
           }
         }
       }
+      await update(ref(db), { [`study_material/${classKey}/${matKey}/isHidden`]: newState }).catch(() => {});
       
       const selectEl = document.getElementById("matAdminManageClassSelectTab");
       const targetCls = (currentRole === "admin" && selectEl) ? selectEl.value : assignedClass;
       window.loadTeacherStudyMaterials(targetCls);
     };
-
 
 
 
@@ -9010,34 +8794,24 @@ document.getElementById("hwTitleInput").value = "";
 
  
 
-          window.loadStudentProfileLeaves = async function(admn) {
+    window.loadStudentProfileLeaves = async function(admn) {
       const container = document.getElementById("spLeaveAppContainer");
       if(!container) return;
       container.innerHTML = `<div style="text-align:center; padding:14px; font-weight:800; color:var(--text-muted);">⏳ Fetching applications...</div>`;
       
       try {
-        const snap = await getDocs(collection(fsDb, "leaves"));
-        const leaveList = [];
-        
+               const snap = await getDocs(collection(fsDb, "leaves"));
+        const leavesData = {};
         snap.forEach(d => {
-          const dt = d.data();
-          if (String(dt.admn) === String(admn) || String(dt.userId) === String(admn)) {
-            leaveList.push({ id: d.id, ...dt });
-          }
+            const dt = d.data();
+            if (String(dt.admn) === String(admn) || String(dt.userId) === String(admn)) {
+                leavesData[d.id] = dt;
+            }
         });
 
-        // Clear loader completely
-        container.innerHTML = "";
-        
-        if(leaveList.length === 0) {
-          container.innerHTML = `<div style="text-align:center; padding:14px; font-weight:700; color:var(--text-muted);">No leave applications found for this student.</div>`;
-          setTimeout(() => window.syncProfileModalHeight(), 150);
-          return;
-        }
 
-        leaveList.sort((a,b) => (b.timestamp || 0) - (a.timestamp || 0));
+        const leaveList = Object.values(leavesData).sort((a,b) => b.timestamp - a.timestamp);
         
-        let htmlCards = "";
         leaveList.forEach(l => {
           let statusColor = "#d97706"; // Pending
           if (l.status === 'Approved') statusColor = "#16a34a";
@@ -9045,27 +8819,24 @@ document.getElementById("hwTitleInput").value = "";
           
           const safeMsg = (l.message || "").replace(/'/g, "\\'").replace(/"/g, '&quot;');
           const safeReason = (l.reason || "").replace(/'/g, "\\'").replace(/"/g, '&quot;');
-          const safeDate = l.displayLeaveDate || l.leaveDate || "-";
 
-          htmlCards += `
+          container.innerHTML += `
             <div style="padding:12px; border:1px solid var(--border-color); border-radius:12px; margin-bottom:10px; background:rgba(0,0,0,0.02); display:flex; justify-content:space-between; align-items:center; cursor:pointer;" 
-                 onclick="window.openLeaveActionModal('${l.id}', '${l.admn}', '${(l.name||'').replace(/'/g, "\\'")}', '${l.class}', '${safeReason}', '${safeMsg}', '${safeDate}', '${l.status}', 'student')">
+                 onclick="window.openLeaveActionModal('${l.id}', '${l.admn}', '${l.name}', '${l.class}', '${safeReason}', '${safeMsg}', '${l.displayLeaveDate}', '${l.status}')">
               <div>
-                <div style="font-size:12px; font-weight:800; color:#0288d1;">📅 ${safeDate}</div>
-                <div style="font-size:11px; font-weight:700; color:var(--text-color); margin-top:2px;">Reason: ${l.reason || '-'}</div>
+                <div style="font-size:12px; font-weight:800; color:#0288d1;">📅 ${l.displayLeaveDate}</div>
+                <div style="font-size:11px; font-weight:700; color:var(--text-color); margin-top:2px;">Reason: ${l.reason}</div>
               </div>
-              <div style="font-size:10px; font-weight:900; color:white; background:${statusColor}; padding:4px 8px; border-radius:8px;">${l.status || 'Pending'}</div>
+              <div style="font-size:10px; font-weight:900; color:white; background:${statusColor}; padding:4px 8px; border-radius:8px;">${l.status}</div>
             </div>`;
         });
-
-        container.innerHTML = htmlCards;
-      } catch(e) {
+          } catch(e) {
         container.innerHTML = `<div style="text-align:center; padding:14px; color:red;">Failed to load applications.</div>`;
       }
       
+      // ✅ YE EK LINE YAHAN ADD KARNI HAI
       setTimeout(() => window.syncProfileModalHeight(), 150);
     };
-
 
 
 
@@ -9785,110 +9556,45 @@ document.getElementById("hwTitleInput").value = "";
       });
     });
 
-
-          async function generateAttendanceReport(stdVal, selectedAdmnVal, monthVal, targetContainerId) {
+    async function generateAttendanceReport(stdVal, selectedAdmnVal, monthVal, targetContainerId) {
       const daysCount = getDaysInMonth(monthVal);
       const monthIndex = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].indexOf(monthVal);
       const year = new Date().getFullYear();
       const daysNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-      const reportDiv = document.getElementById(targetContainerId);
-      if (!reportDiv) return;
+      let students = getLiveStudents().filter(s => cleanClassStr(s.class) === cleanClassStr(stdVal));
+      if(selectedAdmnVal !== "ALL") students = students.filter(s => String(s.admn) === String(selectedAdmnVal));
+
+           const reportDiv = document.getElementById(targetContainerId);
       reportDiv.innerHTML = "";
 
-      // 1. Single Student Attendance View (Direct Student Lookup)
-      if (selectedAdmnVal && selectedAdmnVal !== "ALL") {
-        let st = await getStudentRecord(selectedAdmnVal);
-        if (!st) {
-          const liveSts = getLiveStudents();
-          st = liveSts.find(s => String(s.admn) === String(selectedAdmnVal)) || { name: "Student", admn: selectedAdmnVal, class: stdVal || "-" };
-        }
+      if(selectedAdmnVal !== "ALL" && students.length > 0) {
+        const st = students[0];
+        const mData = await safeDataFetch(`attendance/${st.admn}/${monthVal}`) || {};
+      }
+      const allAtt = (selectedAdmnVal === "ALL") ? (await safeDataFetch("attendance") || {}) : {};
 
-        // Fetch attendance from Igris cache / Firestore
-        let rawMData = await safeDataFetch(`attendance/${st.admn}/${monthVal}`) || {};
-        let mData = rawMData.days || rawMData;
-
-        // Direct Firestore collection fallback if not in cache
-        if (!mData || Object.keys(mData).length === 0) {
-          try {
-            const attDoc = await getDoc(doc(fsDb, "attendance", `${st.admn}_${monthVal}`));
-            if (attDoc.exists()) {
-              const dt = attDoc.data();
-              mData = dt.days || dt;
-            }
-          } catch(e) {}
-        }
-
-        const today = new Date();
-        const isCurrentMonthAndYear = (today.getFullYear() === year && today.getMonth() === monthIndex);
-
-        let totalWorkingDays = 0, presentDays = 0, absentDays = 0, tableRows = "";
-
+      if(selectedAdmnVal !== "ALL" && students.length > 0) {
+        const st = students[0];
+        const mData = await safeDataFetch(`attendance/${st.admn}/${monthVal}`) || {};
+ let totalWorkingDays = 0, presentDays = 0, absentDays = 0, tableRows = "";
         for(let d = 1; d <= daysCount; d++) {
           const dateObj = new Date(year, monthIndex, d);
           const isSunday = dateObj.getDay() === 0;
-          const isFutureDay = isCurrentMonthAndYear && (d > today.getDate());
-          const val = mData ? mData[`day_${d}`] : undefined;
+          const val = mData[`day_${d}`];
           let status = "-", badgeColor = "#64748b";
 
-          if (isSunday) { 
-            status = "SUN"; badgeColor = "#ea580c"; 
-          } else if (val === "H") { 
-            status = "H"; badgeColor = "#9333ea"; 
-          } else if (val === true || val === "Present" || val === "P") { 
-            status = "P"; badgeColor = "#16a34a"; presentDays++; totalWorkingDays++; 
-          } else if (val === false || val === "Absent" || val === "A") { 
-            status = "A"; badgeColor = "#dc2626"; absentDays++; totalWorkingDays++; 
-          } else if (!isFutureDay) {
-            // Past working day without mark is treated as Absent
-            status = "A"; badgeColor = "#dc2626"; absentDays++; totalWorkingDays++; 
-          } else {
-            status = "-"; badgeColor = "#64748b"; 
-          }
-
-          tableRows += `
-            <tr>
-              <td>${String(d).padStart(2, '0')}/${String(monthIndex + 1).padStart(2, '0')}/${year}</td>
-              <td>${daysNames[dateObj.getDay()]}</td>
-              <td><b style="color:${badgeColor}; font-size:12px;">${status}</b></td>
-            </tr>`;
+          if(isSunday) { status = "SUN"; badgeColor = "#ea580c"; } 
+          else if(val === "H") { status = "H"; badgeColor = "#9333ea"; } 
+          else if(val === true) { status = "P"; badgeColor = "#16a34a"; presentDays++; totalWorkingDays++; } 
+          else if(val === false || val === undefined) { status = "A"; badgeColor = "#dc2626"; absentDays++; totalWorkingDays++; }
+          tableRows += `<tr><td>${String(d).padStart(2, '0')}/${String(monthIndex + 1).padStart(2, '0')}/${year}</td><td>${daysNames[dateObj.getDay()]}</td><td><b style="color:${badgeColor}; font-size:12px;">${status}</b></td></tr>`;
         }
-
-        reportDiv.innerHTML = `
-          <div style="text-align:center; margin-bottom:12px; border-bottom:2px solid var(--border-color); padding-bottom:8px;">
-            <h3 style="font-size:16px; font-weight:900; color:#0288d1;">${st.name}</h3>
-            <p style="font-size:11px; font-weight:700; color:var(--text-muted);">Admn No: ${st.admn} | Class: ${st.class} | Month: ${monthVal}</p>
-          </div>
-          <div class="table-container" style="max-height:48vh; overflow-y:auto;">
-            <table style="min-width:100%;">
-              <thead><tr><th>Date</th><th>Day</th><th>Status</th></tr></thead>
-              <tbody>${tableRows}</tbody>
-            </table>
-          </div>
-          <div class="stats-grid" style="margin-top:14px; grid-template-columns: 1fr 1fr 1fr;">
-            <div class="stat-card blue" style="padding:10px;"><span style="font-size:10px;">Working Days</span><h3 style="font-size:16px;">${totalWorkingDays}</h3></div>
-            <div class="stat-card" style="background:linear-gradient(135deg, #16a34a 0%, #15803d 100%); padding:10px;"><span style="font-size:10px;">Present (P)</span><h3 style="font-size:16px;">${presentDays}</h3></div>
-            <div class="stat-card red" style="padding:10px;"><span style="font-size:10px;">Absent (A)</span><h3 style="font-size:16px;">${absentDays}</h3></div>
-          </div>`;
-      } 
-      // 2. Class-wide View (For Admin / Teacher Track Attendance)
-      else {
-        let students = getLiveStudents().filter(s => cleanClassStr(s.class) === cleanClassStr(stdVal));
-        if (students.length === 0) {
-          const freshSt = await safeDataFetch("students") || {};
-          if (window.MM_STORE) window.MM_STORE.students = freshSt;
-          students = getLiveStudents().filter(s => cleanClassStr(s.class) === cleanClassStr(stdVal));
-        }
-
-        const allAtt = await safeDataFetch("attendance") || {};
+        reportDiv.innerHTML = `<div style="text-align:center; margin-bottom:12px; border-bottom:2px solid var(--border-color); padding-bottom:8px;"><h3 style="font-size:16px; font-weight:900; color:#0288d1;">${st.name}</h3><p style="font-size:11px; font-weight:700; color:var(--text-muted);">Admn No: ${st.admn} | Class: ${st.class} | Month: ${monthVal}</p></div><div class="table-container"><table style="min-width:100%;"><thead><tr><th>Date</th><th>Day</th><th>Status (P/A/SUN/H)</th></tr></thead><tbody>${tableRows}</tbody></table></div><div class="stats-grid" style="margin-top:14px; grid-template-columns: 1fr 1fr 1fr;"><div class="stat-card blue" style="padding:10px;"><span style="font-size:10px;">Working Days</span><h3 style="font-size:16px;">${totalWorkingDays}</h3></div><div class="stat-card" style="background:linear-gradient(135deg, #16a34a 0%, #15803d 100%); padding:10px;"><span style="font-size:10px;">Present (P)</span><h3 style="font-size:16px;">${presentDays}</h3></div><div class="stat-card red" style="padding:10px;"><span style="font-size:10px;">Absent (A)</span><h3 style="font-size:16px;">${absentDays}</h3></div></div>`;
+      } else {
         let headerDays = "", tableRows = "";
         for(let d = 1; d <= daysCount; d++) { headerDays += `<th>${d}</th>`; }
-
-        if (students.length === 0) {
-          reportDiv.innerHTML = `<div style="text-align:center; padding:16px; color:var(--text-muted); font-size:12px;">No students registered in Class ${stdVal}.</div>`;
-          return;
-        }
-
-        students.forEach(st => {
+       
+                students.forEach(st => {
           const rawMData = allAtt[`${st.admn}_${monthVal}`] || (allAtt[st.admn] && allAtt[st.admn][monthVal]) || {};
           const mData = rawMData.days || rawMData;
           let presentDays = 0, absentDays = 0, totalWorkingDays = 0, studentDaysCells = "";
@@ -9902,24 +9608,12 @@ document.getElementById("hwTitleInput").value = "";
             else { statusText = "A"; textColor = "#dc2626"; absentDays++; totalWorkingDays++; }
             studentDaysCells += `<td style="color:${textColor}; font-weight:800;">${statusText}</td>`;
           }
-          tableRows += `<tr><td style="text-align:left; padding-left:8px; font-weight:700; min-width:140px;">${st.name}</td>${studentDaysCells}<td style="font-weight:900; background:rgba(2, 136, 209, 0.1);">${totalWorkingDays}</td><td style="font-weight:900; color:#16a34a; background:rgba(34, 197, 94, 0.1);">${presentDays}</td><td style="font-weight:900; color:#dc2626; background:rgba(220, 38, 38, 0.1);">${absentDays}</td></tr>`;
+          tableRows += `<tr><td style="text-align:left; padding-left:8px; font-weight:700; min-width:140px;">${st.name}</td>${studentDaysCells}<td style="font-weight:900; background:rgba(2, 136, 209, 0.1);">${totalWorkingDays}</td><td style="font-weight:900; color:#16a34a; background:rgba(220, 38, 38, 0.1);">${presentDays}</td><td style="font-weight:900; color:#dc2626; background:rgba(220, 38, 38, 0.1);">${absentDays}</td></tr>`;
         });
 
         reportDiv.innerHTML = `<div class="table-container"><table><thead><tr><th style="min-width:140px; text-align:left; padding-left:8px;">Name</th>${headerDays}<th style="background:#0288d1; color:white !important;">Total</th><th style="background:#16a34a; color:white !important;">P</th><th style="background:#dc2626; color:white !important;">A</th></tr></thead><tbody>${tableRows}</tbody></table></div>`;
       }
     }
-
-    addSafeListener("sViewAttendanceBtn", "click", () => {
-      const btn = document.getElementById("sViewAttendanceBtn");
-      runWithBtnSpinner(btn, "View Attendance", async () => {
-        const month = document.getElementById("sAttMonthSelect").value;
-        const student = await getStudentRecord(currentStudentAdmn);
-        const cls = student ? student.class : (assignedClass || "1");
-        await generateAttendanceReport(cls, currentStudentAdmn, month, "sAttReportContent");
-        document.getElementById("sAttReportArea").style.display = "block";
-      });
-    });
-
 
     addSafeListener("trackAttendanceBtn", "click", () => {
       const btn = document.getElementById("trackAttendanceBtn");
@@ -9977,14 +9671,13 @@ document.getElementById("hwTitleInput").value = "";
           updatedAt: new Date().toISOString()
         };
 
-
-                // 🚀 Firestore + Igris Only (No RTDB fallback)
+        // 🚀 Firestore + AccuEngine
         await setDoc(doc(fsDb, "expenses", expDocKey), expPayload, { merge: true });
-        if (window.AccuEngine || window.Igris) {
-          const Sentinel = window.Igris || window.AccuEngine;
-          await Sentinel.setLocal("expenses", expDocKey, expPayload);
-          if (typeof Sentinel.bumpSyncVersion === "function") Sentinel.bumpSyncVersion();
+        if (window.AccuEngine) {
+          await window.AccuEngine.setLocal("expenses", expDocKey, expPayload);
+          window.AccuEngine.bumpSyncVersion();
         }
+        await set(ref(db, `expenses/${month}/${expId}`), expPayload).catch(() => {});
 
         alert("✔ Expense entry saved successfully.");
 });
@@ -10021,22 +9714,21 @@ document.getElementById("hwTitleInput").value = "";
       });
     });
 
-          window.deleteExpenseEntry = async function(month, expKey) {
+        window.deleteExpenseEntry = async function(month, expKey) {
       if(confirm("Are you sure you want to remove this expense entry?")) {
         const docKey = expKey.includes("_") ? expKey : `${month}_${expKey}`;
-        // 🚀 Firestore + Igris Only (No RTDB fallback)
+        // 🚀 Firestore + AccuEngine
         await deleteDoc(doc(fsDb, "expenses", docKey)).catch(() => {});
-        const Sentinel = window.Igris || window.AccuEngine;
-        if (Sentinel && typeof Sentinel.invalidate === "function") {
-          await Sentinel.invalidate("expenses", docKey);
-          if (typeof Sentinel.bumpSyncVersion === "function") Sentinel.bumpSyncVersion();
+        if (window.AccuEngine) {
+          await window.AccuEngine.invalidate("expenses", docKey);
+          window.AccuEngine.bumpSyncVersion();
         }
+        await remove(ref(db, `expenses/${month}/${expKey}`)).catch(() => {});
 
         alert("✔ Expense entry removed successfully.");
         document.getElementById("loadRmExpenseSheetBtn").click();
       }
     };
-
 
 
     addSafeListener("loadRmFeeBtn", "click", () => {
@@ -10956,20 +10648,16 @@ document.getElementById("hwTitleInput").value = "";
         const subDocKey = `${classKey}_${subjId}`;
         const subPayload = { id: subjId, docKey: subDocKey, name: subjectName, class: classKey, date: getTodayFormattedDate() };
 
-               const subjId = Date.now().toString();
-        const subDocKey = `${classKey}_${subjId}`;
-        const subPayload = { id: subjId, docKey: subDocKey, name: subjectName, class: classKey, date: getTodayFormattedDate() };
-
-        // 🚀 Firestore + Igris Only (No RTDB fallback)
+        // 🚀 Firestore + AccuEngine
         await setDoc(doc(fsDb, "subjects", subDocKey), subPayload, { merge: true });
-        const Sentinel = window.Igris || window.AccuEngine;
-        if (Sentinel && typeof Sentinel.setLocal === "function") {
-          await Sentinel.setLocal("subjects", subDocKey, subPayload);
-          if (typeof Sentinel.bumpSyncVersion === "function") Sentinel.bumpSyncVersion();
+        if (window.AccuEngine) {
+          await window.AccuEngine.setLocal("subjects", subDocKey, subPayload);
+          window.AccuEngine.bumpSyncVersion();
         }
+        await set(ref(db, `subjects/${classKey}/${subjId}`), subPayload).catch(() => {});
 
         alert(`✔ Subject "${subjectName}" saved successfully for Class ${assignedClass}!`);
- document.getElementById("newSubjectNameInput").value = "";
+  document.getElementById("newSubjectNameInput").value = "";
         window.closeModal("addSubjectModal");
       });
     });
@@ -11046,7 +10734,7 @@ document.getElementById("hwTitleInput").value = "";
    });
 
 
-            addSafeListener("submitFinalTestBtn", "click", () => {
+      addSafeListener("submitFinalTestBtn", "click", () => {
       const btn = document.getElementById("submitFinalTestBtn");
       runWithBtnSpinner(btn, "🚀 Submit & Publish Test", async () => {
         const name = document.getElementById("cTestName").value.trim();
@@ -11078,64 +10766,39 @@ document.getElementById("hwTitleInput").value = "";
             return; 
         }
 
-        const testId = Date.now().toString();
+                const testId = Date.now().toString();
         const cleanClass = cleanClassStr(assignedClass);
-        const totalMarks = numQ * marksPerQ;
-
         const testPayloadData = { 
-          id: testId,
-          testId: testId,
+          id: testId, 
           title: name, 
           subject: subject, 
           numQuestions: numQ, 
           marksPerQ: marksPerQ, 
-          totalMarks: totalMarks, 
+          totalMarks: numQ * marksPerQ, 
           timeMinutes: timeMins, 
           expiry: expiry, 
           questions: questionsList, 
           class: cleanClass, 
-          createdDate: getTodayFormattedDate(),
-          createdAt: new Date().toISOString()
+          createdDate: getTodayFormattedDate() 
         };
 
+        // 🚀 Pura Online Test direct Realtime Database me save hoga
         try {
-          // 1. Save Test in Database
           await set(ref(db, `online_tests/${cleanClass}/${testId}`), testPayloadData);
-
-          // 2. Synchronize Memory Cache immediately
-          if (!window.adminTestsCache) window.adminTestsCache = {};
-          if (!window.adminTestsCache[cleanClass]) window.adminTestsCache[cleanClass] = {};
-          window.adminTestsCache[cleanClass][testId] = testPayloadData;
-
-          // 3. Clear local JSON and form inputs
-          document.getElementById("cTestName").value = "";
-          document.getElementById("cTestNumQuestions").value = "";
-          document.getElementById("cTestMarksPerQ").value = "";
-          document.getElementById("cTestTimeMinutes").value = "";
-          document.getElementById("cTestExpiryDateTime").value = "";
-          autoFilledJsonQuestions = null; 
-          if(document.getElementById("jsonCodeInput")) document.getElementById("jsonCodeInput").value = "";
-
-          window.showCustomAlert(`✔ Online test "${name}" published successfully for Class ${assignedClass}!`);
+          window.showCustomAlert(`✔ Online Test "${name}" published successfully for Class ${assignedClass}!`);
         } catch (err) {
-          window.showCustomAlert("Error publishing online test. Please try again.");
+          window.showCustomAlert("Error publishing test to Realtime Database: " + err.message);
         }
 
         if (typeof window.loadTeacherActiveOnlineTests === "function") {
           window.loadTeacherActiveOnlineTests();
         }
-        
-        // Agar Admin panel par tests table khuli ho toh foran fresh data render karein
-        const adminTestTable = document.getElementById("adminInteractiveTestBody");
-        if (adminTestTable && typeof window.renderAdminInteractiveTestTable === "function") {
-          const currentStdVal = document.getElementById("adminInteractiveTestStdSelect") ? document.getElementById("adminInteractiveTestStdSelect").value : "ALL";
-          window.renderAdminInteractiveTestTable(currentStdVal, true);
-        }
-
+        autoFilledJsonQuestions = null; 
+        if(document.getElementById("jsonCodeInput")) document.getElementById("jsonCodeInput").value = "";
         window.closeModal("createOnlineTestModal");
+
       });
     });
-
 
       
 
@@ -11528,48 +11191,19 @@ document.getElementById("hwTitleInput").value = "";
        window.openModal("studentTestResultModal");
     };
 
-          window.removeOnlineTest = async function(testId) {
+
+
+    window.removeOnlineTest = async function(testId) {
       window.showCustomConfirm("Are you sure you want to completely remove this active test?", async () => {
         try {
-          const cleanClass = cleanClassStr(assignedClass);
-          
-          // 1. Delete test from Realtime Database
-          await remove(ref(db, `online_tests/${cleanClass}/${testId}`));
-
-          // 2. Delete attempts from Firestore 'test_attempts' (student's 'tests' records remain safe)
-          const attemptsSnap = await getDocs(collection(fsDb, "test_attempts"));
-          const deletePromises = [];
-          attemptsSnap.forEach(d => {
-            const dt = d.data();
-            if (String(dt.testId) === String(testId) || d.id.startsWith(testId + "_")) {
-              deletePromises.push(deleteDoc(doc(fsDb, "test_attempts", d.id)));
-            }
-          });
-          await Promise.all(deletePromises);
-
-          // 3. Clear from local memory caches
-          if (window.adminTestsCache && window.adminTestsCache[cleanClass]) {
-            delete window.adminTestsCache[cleanClass][testId];
-          }
-          if (window.adminAttemptsCache && window.adminAttemptsCache[testId]) {
-            delete window.adminAttemptsCache[testId];
-          }
-
-          window.showCustomAlert("✔ Online test and attempts removed successfully.");
+          await remove(ref(db, `online_tests/${cleanClassStr(assignedClass)}/${testId}`));
+          window.showCustomAlert("✔ Online Test has been Removed successfully!");
           window.loadTeacherActiveOnlineTests();
-
-          // Refresh Admin table if open
-          const adminStdSelect = document.getElementById("adminInteractiveTestStdSelect");
-          if (adminStdSelect && typeof window.renderAdminInteractiveTestTable === "function") {
-            window.renderAdminInteractiveTestTable(adminStdSelect.value, true);
-          }
         } catch (err) { 
-          window.showCustomAlert("Failed to remove test. Please try again."); 
+          window.showCustomAlert("Problem Test remove. Please wait and try again."); 
         }
       });
     };
-
-
 
 
     window.openTeacherManagementTab = function(e) {
@@ -12025,24 +11659,25 @@ document.getElementById("hwTitleInput").value = "";
 
           claims[todayKey] = true;
 
-                 claims[todayKey] = true;
-
-          // 🚀 Firestore + Igris Only (No RTDB fallback)
+          // Save strictly inside Firestore 'daily_claims'
           await setDoc(doc(fsDb, "daily_claims", String(loggedUser)), { claims: claims, userId: String(loggedUser) }, { merge: true });
           await setDoc(doc(fsDb, "teachers", String(loggedUser)), { points: newPts }, { merge: true });
 
-          const Sentinel = window.Igris || window.AccuEngine;
-          if (Sentinel && typeof Sentinel.setLocal === "function") {
-            await Sentinel.setLocal("daily_claims", loggedUser, claims);
+          if (window.AccuEngine) {
+            await window.AccuEngine.setLocal("daily_claims", loggedUser, claims);
             if (teacherData) {
               teacherData.points = newPts;
-              await Sentinel.setLocal("teachers", loggedUser, teacherData);
+              await window.AccuEngine.setLocal("teachers", loggedUser, teacherData);
             }
-            if (typeof Sentinel.bumpSyncVersion === "function") Sentinel.bumpSyncVersion();
+            window.AccuEngine.bumpSyncVersion();
           }
 
-          btn.style.display = "none";
+          await update(ref(db), {
+            [`teachers/${loggedUser}/points`]: newPts,
+            [`daily_claims/${loggedUser}/${todayKey}`]: true
+          }).catch(() => {});
 
+          btn.style.display = "none";
           if (badge) badge.style.display = "block";
 
           const myTbCard = document.getElementById(`tbCard_${loggedUser}`);
@@ -12440,25 +12075,25 @@ document.getElementById("hwTitleInput").value = "";
       const todayNum = new Date().getDate();
       const nowTime = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
       
-            // 🚀  (Muster In/Out)
-           // 🚀 Firestore + Igris Only (No RTDB fallback)
+            // 🚀 Firestore + AccuEngine (Muster In/Out)
       let monthMuster = {};
-      const Sentinel = window.Igris || window.AccuEngine;
-      if (Sentinel && typeof Sentinel.fetch === "function") {
-        monthMuster = await Sentinel.fetch(`muster/${currentMonth}`) || {};
+      if (window.AccuEngine) {
+        monthMuster = await window.AccuEngine.fetch(`muster/${currentMonth}`) || {};
       }
       if (!monthMuster[`day_${todayNum}`]) monthMuster[`day_${todayNum}`] = {};
       if (!monthMuster[`day_${todayNum}`][loggedUser]) monthMuster[`day_${todayNum}`][loggedUser] = {};
       monthMuster[`day_${todayNum}`][loggedUser][type] = nowTime;
 
       await setDoc(doc(fsDb, "muster", currentMonth), monthMuster, { merge: true });
-      if (Sentinel && typeof Sentinel.setLocal === "function") {
-        await Sentinel.setLocal("muster", currentMonth, monthMuster);
-        if (typeof Sentinel.bumpSyncVersion === "function") Sentinel.bumpSyncVersion();
+      if (window.AccuEngine) {
+        await window.AccuEngine.setLocal("muster", currentMonth, monthMuster);
       }
+      await update(ref(db), {
+        [`muster/${currentMonth}/day_${todayNum}/${loggedUser}/${type}`]: nowTime
+      }).catch(() => {});
       
-      alert(`✔ ${actionText} time recorded successfully!`);
-      window.checkMusterButtonStates();
+      alert(`${actionText} time saved successfully!`);
+window.checkMusterButtonStates();
 
       if(type === 'in') {
         setTimeout(() => {
@@ -12524,30 +12159,32 @@ document.getElementById("hwTitleInput").value = "";
       const month = document.getElementById("delMusterMonthSelect").value;
       
       if(!username) { alert("Please select a teacher first."); return; }
-
-            if(confirm(`Are you sure you want to delete muster records for this teacher in ${month}?`)) {
+      
+            if(confirm(`Are you sure you want to completely delete muster data for this teacher in ${month}?`)) {
         const daysCount = getDaysInMonth(month);
         let monthMuster = {};
-        const Sentinel = window.Igris || window.AccuEngine;
-        if (Sentinel && typeof Sentinel.fetch === "function") {
-          monthMuster = await Sentinel.fetch(`muster/${month}`) || {};
+        if (window.AccuEngine) {
+          monthMuster = await window.AccuEngine.fetch(`muster/${month}`) || {};
         }
         for(let d=1; d<=daysCount; d++) {
           if (monthMuster[`day_${d}`] && monthMuster[`day_${d}`][username]) {
             delete monthMuster[`day_${d}`][username];
           }
         }
-        // 🚀 Firestore + Igris Only (No RTDB fallback)
         await setDoc(doc(fsDb, "muster", month), monthMuster);
-        if (Sentinel && typeof Sentinel.setLocal === "function") {
-          await Sentinel.setLocal("muster", month, monthMuster);
-          if (typeof Sentinel.bumpSyncVersion === "function") Sentinel.bumpSyncVersion();
+        if (window.AccuEngine) {
+          await window.AccuEngine.setLocal("muster", month, monthMuster);
+          window.AccuEngine.bumpSyncVersion();
         }
 
-        alert("✔ Muster records deleted successfully.");
-        window.closeModal('deleteMusterModal');
-
-      if(document.getElementById("adminMusterTableCard").style.display === "block") {
+        const updates = {};
+        for(let d=1; d<=daysCount; d++) {
+          updates[`muster/${month}/day_${d}/${username}`] = null;
+        }
+        await update(ref(db), updates).catch(() => {});
+        alert("✔ Muster data deleted successfully!");
+  window.closeModal('deleteMusterModal');
+        if(document.getElementById("adminMusterTableCard").style.display === "block") {
           window.loadAdminMusterTable();
         }
       }
@@ -12715,39 +12352,13 @@ document.getElementById("hwTitleInput").value = "";
       window.location.href = `upi://pay?pa=7302132270@ybl&pn=${encodeURIComponent("MM ISLAMIC ENGLISH SCHOOL")}&am=${amount}&cu=INR&tn=${encodeURIComponent("School Fee ID " + currentStudentAdmn)}`;
     };
 
-        addSafeListener("sPayFeesNowBtn", "click", async () => {
-      if(!currentStudentTotalDueAmount || isNaN(currentStudentTotalDueAmount) || currentStudentTotalDueAmount <= 0) {
-        window.showCustomAlert("No pending fees due at this moment.");
-        return;
-      }
-
+    addSafeListener("sPayFeesNowBtn", "click", async () => {
+      if(currentStudentTotalDueAmount <= 0) return;
       const student = await getStudentRecord(currentStudentAdmn);
       const studentName = student ? student.name : "Student";
-      const admn = student ? student.admn : currentStudentAdmn;
-
-      const pendingMonthsStr = (window.currentStudentPendingMonthsList && window.currentStudentPendingMonthsList.length > 0)
-        ? window.currentStudentPendingMonthsList.join(", ")
-        : "Fees";
-
-      // Notes mein pending months aur student ki details
-      const rawNote = `Fees: ${pendingMonthsStr} - ID ${admn} (${studentName})`;
-      const cleanNote = rawNote.substring(0, 50); // UPI note limit standard
-
-      // Exact amount format with 7302132270@ybl VPA
-      const upiUrl = `upi://pay?pa=7302132270@ybl&pn=${encodeURIComponent("MM ISLAMIC ENGLISH SCHOOL")}&am=${currentStudentTotalDueAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(cleanNote)}`;
-
-      // Cross-platform mobile intent redirection
-      const link = document.createElement("a");
-      link.href = upiUrl;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-      document.body.appendChild(link);
-      link.click();
-
-      setTimeout(() => {
-        link.remove();
-        window.location.href = upiUrl;
-      }, 100);
+      const admn = student ? student.admn : "";
+      const note = `School Fee Payment Admn ID ${admn} (${studentName})`;
+      window.location.href = `upi://pay?pa=7302132270@ybl&pn=${encodeURIComponent("MM ISLAMIC ENGLISH SCHOOL")}&am=${currentStudentTotalDueAmount}&cu=INR&tn=${encodeURIComponent(note)}`;
     });
 
     addSafeListener("adminGenerateAttPdfBtn", "click", () => {
@@ -12986,43 +12597,10 @@ document.getElementById("hwTitleInput").value = "";
         });
     };
 
-        // --- 2. TIMETABLE ENGINE (IGRIS -> FIRESTORE -> IGRIS | NO SUBJECT COLUMN) ---
+    // --- 2. TIMETABLE ENGINE ---
     let isTtEditMode = false;
     let currentTtData = [];
     const defaultTtRows = 7;
-
-    window.getTimetableFromIgrisOrFirestore = async function(clsStr) {
-      const cleanCls = cleanClassStr(clsStr);
-      const Sentinel = window.Igris || window.AccuEngine;
-
-      // 1. Igris Cache Check
-      if (Sentinel && typeof Sentinel.fetch === "function") {
-        const cached = await Sentinel.fetch(`timetable/${cleanCls}`);
-        if (cached) {
-          const list = Array.isArray(cached) ? cached : (cached.schedule || null);
-          if (list && list.length > 0) return list;
-        }
-      }
-
-      // 2. Direct Firestore Fetch
-      try {
-        const snap = await getDoc(doc(fsDb, "timetable", cleanCls));
-        if (snap.exists()) {
-          const dt = snap.data();
-          const list = dt.schedule || (Array.isArray(dt) ? dt : null);
-          if (list) {
-            if (Sentinel && typeof Sentinel.setLocal === "function") {
-              await Sentinel.setLocal("timetable", cleanCls, list);
-            }
-            return list;
-          }
-        }
-      } catch (err) {
-        console.warn("Firestore timetable fetch warning:", err);
-      }
-
-      return null;
-    };
 
     window.openTimetableTab = function(e, role) {
       if(e) e.stopPropagation();
@@ -13050,14 +12628,14 @@ document.getElementById("hwTitleInput").value = "";
       document.getElementById(btnId).className = "btn-primary btn-purple";
       document.getElementById(actionBoxId).style.display = "none";
 
-      const ttData = await window.getTimetableFromIgrisOrFirestore(cleanCls);
+      const ttData = await safeDataFetch(`timetable/${cleanCls}`);
       
       if (ttData && Array.isArray(ttData) && ttData.length > 0) {
           currentTtData = ttData;
       } else {
           currentTtData = [];
           for(let i=0; i<defaultTtRows; i++) {
-              currentTtData.push({ time: "", mon: "", tue: "", wed: "", thu: "", fri: "", sat: "" });
+              currentTtData.push({ time: "", subject: "", mon: "", tue: "", wed: "", thu: "", fri: "", sat: "" });
           }
       }
       window.renderTimetableTable(role);
@@ -13067,34 +12645,26 @@ document.getElementById("hwTitleInput").value = "";
       const tbodyId = role === 'admin' ? "ttAdminTableBody" : "ttTeacherTableBody";
       const tbody = document.getElementById(tbodyId);
       if(!tbody) return;
-
-      // Subject column header ko table thead se dynamically hatao
-      const table = tbody.closest("table");
-      if (table) {
-        const thead = table.querySelector("thead");
-        if (thead) {
-          thead.innerHTML = `<tr><th>Time</th><th>Monday</th><th>Tuesday</th><th>Wednesday</th><th>Thursday</th><th>Friday</th><th>Saturday</th></tr>`;
-        }
-      }
-
       tbody.innerHTML = "";
 
       currentTtData.forEach((row, idx) => {
         if(isTtEditMode) {
           tbody.innerHTML += `
             <tr>
-              <td><input type="text" id="tt_${role}_time_${idx}" value="${row.time || ''}" placeholder="Time" style="width:75px; padding:4px; font-size:11px;"></td>
-              <td><input type="text" id="tt_${role}_mon_${idx}" value="${row.mon || ''}" placeholder="Mon" style="width:65px; padding:4px; font-size:11px;"></td>
-              <td><input type="text" id="tt_${role}_tue_${idx}" value="${row.tue || ''}" placeholder="Tue" style="width:65px; padding:4px; font-size:11px;"></td>
-              <td><input type="text" id="tt_${role}_wed_${idx}" value="${row.wed || ''}" placeholder="Wed" style="width:65px; padding:4px; font-size:11px;"></td>
-              <td><input type="text" id="tt_${role}_thu_${idx}" value="${row.thu || ''}" placeholder="Thu" style="width:65px; padding:4px; font-size:11px;"></td>
-              <td><input type="text" id="tt_${role}_fri_${idx}" value="${row.fri || ''}" placeholder="Fri" style="width:65px; padding:4px; font-size:11px;"></td>
-              <td><input type="text" id="tt_${role}_sat_${idx}" value="${row.sat || ''}" placeholder="Sat" style="width:65px; padding:4px; font-size:11px;"></td>
+              <td><input type="text" id="tt_${role}_time_${idx}" value="${row.time}" style="width:70px; padding:4px; font-size:11px;"></td>
+              <td><input type="text" id="tt_${role}_sub_${idx}" value="${row.subject}" style="width:80px; padding:4px; font-size:11px;"></td>
+              <td><input type="text" id="tt_${role}_mon_${idx}" value="${row.mon}" style="width:60px; padding:4px; font-size:11px;"></td>
+              <td><input type="text" id="tt_${role}_tue_${idx}" value="${row.tue}" style="width:60px; padding:4px; font-size:11px;"></td>
+              <td><input type="text" id="tt_${role}_wed_${idx}" value="${row.wed}" style="width:60px; padding:4px; font-size:11px;"></td>
+              <td><input type="text" id="tt_${role}_thu_${idx}" value="${row.thu}" style="width:60px; padding:4px; font-size:11px;"></td>
+              <td><input type="text" id="tt_${role}_fri_${idx}" value="${row.fri}" style="width:60px; padding:4px; font-size:11px;"></td>
+              <td><input type="text" id="tt_${role}_sat_${idx}" value="${row.sat}" style="width:60px; padding:4px; font-size:11px;"></td>
             </tr>`;
         } else {
           tbody.innerHTML += `
             <tr>
               <td style="font-weight:800; color:#0288d1;">${row.time || '-'}</td>
+              <td style="font-weight:800;">${row.subject || '-'}</td>
               <td>${row.mon || '-'}</td><td>${row.tue || '-'}</td><td>${row.wed || '-'}</td>
               <td>${row.thu || '-'}</td><td>${row.fri || '-'}</td><td>${row.sat || '-'}</td>
             </tr>`;
@@ -13121,6 +12691,7 @@ document.getElementById("hwTitleInput").value = "";
               for(let i=0; i<currentTtData.length; i++) {
                   updatedData.push({
                       time: document.getElementById(`tt_${role}_time_${i}`).value.trim(),
+                      subject: document.getElementById(`tt_${role}_sub_${i}`).value.trim(),
                       mon: document.getElementById(`tt_${role}_mon_${i}`).value.trim(),
                       tue: document.getElementById(`tt_${role}_tue_${i}`).value.trim(),
                       wed: document.getElementById(`tt_${role}_wed_${i}`).value.trim(),
@@ -13129,27 +12700,25 @@ document.getElementById("hwTitleInput").value = "";
                       sat: document.getElementById(`tt_${role}_sat_${i}`).value.trim()
                   });
               }
-              currentTtData = updatedData;
-              const Sentinel = window.Igris || window.AccuEngine;
-
-              // 1. Igris (Teacher / Admin local cache)
-              if (Sentinel && typeof Sentinel.setLocal === "function") {
-                await Sentinel.setLocal("timetable", cleanCls, updatedData);
-                if (typeof Sentinel.bumpSyncVersion === "function") {
-                  Sentinel.bumpSyncVersion();
-                }
-              }
-
-             
-                        // 2. Cloud Firestore Save (No RTDB fallback)
+                           currentTtData = updatedData;
+              // 🚀 1. Cloud Firestore Save
               await setDoc(doc(fsDb, "timetable", cleanCls), {
                 class: cleanCls,
                 schedule: updatedData,
                 updatedAt: new Date().toISOString()
               }, { merge: true });
-              
-              window.showCustomAlert(`✔ Timetable updated for Class ${cleanCls}`);
 
+              // 🚀 2. AccuEngine Encrypted Cache Save
+              if (window.AccuEngine) {
+                await window.AccuEngine.setLocal("timetable", cleanCls, updatedData);
+                window.AccuEngine.bumpSyncVersion();
+              }
+
+              // Fallback RTDB
+              await set(ref(db, `timetable/${cleanCls}`), updatedData).catch(() => {});
+              
+              window.showCustomAlert(`✔ Time table updated for Class ${cleanCls}`);
+ 
               isTtEditMode = false;
               document.getElementById(btnId).innerText = "✏️ Edit";
               document.getElementById(btnId).className = "btn-primary btn-purple";
@@ -13160,7 +12729,7 @@ document.getElementById("hwTitleInput").value = "";
     };
 
     window.addTimetableRow = function(role) {
-        currentTtData.push({ time: "", mon: "", tue: "", wed: "", thu: "", fri: "", sat: "" });
+        currentTtData.push({ time: "", subject: "", mon: "", tue: "", wed: "", thu: "", fri: "", sat: "" });
         window.renderTimetableTable(role);
     };
 
@@ -13172,7 +12741,6 @@ document.getElementById("hwTitleInput").value = "";
             alert("At least 1 row is required.");
         }
     };
-
 
 
           // --- 3. STUDENT & TEACHER LEAVE APPLICATION ENGINE ---
@@ -13766,18 +13334,17 @@ window.syncProfileModalHeight = function() {
         window.openModal("updateSyllabusModal");
     };
 
-          window.loadSyllabusSubjects = async function() {
+    window.loadSyllabusSubjects = async function() {
         const classSelect = document.getElementById("sylUpdateClassSelect");
         const targetClass = cleanClassStr(classSelect.value);
         const container = document.getElementById("sylSubjectsCheckboxContainer");
         
         container.innerHTML = "Loading subjects...";
         
-        // 1. Fetch available subjects for class
+        // Fetch all subjects added by teacher
         const allSubjects = await safeDataFetch(`subjects/${targetClass}`) || {};
-        
-        // 2. Fetch enabled subjects from syllabus_config
-        const enabledSubjects = await safeDataFetch(`syllabus_config/${targetClass}`) || {};
+        // Fetch currently enabled subjects for syllabus
+        const enabledSubjects = await safeDataFetch(`enabled_syllabus/${targetClass}`) || {};
         
         container.innerHTML = "";
         
@@ -13794,12 +13361,11 @@ window.syncProfileModalHeight = function() {
         });
         
         if(!hasSubjects) {
-            container.innerHTML = `<div style="grid-column: span 3; color: var(--text-muted); font-size: 11px;">No subjects found for Class ${targetClass}. Please add subjects from the menu first.</div>`;
+            container.innerHTML = `<div style="grid-column: span 3; color: var(--text-muted); font-size: 11px;">No subjects found for Class ${targetClass}. Please 'Add Subject' from menu first.</div>`;
         }
     };
 
-
-       window.saveSyllabusSubjects = async function() {
+    window.saveSyllabusSubjects = async function() {
         const btn = document.getElementById("saveSylSubjectsBtn");
         const targetClass = cleanClassStr(document.getElementById("sylUpdateClassSelect").value);
         const checkboxes = document.querySelectorAll(".syl-sub-chk");
@@ -13809,30 +13375,18 @@ window.syncProfileModalHeight = function() {
             checkboxes.forEach(chk => {
                 if(chk.checked) enabledObj[chk.value] = true;
             });
-            
-            // 🚀 Pure Cloud Firestore Save (Standardized document schema)
-            await setDoc(doc(fsDb, "syllabus_config", targetClass), { 
-                class: targetClass, 
-                subjects: enabledObj,
-                updatedAt: new Date().toISOString()
-            }, { merge: true });
-
-            const Sentinel = window.Igris || window.AccuEngine;
-            if (Sentinel && typeof Sentinel.setLocal === "function") {
-                await Sentinel.setLocal("syllabus_config", targetClass, enabledObj);
-                if (typeof Sentinel.bumpSyncVersion === "function") Sentinel.bumpSyncVersion();
+                       // 🚀 Firestore + AccuEngine (Syllabus Config)
+            await setDoc(doc(fsDb, "syllabus_config", targetClass), { class: targetClass, subjects: enabledObj }, { merge: true });
+            if (window.AccuEngine) {
+              await window.AccuEngine.setLocal("syllabus_config", targetClass, enabledObj);
+              window.AccuEngine.bumpSyncVersion();
             }
-
-            // Sync Admin/Teacher Tracker UI immediately
-            if (typeof window.initAdminSyllabusTracker === "function") {
-                window.initAdminSyllabusTracker();
-            }
-
+            await set(ref(db, `enabled_syllabus/${targetClass}`), enabledObj).catch(() => {});
             alert("✔ Syllabus subjects updated successfully.");
-        });
+ });
     };
 
-          // --- CHAPTERS MANAGEMENT (ROBUST FIRESTORE INTEGRATION) ---
+    // --- CHAPTERS MANAGEMENT (BUG-FREE ROW ADDITION) ---
     window.openAddChaptersModal = async function() {
         const targetClass = cleanClassStr(document.getElementById("sylUpdateClassSelect").value);
         const subjectSelect = document.getElementById("sylChapterSubjectSelect");
@@ -13840,19 +13394,16 @@ window.syncProfileModalHeight = function() {
         subjectSelect.innerHTML = `<option value="">Loading...</option>`;
         window.openModal("addChaptersModal"); 
         
-        const enabledSubjects = await safeDataFetch(`syllabus_config/${targetClass}`) || {};
+        const enabledSubjects = await safeDataFetch(`enabled_syllabus/${targetClass}`) || {};
         subjectSelect.innerHTML = `<option value="">-- Select Subject --</option>`;
         
         Object.keys(enabledSubjects).forEach(subName => {
-            if(enabledSubjects[subName] === true) {
-                subjectSelect.innerHTML += `<option value="${subName}">${subName}</option>`;
-            }
+            subjectSelect.innerHTML += `<option value="${subName}">${subName}</option>`;
         });
         
         document.getElementById("chaptersTableBody").innerHTML = `<tr><td colspan="2" style="text-align:center;">Please select a subject first</td></tr>`;
     };
 
-      
     window.loadSyllabusChapters = async function() {
         const targetClass = cleanClassStr(document.getElementById("sylUpdateClassSelect").value);
         const targetSubject = document.getElementById("sylChapterSubjectSelect").value;
@@ -13865,21 +13416,19 @@ window.syncProfileModalHeight = function() {
         
         tbody.innerHTML = `<tr><td colspan="2" style="text-align:center;">Loading chapters...</td></tr>`;
         
-        // Direct fetch for class & subject composite document
         const chapters = await safeDataFetch(`syllabus_chapters/${targetClass}/${targetSubject}`) || [];
         
-        tbody.innerHTML = "";
+        tbody.innerHTML = ""; // Clear loader
         
-        if(Array.isArray(chapters) && chapters.length > 0) {
-            chapters.forEach((ch, idx) => window.appendChapterRowDOM(idx + 1, ch.name || ""));
+        if(chapters.length > 0) {
+            chapters.forEach((ch, idx) => window.appendChapterRowDOM(idx + 1, ch.name));
         } else {
-            // Pre-fill 12 empty rows for ease of entry
+            // Pre-fill 12 rows automatically as requested
             for(let i = 1; i <= 12; i++) {
                 window.appendChapterRowDOM(i, "");
             }
         }
     };
-
 
     // 🚀 THE FIX: Safely Append Row Without innerHTML += (Saves Text Data)
     window.appendChapterRowDOM = function(chNumber, chNameValue) {
@@ -13953,7 +13502,7 @@ window.syncProfileModalHeight = function() {
                 }
             });
             
-                      // 🚀 Firestore + Igris Only (No RTDB fallback)
+                      // 🚀 Firestore + AccuEngine (Chapters)
             const chDocKey = `${targetClass}_${targetSubject}`;
             await setDoc(doc(fsDb, "syllabus_chapters", chDocKey), {
               class: targetClass,
@@ -13962,11 +13511,11 @@ window.syncProfileModalHeight = function() {
               updatedAt: new Date().toISOString()
             }, { merge: true });
             
-            const Sentinel = window.Igris || window.AccuEngine;
-            if (Sentinel && typeof Sentinel.setLocal === "function") {
-              await Sentinel.setLocal("syllabus_chapters", chDocKey, chaptersData);
-              if (typeof Sentinel.bumpSyncVersion === "function") Sentinel.bumpSyncVersion();
+            if (window.AccuEngine) {
+              await window.AccuEngine.setLocal("syllabus_chapters", chDocKey, chaptersData);
+              window.AccuEngine.bumpSyncVersion();
             }
+            await set(ref(db, `syllabus_chapters/${targetClass}/${targetSubject}`), chaptersData).catch(() => {});
             alert(`✔ Chapters saved successfully for ${targetSubject}.`);
 });
     };
@@ -13976,16 +13525,15 @@ window.syncProfileModalHeight = function() {
     // 🚀 STUDENT SYLLABUS AUTO-SAVE ENGINE (PHASE 3)
     // ==========================================
 
-          window.initStudentSyllabusTab = async function() {
+    window.initStudentSyllabusTab = async function() {
         const student = await getStudentRecord(currentStudentAdmn);
         if(!student) return;
         
         const cleanClass = cleanClassStr(student.class);
         const subjectSelect = document.getElementById("sStudentSylSubjectSelect");
-        if (!subjectSelect) return;
         
-        // Fetch enabled subjects directly from standardized syllabus_config
-        const enabledSubjects = await safeDataFetch(`syllabus_config/${cleanClass}`) || {};
+        // Sirf wahi subjects fetch karein jo Teacher ne Syllabus Tracker ke liye enable kiye hain
+        const enabledSubjects = await safeDataFetch(`enabled_syllabus/${cleanClass}`) || {};
         
         subjectSelect.innerHTML = `<option value="ALL">All Subjects</option>`;
         let hasSubjects = false;
@@ -13997,40 +13545,30 @@ window.syncProfileModalHeight = function() {
             }
         });
         
-        const tableContainer = document.getElementById("sStudentSyllabusTableContainer");
         if(!hasSubjects) {
-            if (tableContainer) tableContainer.innerHTML = `<div style="padding:16px; color:var(--text-muted); text-align:center;">No syllabus subjects enabled by the teacher yet.</div>`;
+            document.getElementById("sStudentSyllabusTableContainer").innerHTML = `<div style="padding:16px;">No syllabus subjects enabled by the teacher yet.</div>`;
         } else {
             subjectSelect.onchange = () => window.loadStudentSyllabusTable(cleanClass);
             window.loadStudentSyllabusTable(cleanClass);
         }
     };
 
-          window.loadStudentSyllabusTable = async function(cleanClass) {
-        const subjectSelect = document.getElementById("sStudentSylSubjectSelect");
-        const subject = subjectSelect ? subjectSelect.value : "ALL";
+    window.loadStudentSyllabusTable = async function(cleanClass) {
+        const subject = document.getElementById("sStudentSylSubjectSelect").value;
         const container = document.getElementById("sStudentSyllabusTableContainer");
-        if (!container) return;
         
         if (subject === "ALL") {
-            container.innerHTML = `<div style="padding: 16px; color: var(--text-muted); text-align:center;">Please select a specific subject from the dropdown above to view and tick chapters.</div>`;
-            setTimeout(() => window.syncStudentStudyHeight(), 150);
+            container.innerHTML = `<div style="padding: 16px; color: var(--text-muted);">Please select a specific subject from the dropdown above to update your chapter progress. Overall graphs are shown below.</div>`;
             return;
         }
         
-        container.innerHTML = `<div style="padding: 14px; text-align:center;">⏳ Loading chapters...</div>`;
+        container.innerHTML = "Loading chapters...";
         
-        // 1. Fetch Chapters list
-        const rawChapters = await safeDataFetch(`syllabus_chapters/${cleanClass}/${subject}`) || [];
-        const chapters = Array.isArray(rawChapters) ? rawChapters : (rawChapters.chapters || []);
-        
-        // 2. Fetch Student Progress for this subject
-        const rawProgress = await safeDataFetch(`syllabus_progress/${currentStudentAdmn}/${subject}`) || {};
-        const progress = rawProgress.progress || rawProgress;
+        const chapters = await safeDataFetch(`syllabus_chapters/${cleanClass}/${subject}`) || [];
+        const progress = await safeDataFetch(`syllabus_progress/${currentStudentAdmn}/${subject}`) || {};
         
         if(chapters.length === 0) {
-            container.innerHTML = `<div style="padding: 16px; color: var(--text-muted); text-align:center;">No chapters added for ${subject} yet.</div>`;
-            setTimeout(() => window.syncStudentStudyHeight(), 150);
+            container.innerHTML = `<div style="padding: 16px; color: var(--text-muted);">No chapters added for ${subject} yet.</div>`;
             return;
         }
         
@@ -14047,72 +13585,62 @@ window.syncProfileModalHeight = function() {
                 <tbody>
         `;
         
-        chapters.forEach(ch => {
-            const chNo = ch.no;
-            const isCompleted = progress[`ch_${chNo}`] === true;
+              chapters.forEach(ch => {
+            const isCompleted = progress[`ch_${ch.no}`] === true;
             html += `
                 <tr style="${isCompleted ? 'background: rgba(34, 197, 94, 0.05);' : ''}">
-                    <td style="font-weight: 900; color: #0288d1;">${chNo}</td>
-                    <td style="text-align: left; padding-left: 8px; font-weight: 700; ${isCompleted ? 'color: #16a34a; text-decoration: line-through; opacity:0.75;' : ''}">${ch.name || 'Chapter ' + chNo}</td>
+                    <td style="font-weight: 900; color: #0288d1;">${ch.no}</td>
+                    <td style="text-align: left; padding-left: 8px; font-weight: 700; ${isCompleted ? 'color: #16a34a; text-decoration: line-through; opacity:0.7;' : ''}">${ch.name}</td>
                     <td>
-                        <input type="checkbox" style="width: 20px; height: 20px; accent-color: #16a34a; cursor: pointer;" 
-                               ${isCompleted ? 'checked' : ''} 
-                               onchange="window.updateChapterProgress('${subject}', '${chNo}', this.checked)">
+                        <input type="checkbox" style="width: 22px; height: 22px; accent-color: #16a34a; cursor: pointer;" 
+                         ${isCompleted ? 'checked' : ''} 
+                               onchange="window.updateChapterProgress('${subject}', '${ch.no}', this.checked)">
                     </td>
                 </tr>
             `;
         });
         
-        html += `</tbody></table></div>`;
+              html += `</tbody></table></div>`;
         container.innerHTML = html;
-        setTimeout(() => window.syncStudentStudyHeight(), 150);
+        setTimeout(() => window.syncStudentStudyHeight(), 150); // Height Update Engine
     };
 
 
-          // Auto-Save Tickbox function syncing directly with Cloud Firestore
+    // Auto-Save Tickbox function directly syncing to Firebase
     window.updateChapterProgress = async function(subject, chapterNo, isCompleted) {
-        try {
+        try {            // 🚀 Firestore + AccuEngine (Student Progress)
             const progDocKey = `${currentStudentAdmn}_${subject}`;
-            const Sentinel = window.Igris || window.AccuEngine;
-
-            // 1. Fetch current progress map safely
-            let rawData = await safeDataFetch(`syllabus_progress/${currentStudentAdmn}/${subject}`) || {};
-            let currentProg = (rawData && rawData.progress) ? { ...rawData.progress } : { ...rawData };
-            
-            // 2. Set new tick state
+            let currentProg = {};
+            if (window.AccuEngine) {
+              currentProg = await window.AccuEngine.fetch(`syllabus_progress/${currentStudentAdmn}/${subject}`) || {};
+            }
             currentProg[`ch_${chapterNo}`] = isCompleted;
 
-            // 3. Save to Cloud Firestore
             await setDoc(doc(fsDb, "syllabus_progress", progDocKey), {
-              admn: String(currentStudentAdmn),
+              admn: currentStudentAdmn,
               subject: subject,
               progress: currentProg,
               updatedAt: new Date().toISOString()
             }, { merge: true });
 
-            // 4. Update local cache
-            if (Sentinel && typeof Sentinel.setLocal === "function") {
-              await Sentinel.setLocal("syllabus_progress", progDocKey, {
-                admn: String(currentStudentAdmn),
-                subject: subject,
-                progress: currentProg
-              });
-              if (typeof Sentinel.bumpSyncVersion === "function") Sentinel.bumpSyncVersion();
+            if (window.AccuEngine) {
+              await window.AccuEngine.setLocal("syllabus_progress", progDocKey, currentProg);
             }
+            await update(ref(db), {
+                [`syllabus_progress/${currentStudentAdmn}/${subject}/ch_${chapterNo}`]: isCompleted
+            }).catch(() => {});
 
-            // 5. Silent refresh table for strikethrough style
+            
+            // Reload the table silently to apply strikethrough/color effects instantly
             const student = await getStudentRecord(currentStudentAdmn);
-            if (student) {
-              window.loadStudentSyllabusTable(cleanClassStr(student.class));
-            }
-
-            // 6. Refresh active graphs
+            window.loadStudentSyllabusTable(cleanClassStr(student.class));
+            
+            // (Graph update trigger will be placed here in Phase 4)
             if(typeof window.renderSyllabusGraphs === "function") {
-              window.renderSyllabusGraphs(); 
+                window.renderSyllabusGraphs(); 
             }
         } catch(e) {
-            console.error("Progress save error:", e);
-            alert("Failed to save chapter progress. Please try again.");
+            alert("Error saving progress. Please check your internet connection.");
         }
     };
 
@@ -14124,18 +13652,18 @@ window.syncProfileModalHeight = function() {
     let stHomeSylChart = null;
     let stIndividualCharts = {};
 
-          // 1. ADMIN/TEACHER GRAPH LOGIC (STANDARDIZED SYLLABUS_CONFIG & PROGRESS)
+     // 1. ADMIN/TEACHER GRAPH LOGIC
     window.initAdminSyllabusTracker = async function() {
         let cls = document.getElementById("sylTrackClassSelect").value;
         const chkContainer = document.getElementById("sylAdminCheckboxes");
 
         if (cls === "ALL") {
-            chkContainer.style.display = "none";
+            chkContainer.style.display = "none"; // Admin mode mein checkboxes gayab
             window.refreshAdminSyllabusGraph();
             return;
         }
 
-        chkContainer.style.display = "grid";
+        chkContainer.style.display = "grid"; // Wapas lao agar specific class ho
         
         if(currentRole === 'teacher') {
             cls = cleanClassStr(assignedClass);
@@ -14144,20 +13672,19 @@ window.syncProfileModalHeight = function() {
         }
         cls = cleanClassStr(cls);
 
-        // Direct fetch from standardized syllabus_config
-        const enabledSubjects = await safeDataFetch(`syllabus_config/${cls}`) || {};
+        const enabledSubjects = await safeDataFetch(`enabled_syllabus/${cls}`) || {};
         
         chkContainer.innerHTML = `<div class="checkbox-item" style="font-weight:900;"><input type="checkbox" id="sylChkAll" checked onchange="window.toggleAllSylSubjects(this)"> ALL</div>`;
 
         let hasSub = false;
         Object.keys(enabledSubjects).forEach(sub => {
-            if(enabledSubjects[sub] === true) {
+            if(enabledSubjects[sub]) {
                 hasSub = true;
                 chkContainer.innerHTML += `<div class="checkbox-item"><input type="checkbox" class="syl-filter-chk" value="${sub}" checked onchange="window.refreshAdminSyllabusGraph()"> ${sub}</div>`;
             }
         });
 
-        if(!hasSub) chkContainer.innerHTML = "<div style='grid-column:span 3; font-size:11px; color:var(--text-muted); text-align:center;'>No syllabus subjects configured for this class.</div>";
+        if(!hasSub) chkContainer.innerHTML = "<div style='grid-column:span 3; font-size:11px; color:var(--text-muted);'>No syllabus configured.</div>";
         
         window.refreshAdminSyllabusGraph();
     };
@@ -14167,199 +13694,189 @@ window.syncProfileModalHeight = function() {
         window.refreshAdminSyllabusGraph();
     };
 
-    // Smart Theme Helper for Charts
-    window.getChartThemeColors = function() {
-      const isDark = document.body.classList.contains("dark-mode");
-      return {
-        isDark: isDark,
-        emptyArc: "rgba(0,0,0,0.05)",
-        borderColor: isDark ? "#ffffff" : "#000000",
-        mutedText: "#0288d1",
-        activeText: "#0288d1",
-        palette: ['#0288d1', '#16a34a', '#d97706', '#9333ea', '#dc2626', isDark ? '#38bdf8' : '#0f172a', '#e11d48', '#059669', '#ea580c', '#4f46e5']
+
+      // Smart Theme Helper for Charts (Original Crisp Look + White Outline in Dark Mode)
+      window.getChartThemeColors = function() {
+        const isDark = document.body.classList.contains("dark-mode");
+        return {
+          isDark: isDark,
+          emptyArc: "rgba(0,0,0,0.05)", // Aapka original slice fill
+          borderColor: isDark ? "#ffffff" : "#000000", // Light mode me Black outline, Dark mode me White outline!
+          mutedText: "#0288d1",
+          activeText: "#0288d1",
+          palette: ['#0288d1', '#16a34a', '#d97706', '#9333ea', '#dc2626', isDark ? '#38bdf8' : '#0f172a', '#e11d48', '#059669', '#ea580c', '#4f46e5']
+        };
       };
-    };
-
-    window.refreshAdminSyllabusGraph = async function() {
-      const cls = document.getElementById("sylTrackClassSelect").value;
-      const breakdownDiv = document.getElementById("sylTrackBreakdown");
-      const ctx = document.getElementById("adminSyllabusChart");
-      if(!ctx) return;
-
-      const theme = window.getChartThemeColors();
-      const bgColors = theme.palette;
-
-      let totalPossibleCompletions = 0;
-      let actualCompletions = 0;
-      let breakdownHtml = "";
-      
-      const chartLabels = [];
-      const chartData = [];
-      const chartColors = [];
-
-      const allChapters = await safeDataFetch(`syllabus_chapters`) || {};
-      const allProgress = await safeDataFetch(`syllabus_progress`) || {};
-      const liveStudents = getLiveStudents();
-
-      if (cls === "ALL") {
-          const classesList = ["Nursery", "Jr. KG", "Sr. KG", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"];
-          
-          classesList.forEach((cName, i) => {
-              const cKey = cleanClassStr(cName);
-              const classStudents = liveStudents.filter(s => cleanClassStr(s.class) === cKey);
-              if (classStudents.length === 0) return;
-
-              const classChaps = allChapters[cKey] || {};
-              if (Object.keys(classChaps).length === 0) return;
-
-              let clsPossible = 0;
-              let clsCompleted = 0;
-
-              Object.keys(classChaps).forEach(sub => {
-                  const rawList = classChaps[sub];
-                  const subChapsList = Array.isArray(rawList) ? rawList : (rawList.chapters || []);
-                  if(Array.isArray(subChapsList) && subChapsList.length > 0) {
-                      clsPossible += (subChapsList.length * classStudents.length);
-                      classStudents.forEach(st => {
-                          const rawStProg = allProgress[String(st.admn)] ? allProgress[String(st.admn)][sub] : null;
-                          const stProg = (rawStProg && rawStProg.progress) ? rawStProg.progress : rawStProg;
-                          if(stProg) {
-                              subChapsList.forEach(ch => { 
-                                  if(stProg[`ch_${ch.no}`] === true) clsCompleted++; 
-                              });
-                          }
-                      });
-                  }
-              });
-
-              if (clsPossible > 0) {
-                  totalPossibleCompletions += clsPossible;
-                  actualCompletions += clsCompleted;
-                  const clsPercent = Math.round((clsCompleted / clsPossible) * 100);
-                  const color = bgColors[i % bgColors.length];
-                  
-                  chartLabels.push(`Class ${cName} (Done)`);
-                  chartData.push(clsCompleted);
-                  chartColors.push(color);
-                  
-                  chartLabels.push(`Class ${cName} (Left)`);
-                  chartData.push(clsPossible - clsCompleted);
-                  chartColors.push(theme.emptyArc);
-
-                  breakdownHtml += `
-                  <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border-color); font-size:12px; font-weight:800;">
-                      <span style="color:${color} !important;">● Class ${cName}</span>
-                      <span>${clsCompleted}/${clsPossible} (${clsPercent}%)</span>
-                  </div>`;
-              }
-          });
-
-      } else {
-          const allChk = document.getElementById("sylChkAll");
-          const chks = Array.from(document.querySelectorAll(".syl-filter-chk"));
-          if(allChk) allChk.checked = chks.every(c => c.checked) && chks.length > 0;
-
-          const selectedSubs = chks.filter(c => c.checked).map(c => c.value);
-
-          if(selectedSubs.length === 0) {
-              breakdownDiv.innerHTML = "<div style='font-size:12px; font-weight:700; color:var(--text-muted); text-align:center;'>Select at least one subject to view graph.</div>";
-              if(adminSylChart) adminSylChart.destroy();
-              return;
-          }
-
-          const cleanCls = cleanClassStr(cls);
-          const classStudents = liveStudents.filter(s => cleanClassStr(s.class) === cleanCls);
-          const clsChaps = allChapters[cleanCls] || {};
-
-          selectedSubs.forEach((sub, i) => {
-              const rawSubChaps = clsChaps[sub] || [];
-              const subChaps = Array.isArray(rawSubChaps) ? rawSubChaps : (rawSubChaps.chapters || []);
-              if(subChaps.length === 0) return;
-
-              let subCompletedCount = 0;
-              let subPossible = subChaps.length * classStudents.length;
-
-              classStudents.forEach(st => {
-                  const rawStProg = allProgress[String(st.admn)] ? allProgress[String(st.admn)][sub] : null;
-                  const stProg = (rawStProg && rawStProg.progress) ? rawStProg.progress : rawStProg;
-                  if(stProg) {
-                      subChaps.forEach(ch => { 
-                          if(stProg[`ch_${ch.no}`] === true) subCompletedCount++; 
-                      });
-                  }
-              });
-
-              totalPossibleCompletions += subPossible;
-              actualCompletions += subCompletedCount;
-              
-              const subPercent = subPossible > 0 ? Math.round((subCompletedCount / subPossible) * 100) : 0;
-              const color = bgColors[i % bgColors.length];
-              
-              chartLabels.push(`${sub} (Done)`);
-              chartData.push(subCompletedCount);
-              chartColors.push(color);
-              
-              chartLabels.push(`${sub} (Left)`);
-              chartData.push(subPossible - subCompletedCount);
-              chartColors.push(theme.emptyArc);
-
-              breakdownHtml += `
-              <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border-color); font-size:12px; font-weight:800;">
-                  <span style="color:${color} !important;">● ${sub}</span>
-                  <span>${subCompletedCount}/${subPossible} (${subPercent}%)</span>
-              </div>`;
-          });
-      }
-
-      breakdownDiv.innerHTML = breakdownHtml || "<div style='font-size:12px; color:var(--text-muted); text-align:center;'>No progress data recorded yet.</div>";
-      const overallPercent = totalPossibleCompletions > 0 ? Math.round((actualCompletions / totalPossibleCompletions) * 100) : 0;
-
-      if (actualCompletions === 0 && totalPossibleCompletions === 0) {
-          chartLabels.push('Not Started');
-          chartData.push(1);
-          chartColors.push(theme.emptyArc);
-      }
-
-      if(adminSylChart) adminSylChart.destroy();
-      adminSylChart = new Chart(ctx, {
-          type: 'doughnut',
-          data: {
-              labels: chartLabels,
-              datasets: [{
-                  data: chartData,
-                  backgroundColor: chartColors,
-                  borderWidth: 1.5, 
-                  borderColor: theme.borderColor,
-                  hoverOffset: 8 
-              }]
-          },
-          options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { display: false }, tooltip: { enabled: true } } },
-          plugins: [{
-              id: 'centerText',
-              beforeDraw: function(chart) {
-                  var width = chart.width, height = chart.height, cCtx = chart.ctx;
-                  cCtx.restore();
-                  var fontSize = (height / 114).toFixed(2);
-                  cCtx.font = "900 " + fontSize + "em sans-serif";
-                  cCtx.textBaseline = "middle"; 
-                  cCtx.fillStyle = actualCompletions === 0 ? theme.mutedText : theme.activeText;
-                  var text = overallPercent + "%", textX = Math.round((width - cCtx.measureText(text).width) / 2), textY = height / 2;
-                  cCtx.fillText(text, textX, textY); cCtx.save();
-              }
-          }]
-      });
-    };
 
 
-            // 2. STUDENT GRAPH LOGIC (Individual & Home - Accurate Proportions)
+      window.refreshAdminSyllabusGraph = async function() {
+        const cls = document.getElementById("sylTrackClassSelect").value;
+        const breakdownDiv = document.getElementById("sylTrackBreakdown");
+        const ctx = document.getElementById("adminSyllabusChart");
+        if(!ctx) return;
+
+        const theme = window.getChartThemeColors();
+        const bgColors = theme.palette;
+
+        let totalPossibleCompletions = 0;
+        let actualCompletions = 0;
+        let breakdownHtml = "";
+        
+        const chartLabels = [];
+        const chartData = [];
+        const chartColors = [];
+
+        const allChapters = await safeDataFetch(`syllabus_chapters`) || {};
+        const allProgress = await safeDataFetch(`syllabus_progress`) || {};
+        const liveStudents = getLiveStudents();
+
+        if (cls === "ALL") {
+            const classesList = ["Nursery", "Jr. KG", "Sr. KG", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"];
+            
+            classesList.forEach((cName, i) => {
+                const cKey = cleanClassStr(cName);
+                const classStudents = liveStudents.filter(s => cleanClassStr(s.class) === cKey);
+                if (classStudents.length === 0) return;
+
+                const classChaps = allChapters[cKey] || {};
+                if (Object.keys(classChaps).length === 0) return;
+
+                let clsPossible = 0;
+                let clsCompleted = 0;
+
+                Object.keys(classChaps).forEach(sub => {
+                    const subChapsList = classChaps[sub];
+                    if(Array.isArray(subChapsList)) {
+                        clsPossible += (subChapsList.length * classStudents.length);
+                        classStudents.forEach(st => {
+                            const stProg = allProgress[st.admn] ? allProgress[st.admn][sub] : null;
+                            if(stProg) {
+                                subChapsList.forEach(ch => { if(stProg[`ch_${ch.no}`]) clsCompleted++; });
+                            }
+                        });
+                    }
+                });
+
+                if (clsPossible > 0) {
+                    totalPossibleCompletions += clsPossible;
+                    actualCompletions += clsCompleted;
+                    const clsPercent = Math.round((clsCompleted / clsPossible) * 100);
+                    const color = bgColors[i % bgColors.length];
+                    
+                    chartLabels.push(`Class ${cName} (Done)`);
+                    chartData.push(clsCompleted);
+                    chartColors.push(color);
+                    
+                    chartLabels.push(`Class ${cName} (Left)`);
+                    chartData.push(clsPossible - clsCompleted);
+                    chartColors.push(theme.emptyArc);
+
+                    breakdownHtml += `<div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border-color); font-size:12px; font-weight:800;">
+                        <span style="color:${color} !important;">● Class ${cName}</span>
+                        <span>${clsPercent}% Overall</span>
+                    </div>`;
+                }
+            });
+
+        } else {
+            const allChk = document.getElementById("sylChkAll");
+            const chks = Array.from(document.querySelectorAll(".syl-filter-chk"));
+            if(allChk) allChk.checked = chks.every(c => c.checked) && chks.length > 0;
+
+            const selectedSubs = chks.filter(c => c.checked).map(c => c.value);
+
+            if(selectedSubs.length === 0) {
+                breakdownDiv.innerHTML = "<div style='font-size:12px; font-weight:700; color:var(--text-muted); text-align:center;'>Select at least one subject to view graph.</div>";
+                if(adminSylChart) adminSylChart.destroy();
+                return;
+            }
+
+            const cleanCls = cleanClassStr(cls);
+            const classStudents = liveStudents.filter(s => cleanClassStr(s.class) === cleanCls);
+            const clsChaps = allChapters[cleanCls] || {};
+
+            selectedSubs.forEach((sub, i) => {
+                const subChaps = clsChaps[sub] || [];
+                if(subChaps.length === 0) return;
+
+                let subCompletedCount = 0;
+                let subPossible = subChaps.length * classStudents.length;
+
+                classStudents.forEach(st => {
+                    const stProg = allProgress[st.admn] ? allProgress[st.admn][sub] : null;
+                    if(stProg) {
+                        subChaps.forEach(ch => { if(stProg[`ch_${ch.no}`]) subCompletedCount++; });
+                    }
+                });
+
+                totalPossibleCompletions += subPossible;
+                actualCompletions += subCompletedCount;
+                
+                const subPercent = subPossible > 0 ? Math.round((subCompletedCount / subPossible) * 100) : 0;
+                const color = bgColors[i % bgColors.length];
+                
+                chartLabels.push(`${sub} (Done)`);
+                chartData.push(subCompletedCount);
+                chartColors.push(color);
+                
+                chartLabels.push(`${sub} (Left)`);
+                chartData.push(subPossible - subCompletedCount);
+                chartColors.push(theme.emptyArc);
+
+                breakdownHtml += `<div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border-color); font-size:12px; font-weight:800;">
+                    <span style="color:${color} !important;">● ${sub}</span>
+                    <span>${subPercent}% Student Completion</span>
+                </div>`;
+            });
+        }
+
+        breakdownDiv.innerHTML = breakdownHtml || "<div style='font-size:12px; color:var(--text-muted); text-align:center;'>No progress data generated.</div>";
+        const overallPercent = totalPossibleCompletions > 0 ? Math.round((actualCompletions / totalPossibleCompletions) * 100) : 0;
+
+        if (actualCompletions === 0 && totalPossibleCompletions === 0) {
+            chartLabels.push('Not Started');
+            chartData.push(1);
+            chartColors.push(theme.emptyArc);
+        }
+
+        if(adminSylChart) adminSylChart.destroy();
+        adminSylChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: chartLabels,
+                datasets: [{
+                    data: chartData,
+                    backgroundColor: chartColors,
+                    borderWidth: 1.5, 
+                    borderColor: theme.borderColor,
+                    hoverOffset: 10 
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { display: false }, tooltip: { enabled: true } } },
+            plugins: [{
+                id: 'centerText',
+                beforeDraw: function(chart) {
+                    var width = chart.width, height = chart.height, cCtx = chart.ctx;
+                    cCtx.restore();
+                    var fontSize = (height / 114).toFixed(2);
+                    cCtx.font = "900 " + fontSize + "em sans-serif";
+                    cCtx.textBaseline = "middle"; 
+                    cCtx.fillStyle = actualCompletions === 0 ? theme.mutedText : theme.activeText;
+                    var text = overallPercent + "%", textX = Math.round((width - cCtx.measureText(text).width) / 2), textY = height / 2;
+                    cCtx.fillText(text, textX, textY); cCtx.save();
+                }
+            }]
+        });
+      };
+
+      // 2. STUDENT GRAPH LOGIC (Individual & Home)
       window.renderSyllabusGraphs = async function() {
         const student = await getStudentRecord(currentStudentAdmn);
         if(!student) return;
         const cls = cleanClassStr(student.class);
         const theme = window.getChartThemeColors();
         
-        // Direct standardized collection paths
-        const enabledSubjects = await safeDataFetch(`syllabus_config/${cls}`) || {};
+        const enabledSubjects = await safeDataFetch(`enabled_syllabus/${cls}`) || {};
         const allChapters = await safeDataFetch(`syllabus_chapters/${cls}`) || {};
         const myProgress = await safeDataFetch(`syllabus_progress/${currentStudentAdmn}`) || {};
 
@@ -14367,139 +13884,95 @@ window.syncProfileModalHeight = function() {
         if(!container) return;
         
         let html = "";
-        let totalChapsOverall = 0;
-        let completedChapsOverall = 0;
+        let totalChapsOverall = 0; let completedChapsOverall = 0;
         
-        const homeBreakdownList = [];
+        const homeLabels = [];
+        const homeData = [];
         const homeColorsList = theme.palette;
 
-        const activeSubjects = Object.keys(enabledSubjects).filter(sub => enabledSubjects[sub] === true);
+        Object.keys(enabledSubjects).forEach((sub, idx) => {
+            if(enabledSubjects[sub]) {
+                const subChaps = allChapters[sub] || [];
+                if(subChaps.length === 0) return;
 
-        activeSubjects.forEach((sub, idx) => {
-            const rawSubChaps = allChapters[sub] || [];
-            const subChaps = Array.isArray(rawSubChaps) ? rawSubChaps : (rawSubChaps.chapters || []);
-            if(subChaps.length === 0) return;
+                let subCompleted = 0;
+                subChaps.forEach(ch => { if(myProgress[sub] && myProgress[sub][`ch_${ch.no}`]) subCompleted++; });
 
-            const rawProg = myProgress[sub] || {};
-            const subProg = (rawProg && rawProg.progress) ? rawProg.progress : rawProg;
+                totalChapsOverall += subChaps.length;
+                completedChapsOverall += subCompleted;
+                const subPercent = Math.round((subCompleted / subChaps.length) * 100);
 
-            let subCompleted = 0;
-            subChaps.forEach(ch => {
-                if(subProg[`ch_${ch.no}`] === true) subCompleted++;
-            });
+                if(subCompleted > 0) {
+                    homeLabels.push(sub);
+                    homeData.push(subCompleted);
+                }
 
-            totalChapsOverall += subChaps.length;
-            completedChapsOverall += subCompleted;
-            const subPercent = Math.round((subCompleted / subChaps.length) * 100);
-
-            homeBreakdownList.push({
-                subject: sub,
-                completed: subCompleted,
-                total: subChaps.length,
-                percent: subPercent,
-                color: homeColorsList[idx % homeColorsList.length]
-            });
-
-            html += `
-            <div class="card unfold-card" style="margin-top:16px; padding:16px; display:flex; align-items:center; gap:16px;">
-                <div style="position:relative; width:80px; height:80px;"><canvas id="stSylChart_${idx}" style="touch-action: pan-y;"></canvas></div>
-                <div style="flex:1;">
-                    <div style="font-size:14px; font-weight:900; color:var(--text-color);">${sub}</div>
-                    <div style="font-size:11px; font-weight:700; color:var(--text-muted); margin-top:4px;">${subCompleted} out of ${subChaps.length} Chaps Completed</div>
-                    <div style="font-size:18px; font-weight:900; color:${theme.isDark ? '#4ade80' : '#16a34a'}; margin-top:4px;">${subPercent}%</div>
-                </div>
-            </div>`;
+                html += `
+                <div class="card unfold-card" style="margin-top:16px; padding:16px; display:flex; align-items:center; gap:16px;">
+                    <div style="position:relative; width:80px; height:80px;"><canvas id="stSylChart_${idx}" style="touch-action: pan-y;"></canvas></div>
+                    <div style="flex:1;">
+                        <div style="font-size:14px; font-weight:900; color:var(--text-color);">${sub}</div>
+                        <div style="font-size:11px; font-weight:700; color:var(--text-muted); margin-top:4px;">${subCompleted} out of ${subChaps.length} Chaps Completed</div>
+                        <div style="font-size:18px; font-weight:900; color:${theme.isDark ? '#4ade80' : '#16a34a'}; margin-top:4px;">${subPercent}%</div>
+                    </div>
+                </div>`;
+            }
         });
 
-        container.innerHTML = html || "<div style='text-align:center; padding:16px; color:var(--text-muted); font-weight:800;'>No syllabus data generated yet.</div>";
+        container.innerHTML = html || "<div style='text-align:center; padding:16px; color:var(--text-muted); font-weight:800;'>No data generated yet.</div>";
 
-        // Render Study Tab Individual Donut Charts
-        activeSubjects.forEach((sub, idx) => {
-            const ctx = document.getElementById(`stSylChart_${idx}`);
-            if(!ctx) return;
-            const rawSubChaps = allChapters[sub] || [];
-            const subChaps = Array.isArray(rawSubChaps) ? rawSubChaps : (rawSubChaps.chapters || []);
-            const rawProg = myProgress[sub] || {};
-            const subProg = (rawProg && rawProg.progress) ? rawProg.progress : rawProg;
+        Object.keys(enabledSubjects).forEach((sub, idx) => {
+            if(enabledSubjects[sub]) {
+                const ctx = document.getElementById(`stSylChart_${idx}`);
+                if(!ctx) return;
+                const subChaps = allChapters[sub] || [];
+                let subCompleted = 0;
+                subChaps.forEach(ch => { if(myProgress[sub] && myProgress[sub][`ch_${ch.no}`]) subCompleted++; });
+                const remain = subChaps.length - subCompleted;
 
-            let subCompleted = 0;
-            subChaps.forEach(ch => { if(subProg[`ch_${ch.no}`] === true) subCompleted++; });
-            const remain = Math.max(0, subChaps.length - subCompleted);
-
-            if(stIndividualCharts[idx]) stIndividualCharts[idx].destroy();
-            stIndividualCharts[idx] = new Chart(ctx, {
-                type: 'doughnut',
-                data: { 
-                    labels: ['Done', 'Left'], 
-                    datasets: [{ 
-                        data: [subCompleted, remain], 
-                        backgroundColor: [theme.isDark ? '#4ade80' : '#16a34a', theme.emptyArc], 
-                        borderWidth: 1.5, 
-                        borderColor: theme.borderColor, 
-                        hoverOffset: 4 
-                    }] 
-                },
-                options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { display: false }, tooltip: { enabled: true } } }
-            });
+                if(stIndividualCharts[idx]) stIndividualCharts[idx].destroy();
+                stIndividualCharts[idx] = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: { labels: ['Done', 'Left'], datasets: [{ data: [subCompleted, remain], backgroundColor: [theme.isDark ? '#4ade80' : '#16a34a', theme.emptyArc], borderWidth: 1, borderColor: theme.borderColor, hoverOffset: 5 }] },
+                    options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { display: false }, tooltip: { enabled: true } } }
+                });
+            }
         });
 
-        window.renderStudentHomeSyllabusChart(totalChapsOverall, completedChapsOverall, homeBreakdownList);
+        let finalLabels = homeLabels;
+        let finalData = homeData;
+        let finalColors = homeColorsList.slice(0, homeLabels.length);
+
+        if (completedChapsOverall === 0) {
+            finalLabels = ['Not Started'];
+            finalData = [1];
+            finalColors = [theme.emptyArc];
+        }
+
+        window.renderStudentHomeSyllabusChart(totalChapsOverall, completedChapsOverall, finalLabels, finalData, finalColors);
       };
 
-      window.renderStudentHomeSyllabusChart = function(total, completed, breakdownList) {
+      window.renderStudentHomeSyllabusChart = function(total, completed, labels, dataVals, colors) {
         const ctx = document.getElementById("studentHomeSyllabusChart");
         const breakdownDiv = document.getElementById("sHomeSyllabusBreakdown");
         if(!ctx) return;
         const theme = window.getChartThemeColors();
         const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
 
-        const chartLabels = [];
-        const chartData = [];
-        const chartColors = [];
-
-        if (completed === 0 && total === 0) {
-            chartLabels.push('Not Started');
-            chartData.push(1);
-            chartColors.push(theme.emptyArc);
-        } else {
-            // Subject-wise completed slices
-            breakdownList.forEach(item => {
-                if (item.completed > 0) {
-                    chartLabels.push(`${item.subject} (${item.completed})`);
-                    chartData.push(item.completed);
-                    chartColors.push(item.color);
-                }
-            });
-
-            // Remaining uncompleted chapters slice (ensures visually accurate percentage!)
-            const remaining = Math.max(0, total - completed);
-            if (remaining > 0) {
-                chartLabels.push('Remaining');
-                chartData.push(remaining);
-                chartColors.push(theme.emptyArc);
-            }
-
-            if (chartData.length === 0) {
-                chartLabels.push('Not Started');
-                chartData.push(1);
-                chartColors.push(theme.emptyArc);
-            }
-        }
-
         if(stHomeSylChart) stHomeSylChart.destroy();
         stHomeSylChart = new Chart(ctx, {
             type: 'doughnut',
             data: { 
-                labels: chartLabels, 
+                labels: labels, 
                 datasets: [{ 
-                    data: chartData, 
-                    backgroundColor: chartColors, 
-                    borderWidth: 1.5,
+                    data: dataVals, 
+                    backgroundColor: colors, 
+                    borderWidth: 2,
                     borderColor: theme.borderColor,
-                    hoverOffset: 8 
+                    hoverOffset: 10 
                 }] 
             },
-            options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { display: false }, tooltip:{ enabled: true } } },
+            options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { display: false }, tooltip:{enabled:true} } },
             plugins: [{
                 id: 'centerTextHome',
                 beforeDraw: function(chart) {
@@ -14515,21 +13988,19 @@ window.syncProfileModalHeight = function() {
 
         if(breakdownDiv) {
             let bHtml = "";
-            if (breakdownList.length === 0 || completed === 0) {
-                bHtml = "<div style='text-align:center; color:var(--text-muted); font-size:11px; font-weight:700;'>No chapters completed yet. Tick chapters in Study tab to track progress.</div>";
+            if (completed === 0) {
+                bHtml = "<div style='text-align:center; color:var(--text-muted); font-size:11px; font-weight:700;'>No chapters completed yet.</div>";
             } else {
-                breakdownList.forEach(item => {
-                    bHtml += `
-                    <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; font-size:12px; font-weight:800; border-bottom:1px solid var(--border-color);">
-                      <span style="color:${item.color} !important;">● ${item.subject}</span>
-                      <span>${item.completed}/${item.total} Chaps (${item.percent}%)</span>
+                labels.forEach((lbl, i) => {
+                    bHtml += `<div style="display:flex; justify-content:space-between; padding:6px 0; font-size:12px; font-weight:800; border-bottom:1px solid var(--border-color);">
+                      <span style="color:${colors[i]} !important;">● ${lbl}</span>
+                      <span>${dataVals[i]} Chaps Completed</span>
                     </div>`;
                 });
             }
             breakdownDiv.innerHTML = bHtml;
         }
       };
-
 
       const oldInitStudentSylTab = window.initStudentSyllabusTab;
       window.initStudentSyllabusTab = async function() {
@@ -14576,173 +14047,34 @@ window.syncProfileModalHeight = function() {
           }
       };
 
-            window.refreshAdminSyllabusGraph = async function() {
-        const cls = document.getElementById("sylTrackClassSelect").value;
-        const breakdownDiv = document.getElementById("sylTrackBreakdown");
-        const ctx = document.getElementById("adminSyllabusChart");
-        if(!ctx) return;
+      window.initProfileStudyStatus = async function(admn, clsStr) {
+          const cls = cleanClassStr(clsStr);
+          const enabledSubjects = await safeDataFetch(`enabled_syllabus/${cls}`) || {};
+          const chkContainer = document.getElementById("spStudySubjectCheckboxes");
+          
+          chkContainer.innerHTML = `<div class="checkbox-item" style="font-weight:900;"><input type="checkbox" id="spSylChkAll" checked onchange="window.toggleAllSpSylSubjects(this, '${admn}', '${cls}')"> ALL</div>`;
 
-        const theme = window.getChartThemeColors();
-        const bgColors = theme.palette;
+          let hasSub = false;
+          Object.keys(enabledSubjects).forEach(sub => {
+              if(enabledSubjects[sub]) {
+                  hasSub = true;
+                  chkContainer.innerHTML += `<div class="checkbox-item"><input type="checkbox" class="sp-syl-filter-chk" value="${sub}" checked onchange="window.refreshProfileStudyGraph('${admn}', '${cls}')"> ${sub}</div>`;
+              }
+          });
 
-        let totalPossibleCompletions = 0;
-        let actualCompletions = 0;
-        let breakdownHtml = "";
-        
-        const chartLabels = [];
-        const chartData = [];
-        const chartColors = [];
-
-        const allChapters = await safeDataFetch(`syllabus_chapters`) || {};
-        const allProgress = await safeDataFetch(`syllabus_progress`) || {};
-        const liveStudents = getLiveStudents();
-
-        if (cls === "ALL") {
-            const classesList = ["Nursery", "Jr. KG", "Sr. KG", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"];
-            
-            classesList.forEach((cName, i) => {
-                const cKey = cleanClassStr(cName);
-                const classStudents = liveStudents.filter(s => cleanClassStr(s.class) === cKey);
-                if (classStudents.length === 0) return;
-
-                const classChaps = allChapters[cKey] || {};
-                if (Object.keys(classChaps).length === 0) return;
-
-                let clsPossible = 0;
-                let clsCompleted = 0;
-
-                Object.keys(classChaps).forEach(sub => {
-                    const rawList = classChaps[sub];
-                    const subChapsList = Array.isArray(rawList) ? rawList : (rawList.chapters || []);
-                    if(subChapsList.length > 0) {
-                        clsPossible += (subChapsList.length * classStudents.length);
-                        classStudents.forEach(st => {
-                            const rawStProg = allProgress[st.admn] ? allProgress[st.admn][sub] : null;
-                            const stProg = (rawStProg && rawStProg.progress) ? rawStProg.progress : rawStProg;
-                            if(stProg) {
-                                subChapsList.forEach(ch => { if(stProg[`ch_${ch.no}`] === true) clsCompleted++; });
-                            }
-                        });
-                    }
-                });
-
-                if (clsPossible > 0) {
-                    totalPossibleCompletions += clsPossible;
-                    actualCompletions += clsCompleted;
-                    const clsPercent = Math.round((clsCompleted / clsPossible) * 100);
-                    const color = bgColors[i % bgColors.length];
-                    
-                    chartLabels.push(`Class ${cName} (Done)`);
-                    chartData.push(clsCompleted);
-                    chartColors.push(color);
-                    
-                    const left = Math.max(0, clsPossible - clsCompleted);
-                    chartLabels.push(`Class ${cName} (Left)`);
-                    chartData.push(left);
-                    chartColors.push(theme.emptyArc);
-
-                    breakdownHtml += `<div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color); font-size:12px; font-weight:800;">
-                        <span style="color:${color} !important;">● Class ${cName}</span>
-                        <span>${clsCompleted}/${clsPossible} Chaps (${clsPercent}%)</span>
-                    </div>`;
-                }
-            });
-
-        } else {
-            const allChk = document.getElementById("sylChkAll");
-            const chks = Array.from(document.querySelectorAll(".syl-filter-chk"));
-            if(allChk) allChk.checked = chks.every(c => c.checked) && chks.length > 0;
-
-            const selectedSubs = chks.filter(c => c.checked).map(c => c.value);
-
-            if(selectedSubs.length === 0) {
-                breakdownDiv.innerHTML = "<div style='font-size:12px; font-weight:700; color:var(--text-muted); text-align:center;'>Select at least one subject to view graph.</div>";
-                if(adminSylChart) adminSylChart.destroy();
-                return;
-            }
-
-            const cleanCls = cleanClassStr(cls);
-            const classStudents = liveStudents.filter(s => cleanClassStr(s.class) === cleanCls);
-            const clsChaps = allChapters[cleanCls] || {};
-
-            selectedSubs.forEach((sub, i) => {
-                const rawList = clsChaps[sub] || [];
-                const subChaps = Array.isArray(rawList) ? rawList : (rawList.chapters || []);
-                if(subChaps.length === 0) return;
-
-                let subCompletedCount = 0;
-                let subPossible = subChaps.length * classStudents.length;
-
-                classStudents.forEach(st => {
-                    const rawStProg = allProgress[st.admn] ? allProgress[st.admn][sub] : null;
-                    const stProg = (rawStProg && rawStProg.progress) ? rawStProg.progress : rawStProg;
-                    if(stProg) {
-                        subChaps.forEach(ch => { if(stProg[`ch_${ch.no}`] === true) subCompletedCount++; });
-                    }
-                });
-
-                totalPossibleCompletions += subPossible;
-                actualCompletions += subCompletedCount;
-                
-                const subPercent = subPossible > 0 ? Math.round((subCompletedCount / subPossible) * 100) : 0;
-                const color = bgColors[i % bgColors.length];
-                
-                chartLabels.push(`${sub} (Done)`);
-                chartData.push(subCompletedCount);
-                chartColors.push(color);
-                
-                const left = Math.max(0, subPossible - subCompletedCount);
-                chartLabels.push(`${sub} (Left)`);
-                chartData.push(left);
-                chartColors.push(theme.emptyArc);
-
-                breakdownHtml += `<div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color); font-size:12px; font-weight:800;">
-                    <span style="color:${color} !important;">● ${sub}</span>
-                    <span>${subCompletedCount}/${subPossible} Total (${subPercent}%)</span>
-                </div>`;
-            });
-        }
-
-        breakdownDiv.innerHTML = breakdownHtml || "<div style='font-size:12px; color:var(--text-muted); text-align:center;'>No progress data generated.</div>";
-        const overallPercent = totalPossibleCompletions > 0 ? Math.round((actualCompletions / totalPossibleCompletions) * 100) : 0;
-
-        if (actualCompletions === 0 && totalPossibleCompletions === 0) {
-            chartLabels.push('Not Started');
-            chartData.push(1);
-            chartColors.push(theme.emptyArc);
-        }
-
-        if(adminSylChart) adminSylChart.destroy();
-        adminSylChart = new Chart(ctx, {
-            type: 'doughnut',
-            data: {
-                labels: chartLabels,
-                datasets: [{
-                    data: chartData,
-                    backgroundColor: chartColors,
-                    borderWidth: 1.5, 
-                    borderColor: theme.borderColor,
-                    hoverOffset: 8 
-                }]
-            },
-            options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { display: false }, tooltip: { enabled: true } } },
-            plugins: [{
-                id: 'centerText',
-                beforeDraw: function(chart) {
-                    var width = chart.width, height = chart.height, cCtx = chart.ctx;
-                    cCtx.restore();
-                    var fontSize = (height / 114).toFixed(2);
-                    cCtx.font = "900 " + fontSize + "em sans-serif";
-                    cCtx.textBaseline = "middle"; 
-                    cCtx.fillStyle = actualCompletions === 0 ? theme.mutedText : theme.activeText;
-                    var text = overallPercent + "%", textX = Math.round((width - cCtx.measureText(text).width) / 2), textY = height / 2;
-                    cCtx.fillText(text, textX, textY); cCtx.save();
-                }
-            }]
-        });
+          if(!hasSub) {
+              chkContainer.innerHTML = "<div style='grid-column:span 3; font-size:11px; color:var(--text-muted); text-align:center;'>No syllabus subjects configured for this class yet.</div>";
+          }
+          
+          window.refreshProfileStudyGraph(admn, cls);
       };
 
-            window.refreshProfileStudyGraph = async function(admn, cls) {
+      window.toggleAllSpSylSubjects = function(el, admn, cls) {
+          document.querySelectorAll(".sp-syl-filter-chk").forEach(chk => chk.checked = el.checked);
+          window.refreshProfileStudyGraph(admn, cls);
+      };
+
+      window.refreshProfileStudyGraph = async function(admn, cls) {
           const allChk = document.getElementById("spSylChkAll");
           const chks = Array.from(document.querySelectorAll(".sp-syl-filter-chk"));
           if(allChk) allChk.checked = chks.every(c => c.checked) && chks.length > 0;
@@ -14773,18 +14105,15 @@ window.syncProfileModalHeight = function() {
           const studentProgress = await safeDataFetch(`syllabus_progress/${admn}`) || {};
 
           selectedSubs.forEach((sub, i) => {
-              const rawSubChaps = allChapters[sub] || [];
-              const subChaps = Array.isArray(rawSubChaps) ? rawSubChaps : (rawSubChaps.chapters || []);
+              const subChaps = allChapters[sub] || [];
               if(subChaps.length === 0) return;
 
               let subCompletedCount = 0;
               let subPossible = subChaps.length;
 
-              const rawProg = studentProgress[sub] || {};
-              const stProg = (rawProg && rawProg.progress) ? rawProg.progress : rawProg;
-
+              const stProg = studentProgress[sub];
               if(stProg) {
-                  subChaps.forEach(ch => { if(stProg[`ch_${ch.no}`] === true) subCompletedCount++; });
+                  subChaps.forEach(ch => { if(stProg[`ch_${ch.no}`]) subCompletedCount++; });
               }
 
               totalPossibleCompletions += subPossible;
@@ -14796,12 +14125,11 @@ window.syncProfileModalHeight = function() {
               chartData.push(subCompletedCount);
               chartColors.push(color);
               
-              const left = Math.max(0, subPossible - subCompletedCount);
               chartLabels.push(`${sub} (Left)`);
-              chartData.push(left);
+              chartData.push(subPossible - subCompletedCount);
               chartColors.push(theme.emptyArc);
 
-              breakdownHtml += `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid var(--border-color); font-size:11px; font-weight:800;">
+              breakdownHtml += `<div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--border-color); font-size:11px; font-weight:800;">
                   <span style="color:${color} !important;">● ${sub}</span>
                   <span>${subCompletedCount}/${subPossible} Chaps (${subPercent}%)</span>
               </div>`;
@@ -14826,7 +14154,7 @@ window.syncProfileModalHeight = function() {
                       backgroundColor: chartColors,
                       borderWidth: 1.5, 
                       borderColor: theme.borderColor,
-                      hoverOffset: 8
+                      hoverOffset: 10
                   }]
               },
               options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { display: false }, tooltip: { enabled: true } } },
@@ -14847,7 +14175,6 @@ window.syncProfileModalHeight = function() {
           
           setTimeout(() => window.syncProfileModalHeight(), 150);
       };
-
 
             // ==========================================
       // 🚀 PHOTO CROP & PREVIEW ENGINE + STUDENT ALLOWED ENGINE
@@ -15184,14 +14511,14 @@ window.syncProfileModalHeight = function() {
         });
       };
 
-            // 📚 Student Syllabus Progression (Donut Charts one below another - Synced)
+      // 📚 Student Syllabus Progression (Donut Charts one below another)
       window.renderStudentProfileSyllabusGraphs = async function() {
         const student = await getStudentRecord(currentStudentAdmn);
         if(!student) return;
         const cls = cleanClassStr(student.class);
         const theme = window.getChartThemeColors();
         
-        const enabledSubjects = await safeDataFetch(`syllabus_config/${cls}`) || {};
+        const enabledSubjects = await safeDataFetch(`enabled_syllabus/${cls}`) || {};
         const allChapters = await safeDataFetch(`syllabus_chapters/${cls}`) || {};
         const myProgress = await safeDataFetch(`syllabus_progress/${currentStudentAdmn}`) || {};
 
@@ -15199,64 +14526,49 @@ window.syncProfileModalHeight = function() {
         if(!container) return;
         
         let html = "";
-        const activeSubjects = Object.keys(enabledSubjects).filter(sub => enabledSubjects[sub] === true);
+        Object.keys(enabledSubjects).forEach((sub, idx) => {
+            if(enabledSubjects[sub]) {
+                const subChaps = allChapters[sub] || [];
+                if(subChaps.length === 0) return;
 
-        activeSubjects.forEach((sub, idx) => {
-            const rawSubChaps = allChapters[sub] || [];
-            const subChaps = Array.isArray(rawSubChaps) ? rawSubChaps : (rawSubChaps.chapters || []);
-            if(subChaps.length === 0) return;
+                let subCompleted = 0;
+                subChaps.forEach(ch => { if(myProgress[sub] && myProgress[sub][`ch_${ch.no}`]) subCompleted++; });
 
-            const rawProg = myProgress[sub] || {};
-            const subProg = (rawProg && rawProg.progress) ? rawProg.progress : rawProg;
+                const subPercent = Math.round((subCompleted / subChaps.length) * 100);
 
-            let subCompleted = 0;
-            subChaps.forEach(ch => { if(subProg[`ch_${ch.no}`] === true) subCompleted++; });
-            const subPercent = Math.round((subCompleted / subChaps.length) * 100);
-
-            html += `
-            <div style="margin-bottom:12px; padding:16px; display:flex; align-items:center; gap:16px; background:rgba(0,0,0,0.02); border:1px solid var(--border-color); border-radius:14px;">
-                <div style="position:relative; width:65px; height:65px;"><canvas id="sProfSylChart_${idx}" style="touch-action: pan-y;"></canvas></div>
-                <div style="flex:1;">
-                    <div style="font-size:14px; font-weight:900; color:var(--text-color);">${sub}</div>
-                    <div style="font-size:11px; font-weight:700; color:var(--text-muted); margin-top:4px;">${subCompleted} out of ${subChaps.length} Chaps</div>
-                    <div style="font-size:18px; font-weight:900; color:${theme.isDark ? '#4ade80' : '#16a34a'}; margin-top:4px;">${subPercent}%</div>
-                </div>
-            </div>`;
+                html += `
+                <div style="margin-bottom:12px; padding:16px; display:flex; align-items:center; gap:16px; background:rgba(0,0,0,0.02); border:1px solid var(--border-color); border-radius:14px;">
+                    <div style="position:relative; width:65px; height:65px;"><canvas id="sProfSylChart_${idx}" style="touch-action: pan-y;"></canvas></div>
+                    <div style="flex:1;">
+                        <div style="font-size:14px; font-weight:900; color:var(--text-color);">${sub}</div>
+                        <div style="font-size:11px; font-weight:700; color:var(--text-muted); margin-top:4px;">${subCompleted} out of ${subChaps.length} Chaps</div>
+                        <div style="font-size:18px; font-weight:900; color:${theme.isDark ? '#4ade80' : '#16a34a'}; margin-top:4px;">${subPercent}%</div>
+                    </div>
+                </div>`;
+            }
         });
 
         container.innerHTML = html || "<div style='text-align:center; padding:16px; color:var(--text-muted); font-weight:800;'>No syllabus data available yet.</div>";
 
         // Initialize Individual Donut Charts
-        activeSubjects.forEach((sub, idx) => {
-            const ctx = document.getElementById(`sProfSylChart_${idx}`);
-            if(!ctx) return;
-            const rawSubChaps = allChapters[sub] || [];
-            const subChaps = Array.isArray(rawSubChaps) ? rawSubChaps : (rawSubChaps.chapters || []);
-            const rawProg = myProgress[sub] || {};
-            const subProg = (rawProg && rawProg.progress) ? rawProg.progress : rawProg;
+        Object.keys(enabledSubjects).forEach((sub, idx) => {
+            if(enabledSubjects[sub]) {
+                const ctx = document.getElementById(`sProfSylChart_${idx}`);
+                if(!ctx) return;
+                const subChaps = allChapters[sub] || [];
+                let subCompleted = 0;
+                subChaps.forEach(ch => { if(myProgress[sub] && myProgress[sub][`ch_${ch.no}`]) subCompleted++; });
+                const remain = subChaps.length - subCompleted;
 
-            let subCompleted = 0;
-            subChaps.forEach(ch => { if(subProg[`ch_${ch.no}`] === true) subCompleted++; });
-            const remain = Math.max(0, subChaps.length - subCompleted);
-
-            if(sProfIndividualCharts[idx]) sProfIndividualCharts[idx].destroy();
-            sProfIndividualCharts[idx] = new Chart(ctx, {
-                type: 'doughnut',
-                data: { 
-                    labels: ['Done', 'Left'], 
-                    datasets: [{ 
-                        data: [subCompleted, remain], 
-                        backgroundColor: [theme.isDark ? '#4ade80' : '#16a34a', theme.emptyArc], 
-                        borderWidth: 1.5, 
-                        borderColor: theme.borderColor, 
-                        hoverOffset: 4 
-                    }] 
-                },
-                options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { display: false }, tooltip: { enabled: true } } }
-            });
+                if(sProfIndividualCharts[idx]) sProfIndividualCharts[idx].destroy();
+                sProfIndividualCharts[idx] = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: { labels: ['Done', 'Left'], datasets: [{ data: [subCompleted, remain], backgroundColor: [theme.isDark ? '#4ade80' : '#16a34a', theme.emptyArc], borderWidth: 1, borderColor: theme.borderColor, hoverOffset: 5 }] },
+                    options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { display: false }, tooltip: { enabled: true } } }
+                });
+            }
         });
       };
-
 
            window.openStudentMyProfileTab = async function(e) {
         if (e) e.stopPropagation();
