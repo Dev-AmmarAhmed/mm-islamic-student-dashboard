@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Igris -Migration Tool</title>
+  <title>Firebase RTDB to Firestore Migration Tool</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&display=swap');
     body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; }
@@ -45,14 +45,15 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getFirestore, writeBatch, doc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-    // 🔴 APNA FIREBASE CONFIG YAHAN PASTE KAREIN
+    // 🔴 AAPKA EXACT FIREBASE CONFIG ADD KAR DIYA GAYA HAI
     const firebaseConfig = {
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-      projectId: "YOUR_PROJECT_ID",
-      storageBucket: "YOUR_PROJECT_ID.appspot.com",
-      messagingSenderId: "YOUR_SENDER_ID",
-      appId: "YOUR_APP_ID"
+      apiKey: "AIzaSyBHpbgoGs7HFQ3-1tBn9BpGT4YYDaKkZB8",
+      authDomain: "mm-islamic-erp.firebaseapp.com",
+      databaseURL: "https://mm-islamic-erp-default-rtdb.firebaseio.com",
+      projectId: "mm-islamic-erp",
+      storageBucket: "mm-islamic-erp.firebasestorage.app",
+      messagingSenderId: "547338314533",
+      appId: "1:547338314533:web:3973c2b36ef8b3b01170cc"
     };
 
     const app = initializeApp(firebaseConfig);
@@ -92,68 +93,89 @@
       reader.readAsText(file);
     });
 
-    // Smart Mapper Engine: JSON to Firestore Paths
+    // CRASH-PROOF Mapper Engine (Skips Null Data & Converts Arrays properly)
     function generateFirestoreOperations(data) {
       const operations = [];
 
-      // Category 1: Flat Collections (e.g. students/{admn})
+      function safeObjectEntries(obj) {
+        if (!obj || typeof obj !== 'object') return [];
+        return Object.entries(obj);
+      }
+
+      function ensureObject(val) {
+        if (!val) return { value: "empty" };
+        if (typeof val === 'object' && !Array.isArray(val)) return val;
+        return { data: val };
+      }
+
+      // Category 1: Flat Collections
       const flatNodes = ['students', 'teachers', 'users', 'email_lookup', 'teacher_points_logs', 'student_permissions', 'teacher_permissions', 'enabled_syllabus'];
       flatNodes.forEach(node => {
-        if (data[node]) {
-          Object.entries(data[node]).forEach(([docId, docData]) => {
-            // Firestore mein keys string honi chahiye
-            operations.push({ path: `${node}/${String(docId)}`, data: typeof docData === 'object' ? docData : { value: docData } });
-          });
-        }
+        safeObjectEntries(data[node]).forEach(([docId, docData]) => {
+          if (docData) operations.push({ path: `${node}/${String(docId)}`, data: ensureObject(docData) });
+        });
       });
 
-      // Category 2: Class Nested (e.g. study_material/{classId}/items/{matId})
-      const classNestedNodes = ['study_material', 'homework', 'online_tests', 'subjects'];
+      // Category 2: Class Nested
+      const classNestedNodes = ['study_material', 'homework', 'online_tests', 'subjects', 'timetable'];
       classNestedNodes.forEach(node => {
-        if (data[node]) {
-          Object.entries(data[node]).forEach(([classId, items]) => {
-            Object.entries(items).forEach(([itemId, itemData]) => {
-              operations.push({ path: `${node}/${classId}/items/${itemId}`, data: itemData });
-            });
+        safeObjectEntries(data[node]).forEach(([classId, items]) => {
+          safeObjectEntries(items).forEach(([itemId, itemData]) => {
+            if (itemData) operations.push({ path: `${node}/${classId}/items/${itemId}`, data: ensureObject(itemData) });
           });
-        }
+        });
       });
 
-      // Category 3: User Nested (e.g. fees_entries/{admn}/records/{entryId})
+      // Category 3: User Nested
       const userNestedNodes = ['leave_applications', 'teacher_leave_applications', 'tests', 'daily_claims', 'teacher_daily_claims', 'notifications', 'fees_matrix', 'fees_entries', 'student_test_attempts'];
       userNestedNodes.forEach(node => {
-        if (data[node]) {
-          Object.entries(data[node]).forEach(([userId, records]) => {
-            Object.entries(records).forEach(([recordId, recordData]) => {
-              operations.push({ path: `${node}/${userId}/records/${recordId}`, data: typeof recordData === 'object' ? recordData : { value: recordData } });
-            });
+        safeObjectEntries(data[node]).forEach(([userId, records]) => {
+          safeObjectEntries(records).forEach(([recordId, recordData]) => {
+            if (recordData) operations.push({ path: `${node}/${userId}/records/${recordId}`, data: ensureObject(recordData) });
           });
-        }
+        });
       });
 
-      // Special Case 1: Expenses
+      // Category 4: Syllabus Data (New Feature)
+      if (data.syllabus_chapters) {
+        safeObjectEntries(data.syllabus_chapters).forEach(([classId, subjects]) => {
+          safeObjectEntries(subjects).forEach(([subject, chapters]) => {
+            if (chapters) operations.push({ path: `syllabus_chapters/${classId}_${subject}`, data: ensureObject(chapters) });
+          });
+        });
+      }
+
+      if (data.syllabus_progress) {
+        safeObjectEntries(data.syllabus_progress).forEach(([admn, subjects]) => {
+          safeObjectEntries(subjects).forEach(([subject, progressData]) => {
+            if (progressData) operations.push({ path: `syllabus_progress/${admn}/subjects/${subject}`, data: ensureObject(progressData) });
+          });
+        });
+      }
+
+      // Category 5: Expenses
       if (data.expenses) {
-        Object.entries(data.expenses).forEach(([month, records]) => {
-          Object.entries(records).forEach(([expId, expData]) => {
-            operations.push({ path: `expenses/${month}/records/${expId}`, data: expData });
+        safeObjectEntries(data.expenses).forEach(([month, records]) => {
+          safeObjectEntries(records).forEach(([expId, expData]) => {
+            if(expData) operations.push({ path: `expenses/${month}/records/${expId}`, data: ensureObject(expData) });
           });
         });
       }
 
-      // Special Case 2: Attendance
+      // Category 6: Attendance
       if (data.attendance) {
-        Object.entries(data.attendance).forEach(([admn, months]) => {
-          Object.entries(months).forEach(([month, days]) => {
-            operations.push({ path: `attendance/${admn}/months/${month}`, data: days });
+        safeObjectEntries(data.attendance).forEach(([admn, months]) => {
+          safeObjectEntries(months).forEach(([month, days]) => {
+            if(days) operations.push({ path: `attendance/${admn}/months/${month}`, data: ensureObject(days) });
           });
         });
       }
 
-      // Special Case 3: Muster
+      // Category 7: Muster
       if (data.muster) {
-        Object.entries(data.muster).forEach(([month, days]) => {
-          Object.entries(days).forEach(([day, teachers]) => {
-            operations.push({ path: `muster/${month}/days/${day}`, data: teachers });
+        safeObjectEntries(data.muster).forEach(([month, days]) => {
+          safeObjectEntries(days).forEach(([day, teachers]) => {
+            if(teachers) operations.push({ path: `muster/${month}/days/${day}`, data: ensureObject(teachers) });
           });
         });
       }
@@ -168,17 +190,24 @@
       progressContainer.style.display = "block";
 
       log("Analyzing JSON structure and preparing Firestore batches...");
-      const operations = generateFirestoreOperations(parsedData);
+      
+      let operations = [];
+      try {
+          operations = generateFirestoreOperations(parsedData);
+      } catch (err) {
+          log(`❌ Fatal Parsing Error: ${err.message}`, "#ef4444");
+          return;
+      }
+
       const totalOps = operations.length;
       log(`Total documents to write: ${totalOps}`, "#fbbf24");
 
       if (totalOps === 0) {
-        log("No data found to migrate.", "#ef4444");
+        log("No structured data found to migrate.", "#ef4444");
         return;
       }
 
-      // Firestore Batch limit is 500. We use chunks of 400 for safety.
-      const CHUNK_SIZE = 400;
+      const CHUNK_SIZE = 400; // Batch limit safe size
       let completedOps = 0;
 
       for (let i = 0; i < totalOps; i += CHUNK_SIZE) {
@@ -186,21 +215,20 @@
         const batch = writeBatch(fsDb);
 
         chunk.forEach(op => {
-          const docRef = doc(fsDb, op.path);
+          // Document ID mein spaces ya invalid chars ko replace kar dena safe hota hai
+          const safePath = op.path.replace(/\s+/g, '_'); 
+          const docRef = doc(fsDb, safePath);
           batch.set(docRef, op.data);
         });
 
         try {
           await batch.commit();
           completedOps += chunk.length;
-          
-          // Update UI Progress
           const percentage = Math.round((completedOps / totalOps) * 100);
           progressBar.style.width = `${percentage}%`;
           log(`Migrated ${completedOps} / ${totalOps} documents...`);
-          
         } catch (error) {
-          log(`❌ Error in batch ${i/CHUNK_SIZE + 1}: ${error.message}`, "#ef4444");
+          log(`❌ Error writing batch to Firestore: ${error.message}`, "#ef4444");
         }
       }
 
