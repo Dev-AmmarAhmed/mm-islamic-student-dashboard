@@ -13042,6 +13042,639 @@ Exact Output JSON Format Required:
       });
 
 
+      // =========================================================================
+      // PHASE 3: INTERACTIVE GRAPH ENGINE, PHOTO CROPPER & ASSISTANCE SYSTEM
+      // =========================================================================
+
+      // --- 1. THEME & CHART ACCENT COLOR HELPER ---
+      window.getChartThemeColors = function() {
+        const isDark = document.body.classList.contains("dark-mode");
+        return {
+          isDark: isDark,
+          emptyArc: "rgba(0,0,0,0.05)",
+          borderColor: isDark ? "#ffffff" : "#000000",
+          mutedText: "#0288d1",
+          activeText: "#0288d1",
+          palette: ["#0288d1", "#16a34a", "#d97706", "#9333ea", "#dc2626", isDark ? "#38bdf8" : "#0f172a", "#e11d48", "#059669", "#ea580c", "#4f46e5"]
+        };
+      };
+
+      // --- 2. ADMIN / TEACHER SYLLABUS TRACKER GRAPHS ---
+      let adminSylChart = null;
+
+      window.initAdminSyllabusTracker = async function() {
+        let cls = document.getElementById("sylTrackClassSelect") ? document.getElementById("sylTrackClassSelect").value : "ALL";
+        const chkContainer = document.getElementById("sylAdminCheckboxes");
+        if (!chkContainer) return;
+
+        if (cls === "ALL") {
+          chkContainer.style.display = "none";
+          window.refreshAdminSyllabusGraph();
+          return;
+        }
+
+        chkContainer.style.display = "grid";
+        if (currentRole === "teacher") {
+          cls = cleanClassStr(assignedClass);
+          const sel = document.getElementById("sylTrackClassSelect");
+          if (sel) {
+            sel.value = cls;
+            sel.disabled = true;
+          }
+        }
+        cls = cleanClassStr(cls);
+
+        const configDoc = await safeDataFetch(`syllabus_config/${cls}`) || {};
+        const enabledSubjects = configDoc.subjects || configDoc;
+
+        chkContainer.innerHTML = `<div class="checkbox-item" style="font-weight:900;"><input type="checkbox" id="sylChkAll" checked onchange="window.toggleAllSylSubjects(this)"> ALL</div>`;
+
+        let hasSub = false;
+        Object.keys(enabledSubjects).forEach(sub => {
+          if (enabledSubjects[sub]) {
+            hasSub = true;
+            chkContainer.innerHTML += `<div class="checkbox-item"><input type="checkbox" class="syl-filter-chk" value="${sub}" checked onchange="window.refreshAdminSyllabusGraph()"> ${sub}</div>`;
+          }
+        });
+
+        if (!hasSub) chkContainer.innerHTML = "<div style='grid-column:span 3; font-size:11px; color:var(--text-muted);'>No syllabus configured.</div>";
+        window.refreshAdminSyllabusGraph();
+      };
+
+      window.toggleAllSylSubjects = function(el) {
+        document.querySelectorAll(".syl-filter-chk").forEach(chk => chk.checked = el.checked);
+        window.refreshAdminSyllabusGraph();
+      };
+
+      window.refreshAdminSyllabusGraph = async function() {
+        const cls = document.getElementById("sylTrackClassSelect") ? document.getElementById("sylTrackClassSelect").value : "ALL";
+        const breakdownDiv = document.getElementById("sylTrackBreakdown");
+        const ctx = document.getElementById("adminSyllabusChart");
+        if (!ctx) return;
+
+        const theme = window.getChartThemeColors();
+        const bgColors = theme.palette;
+
+        let totalPossibleCompletions = 0;
+        let actualCompletions = 0;
+        let breakdownHtml = "";
+        
+        const chartLabels = [];
+        const chartData = [];
+        const chartColors = [];
+
+        const liveStudents = getLiveStudents();
+
+        if (cls === "ALL") {
+          const classesList = ["Nursery", "Jr. KG", "Sr. KG", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"];
+          
+          for (const cName of classesList) {
+            const cKey = cleanClassStr(cName);
+            const classStudents = liveStudents.filter(s => cleanClassStr(s.class) === cKey);
+            if (classStudents.length === 0) continue;
+
+            let clsPossible = 0;
+            let clsCompleted = 0;
+
+            const configDoc = await safeDataFetch(`syllabus_config/${cKey}`) || {};
+            const enabledSubs = configDoc.subjects || configDoc;
+
+            for (const sub of Object.keys(enabledSubs)) {
+              if (!enabledSubs[sub]) continue;
+              const chDocKey = `${cKey}_${sub}`;
+              const chDoc = await safeDataFetch(`syllabus_chapters/${chDocKey}`) || {};
+              const subChapsList = chDoc.chapters || (Array.isArray(chDoc) ? chDoc : []);
+
+              if (subChapsList.length > 0) {
+                clsPossible += (subChapsList.length * classStudents.length);
+                for (const st of classStudents) {
+                  const uidStr = String(st.admn).trim();
+                  const progDoc = await safeDataFetch(`users/${uidStr}/syllabus_progress/${sub}`) || {};
+                  const stProg = progDoc.progress || progDoc;
+                  subChapsList.forEach(ch => {
+                    if (stProg[`ch_${ch.no}`]) clsCompleted++;
+                  });
+                }
+              }
+            }
+
+            if (clsPossible > 0) {
+              totalPossibleCompletions += clsPossible;
+              actualCompletions += clsCompleted;
+              const clsPercent = Math.round((clsCompleted / clsPossible) * 100);
+              const color = bgColors[chartLabels.length % bgColors.length];
+              
+              chartLabels.push(`Class ${cName} (Done)`);
+              chartData.push(clsCompleted);
+              chartColors.push(color);
+              
+              chartLabels.push(`Class ${cName} (Left)`);
+              chartData.push(clsPossible - clsCompleted);
+              chartColors.push(theme.emptyArc);
+
+              breakdownHtml += `<div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border-color); font-size:12px; font-weight:800;">
+                  <span style="color:${color} !important;">● Class ${cName}</span>
+                  <span>${clsPercent}% Overall</span>
+              </div>`;
+            }
+          }
+        } else {
+          const allChk = document.getElementById("sylChkAll");
+          const chks = Array.from(document.querySelectorAll(".syl-filter-chk"));
+          if (allChk) allChk.checked = chks.every(c => c.checked) && chks.length > 0;
+
+          const selectedSubs = chks.filter(c => c.checked).map(c => c.value);
+          if (selectedSubs.length === 0) {
+            if (breakdownDiv) breakdownDiv.innerHTML = "<div style='font-size:12px; font-weight:700; color:var(--text-muted); text-align:center;'>Select at least one subject to view graph.</div>";
+            if (adminSylChart) adminSylChart.destroy();
+            return;
+          }
+
+          const cleanCls = cleanClassStr(cls);
+          const classStudents = liveStudents.filter(s => cleanClassStr(s.class) === cleanCls);
+
+          for (let i = 0; i < selectedSubs.length; i++) {
+            const sub = selectedSubs[i];
+            const chDocKey = `${cleanCls}_${sub}`;
+            const chDoc = await safeDataFetch(`syllabus_chapters/${chDocKey}`) || {};
+            const subChaps = chDoc.chapters || (Array.isArray(chDoc) ? chDoc : []);
+            if (subChaps.length === 0) continue;
+
+            let subCompletedCount = 0;
+            let subPossible = subChaps.length * classStudents.length;
+
+            for (const st of classStudents) {
+              const uidStr = String(st.admn).trim();
+              const progDoc = await safeDataFetch(`users/${uidStr}/syllabus_progress/${sub}`) || {};
+              const stProg = progDoc.progress || progDoc;
+              subChaps.forEach(ch => {
+                if (stProg[`ch_${ch.no}`]) subCompletedCount++;
+              });
+            }
+
+            totalPossibleCompletions += subPossible;
+            actualCompletions += subCompletedCount;
+            const subPercent = subPossible > 0 ? Math.round((subCompletedCount / subPossible) * 100) : 0;
+            const color = bgColors[i % bgColors.length];
+
+            chartLabels.push(`${sub} (Done)`);
+            chartData.push(subCompletedCount);
+            chartColors.push(color);
+
+            chartLabels.push(`${sub} (Left)`);
+            chartData.push(subPossible - subCompletedCount);
+            chartColors.push(theme.emptyArc);
+
+            breakdownHtml += `<div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border-color); font-size:12px; font-weight:800;">
+                <span style="color:${color} !important;">● ${sub}</span>
+                <span>${subPercent}% Student Completion</span>
+            </div>`;
+          }
+        }
+
+        if (breakdownDiv) breakdownDiv.innerHTML = breakdownHtml || "<div style='font-size:12px; color:var(--text-muted); text-align:center;'>No progress data generated.</div>";
+        const overallPercent = totalPossibleCompletions > 0 ? Math.round((actualCompletions / totalPossibleCompletions) * 100) : 0;
+
+        if (actualCompletions === 0 && totalPossibleCompletions === 0) {
+          chartLabels.push("Not Started");
+          chartData.push(1);
+          chartColors.push(theme.emptyArc);
+        }
+
+        if (adminSylChart) adminSylChart.destroy();
+        adminSylChart = new Chart(ctx, {
+          type: "doughnut",
+          data: {
+            labels: chartLabels,
+            datasets: [{
+              data: chartData,
+              backgroundColor: chartColors,
+              borderWidth: 1.5,
+              borderColor: theme.borderColor,
+              hoverOffset: 10
+            }]
+          },
+          options: { responsive: true, maintainAspectRatio: false, cutout: "65%", plugins: { legend: { display: false }, tooltip: { enabled: true } } },
+          plugins: [{
+            id: "centerText",
+            beforeDraw: function(chart) {
+              const width = chart.width;
+              const height = chart.height;
+              const cCtx = chart.ctx;
+              cCtx.restore();
+              const fontSize = (height / 114).toFixed(2);
+              cCtx.font = "900 " + fontSize + "em sans-serif";
+              cCtx.textBaseline = "middle";
+              cCtx.fillStyle = actualCompletions === 0 ? theme.mutedText : theme.activeText;
+              const text = overallPercent + "%";
+              const textX = Math.round((width - cCtx.measureText(text).width) / 2);
+              const textY = height / 2;
+              cCtx.fillText(text, textX, textY);
+              cCtx.save();
+            }
+          }]
+        });
+      };
+
+      // --- 3. STUDENT & TEACHER PROGRESSION LINE GRAPHS ---
+      let studentLineChartInstance = null;
+      let teacherLineChartInstance = null;
+      let stIndividualCharts = {};
+      let sProfIndividualCharts = {};
+
+      window.renderStudentPointsLineGraph = async function() {
+        const canvas = document.getElementById("studentPointsLineChart");
+        if (!canvas) return;
+
+        const student = await getStudentRecord(currentStudentAdmn);
+        const currentPts = student ? (Number(student.points) || 0) : 0;
+        const uidStr = String(currentStudentAdmn).trim();
+
+        const testsData = await safeDataFetch(`users/${uidStr}/tests`) || {};
+        const dailyClaims = await safeDataFetch(`users/${uidStr}/daily_claims`) || {};
+        let events = [];
+
+        Object.values(testsData).forEach(t => {
+          if (t.awardedPoints) {
+            events.push({ date: t.date, delta: t.awardedPoints, reason: `Test: ${t.name}` });
+          }
+        });
+
+        Object.keys(dailyClaims).forEach(k => {
+          const claimItem = dailyClaims[k];
+          if (claimItem && (claimItem.claimed === true || claimItem === true)) {
+            const parts = k.split("_");
+            if (parts.length === 3) {
+              const dStr = `${String(parts[2]).padStart(2, "0")}/${String(parts[1]).padStart(2, "0")}/${parts[0]}`;
+              const dayDate = new Date(`${parts[0]}-${parts[1]}-${parts[2]}`);
+              const isWeekend = (dayDate.getDay() === 0 || dayDate.getDay() === 6);
+              events.push({ date: dStr, delta: isWeekend ? 80 : 50, reason: "Daily Reward Claimed" });
+            }
+          }
+        });
+
+        events.sort((a, b) => {
+          const pA = a.date.split("/");
+          const pB = b.date.split("/");
+          if (pA.length !== 3 || pB.length !== 3) return 0;
+          return new Date(`${pA[2]}-${pA[1]}-${pA[0]}`).getTime() - new Date(`${pB[2]}-${pB[1]}-${pB[0]}`).getTime();
+        });
+
+        let series = [{ label: "Start", total: 0, date: student ? student.regDate || "Initial" : "-" }];
+        let running = 0;
+
+        events.forEach(ev => {
+          running += ev.delta;
+          series.push({ label: ev.date.slice(0, 5), total: running, date: ev.date, delta: ev.delta, reason: ev.reason });
+        });
+
+        if (running !== currentPts) {
+          series.push({ label: "Today", total: currentPts, date: getTodayFormattedDate(), delta: currentPts - running, reason: "Manual Sync" });
+        }
+
+        const isDark = document.body.classList.contains("dark-mode");
+        const ctx = canvas.getContext("2d");
+        const grad = ctx.createLinearGradient(0, 0, 0, 220);
+        grad.addColorStop(0, isDark ? "rgba(56, 189, 248, 0.45)" : "rgba(2, 136, 209, 0.32)");
+        grad.addColorStop(1, "rgba(2, 136, 209, 0.0)");
+
+        if (studentLineChartInstance) studentLineChartInstance.destroy();
+        studentLineChartInstance = new Chart(canvas, {
+          type: "line",
+          data: {
+            labels: series.map(p => p.label),
+            datasets: [{
+              label: "My Points",
+              data: series.map(p => p.total),
+              customInfo: series,
+              borderColor: isDark ? "#38bdf8" : "#0288d1",
+              backgroundColor: grad,
+              borderWidth: 3, fill: true, tension: 0.35,
+              pointRadius: 0, pointHitRadius: 25, pointHoverRadius: 7
+            }]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: function(context) {
+                    const pt = context.dataset.customInfo[context.dataIndex];
+                    if (!pt.reason) return ` Total: ${pt.total} PTS`;
+                    const sign = pt.delta > 0 ? `+${pt.delta}` : `${pt.delta}`;
+                    return ` ${pt.date}: ${pt.total} PTS (${sign}) \n ${pt.reason}`;
+                  }
+                }
+              }
+            }
+          }
+        });
+      };
+
+      window.renderStudentProfileSyllabusGraphs = async function() {
+        const student = await getStudentRecord(currentStudentAdmn);
+        if (!student) return;
+        const cls = cleanClassStr(student.class);
+        const theme = window.getChartThemeColors();
+        const uidStr = String(currentStudentAdmn).trim();
+
+        const configDoc = await safeDataFetch(`syllabus_config/${cls}`) || {};
+        const enabledSubjects = configDoc.subjects || configDoc;
+        const container = document.getElementById("sProfSyllabusGraphsContainer");
+        if (!container) return;
+
+        let html = "";
+        const keys = Object.keys(enabledSubjects);
+
+        for (let i = 0; i < keys.length; i++) {
+          const sub = keys[i];
+          if (enabledSubjects[sub]) {
+            const chDocKey = `${cls}_${sub}`;
+            const chDoc = await safeDataFetch(`syllabus_chapters/${chDocKey}`) || {};
+            const subChaps = chDoc.chapters || (Array.isArray(chDoc) ? chDoc : []);
+            if (subChaps.length === 0) continue;
+
+            const progDoc = await safeDataFetch(`users/${uidStr}/syllabus_progress/${sub}`) || {};
+            const myProgress = progDoc.progress || progDoc;
+
+            let subCompleted = 0;
+            subChaps.forEach(ch => {
+              if (myProgress[`ch_${ch.no}`]) subCompleted++;
+            });
+
+            const subPercent = Math.round((subCompleted / subChaps.length) * 100);
+
+            html += `
+              <div style="margin-bottom:12px; padding:16px; display:flex; align-items:center; gap:16px; background:rgba(0,0,0,0.02); border:1px solid var(--border-color); border-radius:14px;">
+                <div style="position:relative; width:65px; height:65px;"><canvas id="sProfSylChart_${i}" style="touch-action: pan-y;"></canvas></div>
+                <div style="flex:1;">
+                  <div style="font-size:14px; font-weight:900; color:var(--text-color);">${sub}</div>
+                  <div style="font-size:11px; font-weight:700; color:var(--text-muted); margin-top:4px;">${subCompleted} out of ${subChaps.length} Chaps</div>
+                  <div style="font-size:18px; font-weight:900; color:${theme.isDark ? "#4ade80" : "#16a34a"}; margin-top:4px;">${subPercent}%</div>
+                </div>
+              </div>`;
+          }
+        }
+
+        container.innerHTML = html || "<div style='text-align:center; padding:16px; color:var(--text-muted); font-weight:800;'>No syllabus data available yet.</div>";
+
+        for (let i = 0; i < keys.length; i++) {
+          const sub = keys[i];
+          if (enabledSubjects[sub]) {
+            const ctx = document.getElementById(`sProfSylChart_${i}`);
+            if (!ctx) return;
+            const chDocKey = `${cls}_${sub}`;
+            const chDoc = await safeDataFetch(`syllabus_chapters/${chDocKey}`) || {};
+            const subChaps = chDoc.chapters || (Array.isArray(chDoc) ? chDoc : []);
+            const progDoc = await safeDataFetch(`users/${uidStr}/syllabus_progress/${sub}`) || {};
+            const myProgress = progDoc.progress || progDoc;
+
+            let subCompleted = 0;
+            subChaps.forEach(ch => {
+              if (myProgress[`ch_${ch.no}`]) subCompleted++;
+            });
+            const remain = subChaps.length - subCompleted;
+
+            if (sProfIndividualCharts[i]) sProfIndividualCharts[i].destroy();
+            sProfIndividualCharts[i] = new Chart(ctx, {
+              type: "doughnut",
+              data: {
+                labels: ["Done", "Left"],
+                datasets: [{
+                  data: [subCompleted, remain],
+                  backgroundColor: [theme.isDark ? "#4ade80" : "#16a34a", theme.emptyArc],
+                  borderWidth: 1, borderColor: theme.borderColor, hoverOffset: 5
+                }]
+              },
+              options: { responsive: true, maintainAspectRatio: false, cutout: "75%", plugins: { legend: { display: false }, tooltip: { enabled: true } } }
+            });
+          }
+        }
+      };
+
+      // --- 4. PHOTO CROP & PREVIEW ENGINE ---
+      window.croppedPhotosMap = {};
+      let activeCropInputId = null;
+      let cropImageObj = null;
+      let cropScale = 1;
+      let cropMinScale = 1;
+      let cropOffsetX = 0;
+      let cropOffsetY = 0;
+      let isCropDragging = false;
+      let cropStartX = 0;
+      let cropStartY = 0;
+
+      window.initPhotoCropperForInput = function(inputId, previewImgId = null) {
+        const fileInput = document.getElementById(inputId);
+        if (!fileInput) return;
+        fileInput.addEventListener("change", (e) => {
+          if (!e.target.files || !e.target.files[0]) return;
+          const file = e.target.files[0];
+          if (!file.type.startsWith("image/")) return;
+
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            cropImageObj = new Image();
+            cropImageObj.onload = () => {
+              activeCropInputId = inputId;
+              window.activeCropPreviewImgId = previewImgId;
+
+              const canvas = document.getElementById("photoCropCanvas");
+              if (!canvas) return;
+              const cw = canvas.width;
+              const ch = canvas.height;
+              cropMinScale = Math.max(cw / cropImageObj.width, ch / cropImageObj.height);
+              cropScale = cropMinScale;
+
+              const slider = document.getElementById("photoCropZoomSlider");
+              if (slider) {
+                slider.min = cropMinScale.toFixed(3);
+                slider.max = (cropMinScale * 3).toFixed(3);
+                slider.step = (cropMinScale / 50).toFixed(4);
+                slider.value = cropScale;
+              }
+
+              cropOffsetX = (cw - cropImageObj.width * cropScale) / 2;
+              cropOffsetY = (ch - cropImageObj.height * cropScale) / 2;
+              window.drawPhotoCropCanvas();
+              document.getElementById("photoCropperModal").classList.add("active");
+            };
+            cropImageObj.src = ev.target.result;
+          };
+          reader.readAsDataURL(file);
+        });
+      };
+
+      window.drawPhotoCropCanvas = function() {
+        const canvas = document.getElementById("photoCropCanvas");
+        if (!canvas || !cropImageObj) return;
+        const ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#0f172a";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const drawW = cropImageObj.width * cropScale;
+        const drawH = cropImageObj.height * cropScale;
+
+        if (cropOffsetX > 0) cropOffsetX = 0;
+        if (cropOffsetY > 0) cropOffsetY = 0;
+        if (cropOffsetX + drawW < canvas.width) cropOffsetX = canvas.width - drawW;
+        if (cropOffsetY + drawH < canvas.height) cropOffsetY = canvas.height - drawH;
+
+        ctx.drawImage(cropImageObj, cropOffsetX, cropOffsetY, drawW, drawH);
+      };
+
+      (function setupCropperInteractions() {
+        const canvas = document.getElementById("photoCropCanvas");
+        const slider = document.getElementById("photoCropZoomSlider");
+        if (!canvas || !slider) return;
+
+        slider.addEventListener("input", (e) => {
+          if (!cropImageObj) return;
+          const newScale = parseFloat(e.target.value);
+          const centerX = canvas.width / 2;
+          const centerY = canvas.height / 2;
+          cropOffsetX = centerX - ((centerX - cropOffsetX) / cropScale) * newScale;
+          cropOffsetY = centerY - ((centerY - cropOffsetY) / cropScale) * newScale;
+          cropScale = newScale;
+          window.drawPhotoCropCanvas();
+        });
+
+        const startDrag = (clientX, clientY) => {
+          isCropDragging = true;
+          cropStartX = clientX - cropOffsetX;
+          cropStartY = clientY - cropOffsetY;
+        };
+        const moveDrag = (clientX, clientY) => {
+          if (!isCropDragging || !cropImageObj) return;
+          cropOffsetX = clientX - cropStartX;
+          cropOffsetY = clientY - cropStartY;
+          window.drawPhotoCropCanvas();
+        };
+        const endDrag = () => { isCropDragging = false; };
+
+        canvas.addEventListener("mousedown", (e) => startDrag(e.clientX, e.clientY));
+        window.addEventListener("mousemove", (e) => moveDrag(e.clientX, e.clientY));
+        window.addEventListener("mouseup", endDrag);
+
+        canvas.addEventListener("touchstart", (e) => {
+          if (e.touches.length === 1) {
+            e.preventDefault();
+            startDrag(e.touches[0].clientX, e.touches[0].clientY);
+          }
+        }, { passive: false });
+        canvas.addEventListener("touchmove", (e) => {
+          if (e.touches.length === 1) {
+            e.preventDefault();
+            moveDrag(e.touches[0].clientX, e.touches[0].clientY);
+          }
+        }, { passive: false });
+        canvas.addEventListener("touchend", endDrag);
+      })();
+
+      window.applyPhotoCrop = function() {
+        const canvas = document.getElementById("photoCropCanvas");
+        if (!canvas || !activeCropInputId) return;
+        const croppedBase64 = canvas.toDataURL("image/jpeg", 0.82);
+        window.croppedPhotosMap[activeCropInputId] = croppedBase64;
+
+        if (window.activeCropPreviewImgId) {
+          const prevEl = document.getElementById(window.activeCropPreviewImgId);
+          if (prevEl) prevEl.src = croppedBase64;
+        }
+
+        fetch(croppedBase64)
+          .then(res => res.blob())
+          .then(blob => {
+            const file = new File([blob], "cropped_photo.jpg", { type: "image/jpeg" });
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            const inp = document.getElementById(activeCropInputId);
+            if (inp) inp.files = dt.files;
+          }).catch(() => {});
+
+        document.getElementById("photoCropperModal").classList.remove("active");
+      };
+
+      window.cancelPhotoCrop = function() {
+        if (activeCropInputId) {
+          const inp = document.getElementById(activeCropInputId);
+          if (inp) inp.value = "";
+          delete window.croppedPhotosMap[activeCropInputId];
+        }
+        document.getElementById("photoCropperModal").classList.remove("active");
+      };
+
+      // Initialize cropper bindings
+      window.initPhotoCropperForInput("profPhotoFileInput", "profAvatarDisplay");
+      window.initPhotoCropperForInput("regPhotoFile", null);
+      window.initPhotoCropperForInput("sUpdatePhotoInput", "sMyProfAvatar");
+      window.initPhotoCropperForInput("tRegPhotoFile", "tRegAvatarPreview");
+      window.initPhotoCropperForInput("editTeacherPhotoInput", "editTeacherAvatarPreview");
+      window.initPhotoCropperForInput("tMyProfPhotoInput", "tMyProfAvatar");
+
+      // --- 5. SYSTEM ASSISTANCE MENU ENGINE ---
+      const assistanceData = [
+        {
+          title: "Access Muster (Daily Attendance)",
+          en: "1. Open Access Muster from the menu.<br><br>2. Your check-in/out time will be recorded based on your current location.<br><br>3. Tap Check-in when you arrive, and Check-out when you leave.",
+          ur: "1. Menu se Access Muster open karein.<br><br>2. Aapki location aur wifi ke hisaab se time record hoga.<br><br>3. Aate waqt Check-in aur jaate waqt Check-out dabayein."
+        },
+        {
+          title: "Register Student",
+          en: "1. Enter the student's full name, WhatsApp number, and DOB.<br><br>2. Upload a profile photo if available.<br><br>3. Click Submit to register them to your assigned class.",
+          ur: "1. Student ka poora naam, WhatsApp number aur DOB dalein.<br><br>2. Agar photo hai toh upload karein.<br><br>3. Submit dabayein taake wo aapki class mein add ho jayein."
+        },
+        {
+          title: "Study Material & Syllabus Tracker",
+          en: "1. Open 'Study Material & Syllabus' from the left menu.<br><br>2. <b>Add Material:</b> Click '+ Add Material' to share PDF or Video links with your class.<br><br>3. <b>Enable Subjects:</b> Click 'Update Syllabus' to enable specific subjects for your class.<br><br>4. <b>Add Chapters:</b> Inside the Syllabus modal, click 'Add / Edit Chapters' to create chapter tracking lists.",
+          ur: "1. Menu se 'Study Material & Syllabus' open karein.<br><br>2. <b>Add Material:</b> Naya material add karne ke liye '+ Add Material' dabayein.<br><br>3. <b>Update Syllabus:</b> Apni class ke subjects enable karne ke liye 'Update Syllabus' par jayen."
+        }
+      ];
+
+      let currentAstIndex = 0;
+      let currentAstLang = "en";
+
+      window.openAssistanceMenu = function() {
+        window.closeDrawer();
+        const container = document.getElementById("assistanceCardsContainer");
+        if (!container) return;
+        container.innerHTML = "";
+
+        assistanceData.forEach((item, index) => {
+          container.innerHTML += `
+            <div class="student-grid-card" style="padding: 16px; margin-bottom: 10px; border-radius: 14px; background: var(--card-bg); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between;" onclick="window.openAssistanceDetail(${index})">
+              <div style="font-size: 13px; font-weight: 800; color: var(--text-color);">${item.title}</div>
+              <div style="font-size: 16px; color: #0288d1; font-weight: 900;">➔</div>
+            </div>`;
+        });
+        window.openModal("assistanceMenuModal");
+      };
+
+      window.openAssistanceDetail = function(index) {
+        currentAstIndex = index;
+        currentAstLang = "en";
+        window.renderAstDetail();
+        window.openModal("assistanceDetailModal");
+      };
+
+      window.renderAstDetail = function() {
+        const item = assistanceData[currentAstIndex];
+        if (!item) return;
+        document.getElementById("astDetailTitle").innerText = item.title;
+        document.getElementById("astDetailSteps").innerHTML = currentAstLang === "en" ? item.en : item.ur;
+
+        const toggleBtn = document.getElementById("astTranslateBtn");
+        if (toggleBtn) {
+          toggleBtn.innerText = currentAstLang === "en" ? "🔄 Translate to Roman Urdu" : "🔄 Translate to English";
+        }
+      };
+
+      window.toggleAssistanceLang = function() {
+        currentAstLang = currentAstLang === "en" ? "ur" : "en";
+        window.renderAstDetail();
+      };
 
 
 
