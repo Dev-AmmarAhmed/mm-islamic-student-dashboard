@@ -5587,13 +5587,60 @@ Exact Output JSON Format Required:
         }
       };
 
-              // ==========================================
-      // DIVISION 2: AUTHENTICATION, SESSION, SECURITY & NAVIGATION
-      // ==========================================
+              // =========================================================================
+      // DIVISION 2: AUTHENTICATION, LOGIN, APP LOCK & SESSION MANAGEMENT
+      // =========================================================================
 
-      // --- BRUTE FORCE & LOGIN LOCKOUT TIMER ---
-      let lockoutTimerInterval = null;
+      // --- 1. RESOLVE USER BY EMAIL ---
+      window.resolveUserIdByEmail = async function(emailInput) {
+        const cleanEmail = String(emailInput || "").trim().toLowerCase();
+        if (!cleanEmail || !cleanEmail.includes("@")) return null;
 
+        const emailKey = window.encodeEmailKey(cleanEmail);
+        const mappedId = await safeDataFetch(`email_lookup/${emailKey}`);
+        if (mappedId) return String(mappedId);
+
+        // Fallback: Check in memory store users
+        const allUsers = Object.values(window.MM_STORE.users || {});
+        const found = allUsers.find(u => u && u.Details && u.Details.email && u.Details.email.toLowerCase() === cleanEmail);
+        if (found) return String(found.userId || found.admn);
+
+        return null;
+      };
+
+      // --- 2. COMPLETE PORTAL LOGIN SESSION ---
+      window.completePortalLoginSession = async function(resolvedUserId, uData) {
+        const previousUser = localStorage.getItem("loggedUser");
+        if (previousUser && previousUser !== resolvedUserId) {
+          const theme = localStorage.getItem("appTheme");
+          const darkMode = localStorage.getItem("darkMode");
+          sessionStorage.clear();
+          if (theme) localStorage.setItem("appTheme", theme);
+          if (darkMode) localStorage.setItem("darkMode", darkMode);
+        }
+
+        const uidStr = String(resolvedUserId).trim();
+        localStorage.setItem("loggedUser", uidStr);
+        localStorage.setItem("sessionToken", btoa((uData.password || "MM") + uidStr));
+        localStorage.setItem("loggedRole", uData.role);
+        if (uData.assignedClass) localStorage.setItem("assignedClass", uData.assignedClass);
+        if (uData.admn || uData.role === "student") localStorage.setItem("studentAdmn", uidStr);
+
+        if (typeof window.initNativePushAndSW === "function") {
+          window.initNativePushAndSW();
+        }
+
+        // Render UI
+        renderDashboardForRole(uData.role, uData.assignedClass, uidStr);
+
+        // Hydrate in background
+        if (typeof window.hydrateRoleDashboard === "function") {
+          await window.hydrateRoleDashboard(uData.role, false);
+        }
+      };
+
+      // --- 3. STANDARD LOGIN HANDLER ---
+      let lockoutTimerInterval;
       function startLiveLockoutTimer() {
         const lockoutTime = localStorage.getItem("lockoutUntil");
         if (!lockoutTime) return;
@@ -5617,17 +5664,12 @@ Exact Output JSON Format Required:
           lockoutTimerInterval = setInterval(() => {
             const timeLeft = Math.ceil((parseInt(lockoutTime, 10) - Date.now()) / 1000);
             if (timeLeft > 0) {
-              if (errorEl) {
-                errorEl.innerText = `🚨 Too many failed attempts! Wait ${timeLeft} seconds.`;
-              }
+              if (errorEl) errorEl.innerText = `🚨 Too many failed attempts! Wait ${timeLeft} seconds.`;
             } else {
               clearInterval(lockoutTimerInterval);
               localStorage.removeItem("loginFails");
               localStorage.removeItem("lockoutUntil");
-              if (errorEl) {
-                errorEl.style.display = "none";
-                errorEl.style.color = "red";
-              }
+              if (errorEl) errorEl.style.display = "none";
               if (btn) {
                 btn.disabled = false;
                 btn.style.opacity = "1";
@@ -5641,6 +5683,7 @@ Exact Output JSON Format Required:
           localStorage.removeItem("lockoutUntil");
         }
       }
+      startLiveLockoutTimer();
 
       function handleFailedLogin(errorEl) {
         let fails = parseInt(localStorage.getItem("loginFails"), 10) || 0;
@@ -5660,73 +5703,6 @@ Exact Output JSON Format Required:
         }
       }
 
-      startLiveLockoutTimer();
-
-      // --- EMAIL RESOLUTION ENGINE ---
-      window.resolveUserIdByEmail = async function(emailInput) {
-        const cleanEmail = String(emailInput || "").trim().toLowerCase();
-        if (!cleanEmail || !cleanEmail.includes("@")) return null;
-
-        const emailKey = window.encodeEmailKey(cleanEmail);
-        const mappedId = await safeDataFetch(`email_lookup/${emailKey}`);
-        if (mappedId) return String(mappedId).trim();
-
-        try {
-          const q = fsQuery(collection(fsDb, "users"), where("Details.email", "==", cleanEmail));
-          const snap = await getDocs(q);
-          if (!snap.empty) {
-            return String(snap.docs[0].id).trim();
-          }
-          const qDirect = fsQuery(collection(fsDb, "users"), where("email", "==", cleanEmail));
-          const snapDirect = await getDocs(qDirect);
-          if (!snapDirect.empty) {
-            return String(snapDirect.docs[0].id).trim();
-          }
-        } catch (e) {
-          console.warn("Direct Firestore email lookup fallback error:", e);
-        }
-        return null;
-      };
-
-      // --- SESSION COMPLETION ENGINE ---
-      window.completePortalLoginSession = async function(resolvedUserId, uData) {
-        const uidStr = String(resolvedUserId).trim();
-        const normalized = window.normalizeUserData(uData, uidStr);
-        const previousUser = localStorage.getItem("loggedUser");
-
-        if (previousUser && previousUser !== uidStr) {
-          const theme = localStorage.getItem("appTheme");
-          const darkMode = localStorage.getItem("darkMode");
-          const moreAnim = localStorage.getItem("moreAnimations");
-          const neonEff = localStorage.getItem("neonEffect");
-          sessionStorage.clear();
-          if (theme) localStorage.setItem("appTheme", theme);
-          if (darkMode) localStorage.setItem("darkMode", darkMode);
-          if (moreAnim) localStorage.setItem("moreAnimations", moreAnim);
-          if (neonEff) localStorage.setItem("neonEffect", neonEff);
-        }
-
-        localStorage.setItem("loggedUser", uidStr);
-        localStorage.setItem("sessionToken", btoa((normalized.password || "MM") + uidStr));
-        localStorage.setItem("loggedRole", normalized.role);
-        if (normalized.assignedClass) localStorage.setItem("assignedClass", normalized.assignedClass);
-        if (normalized.role === "student") localStorage.setItem("studentAdmn", uidStr);
-
-        if (!window.MM_STORE.users) window.MM_STORE.users = {};
-        window.MM_STORE.users[uidStr] = normalized;
-
-        if (typeof window.initNativePushAndSW === "function") {
-          window.initNativePushAndSW();
-        }
-
-        renderDashboardForRole(normalized.role, normalized.assignedClass, uidStr);
-
-        if (typeof window.hydrateRoleDashboard === "function") {
-          await window.hydrateRoleDashboard(normalized.role, false);
-        }
-      };
-
-      // --- STANDARD & GOOGLE LOGIN LISTENERS ---
       addSafeListener("loginBtn", "click", () => {
         const btn = document.getElementById("loginBtn");
         const errorEl = document.getElementById("loginError");
@@ -5753,7 +5729,10 @@ Exact Output JSON Format Required:
             targetUserId = resolved;
           }
 
+          // Directly fetch from unified users/{targetUserId}
           let uData = await getFirestoreUser(targetUserId);
+
+          // Fallback to cache / memory store
           if (!uData && window.MM_STORE && window.MM_STORE.users && window.MM_STORE.users[targetUserId]) {
             uData = window.MM_STORE.users[targetUserId];
           }
@@ -5769,9 +5748,10 @@ Exact Output JSON Format Required:
         });
       });
 
+      // --- 4. GOOGLE SIGN-IN ---
       addSafeListener("googleLoginBtn", "click", () => {
         const btn = document.getElementById("googleLoginBtn");
-        const originalHtml = btn ? btn.innerHTML : "Sign in with Google";
+        const originalHtml = btn.innerHTML;
         runWithBtnSpinner(btn, originalHtml, async () => {
           try {
             const provider = new GoogleAuthProvider();
@@ -5787,31 +5767,30 @@ Exact Output JSON Format Required:
             const resolvedUserId = await window.resolveUserIdByEmail(googleEmail);
             if (!resolvedUserId) {
               await auth.signOut().catch(() => {});
-              await window.ensureFirebaseAuth();
-              window.showCustomAlert("Only active users allowed to sign in with Google");
+              window.showCustomAlert("Only active registered users allowed to sign in with Google.");
               return;
             }
 
             const uData = await getFirestoreUser(resolvedUserId);
             if (!uData) {
               await auth.signOut().catch(() => {});
-              await window.ensureFirebaseAuth();
-              window.showCustomAlert("Only active users allowed to sign in with Google");
+              window.showCustomAlert("User record not found in system.");
               return;
             }
 
-            window.completePortalLoginSession(resolvedUserId, uData);
+            await window.completePortalLoginSession(resolvedUserId, uData);
           } catch (err) {
-            if (err && err.code !== "auth/popup-closed-by-user" && err.code !== "auth/cancelled-popup-request") {
-              window.showCustomAlert("Google Sign-In failed. Please ensure Google Sign-In is enabled in Firebase Authentication.");
+            if (err && err.code !== "auth/popup-closed-by-user") {
+              window.showCustomAlert("Google Sign-In failed: " + err.message);
             }
           }
         });
       });
 
+      // --- 5. LOGOUT ---
       addSafeListener("logoutBtn", "click", async () => {
         try {
-          if (typeof auth !== "undefined" && auth.currentUser) {
+          if (auth.currentUser) {
             await remove(ref(db, `auth_sessions/${auth.currentUser.uid}`)).catch(() => {});
             await auth.signOut().catch(() => {});
           }
@@ -5827,633 +5806,6 @@ Exact Output JSON Format Required:
         window.location.replace(window.location.pathname);
       });
 
-      // --- THEME, ANIMATION & APPEARANCE CONTROLS ---
-      const ALL_THEME_CLASSES = [
-        "theme-navy", "theme-amethyst", "theme-cyan", "theme-emerald",
-        "theme-rose", "theme-amber", "theme-indigo", "theme-slate"
-      ];
-
-      const darkModeChk = document.getElementById("darkModeCheckbox");
-      const savedDarkPref = localStorage.getItem("darkMode");
-      const systemPrefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-
-      if (savedDarkPref === "enabled" || (savedDarkPref === null && systemPrefersDark)) {
-        document.body.classList.add("dark-mode");
-        if (darkModeChk) darkModeChk.checked = true;
-      } else {
-        document.body.classList.remove("dark-mode");
-        if (darkModeChk) darkModeChk.checked = false;
-      }
-
-      if (window.matchMedia) {
-        window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
-          if (localStorage.getItem("darkMode") === null) {
-            document.body.classList.toggle("dark-mode", e.matches);
-            if (darkModeChk) darkModeChk.checked = e.matches;
-            if (typeof window.refreshAdminSyllabusGraph === "function" && document.getElementById("mgmtTabStudyMaterial")?.classList.contains("active")) {
-              window.refreshAdminSyllabusGraph();
-            }
-          }
-        });
-      }
-
-      window.applyActiveTheme = function() {
-        const savedTheme = localStorage.getItem("appTheme") || "default";
-        document.body.classList.remove(...ALL_THEME_CLASSES);
-        if (savedTheme !== "default") {
-          document.body.classList.add("theme-" + savedTheme);
-        }
-        const sel = document.getElementById("customThemeSelect");
-        if (sel) sel.value = savedTheme;
-      };
-
-      window.setAppTheme = function(themeName) {
-        localStorage.setItem("appTheme", themeName);
-        window.applyActiveTheme();
-      };
-
-      window.toggleMoreAnimations = function(enabled) {
-        document.body.classList.toggle("more-animations", enabled);
-        localStorage.setItem("moreAnimations", enabled ? "enabled" : "disabled");
-      };
-
-      window.toggleNeonEffect = function(enabled) {
-        document.body.classList.toggle("neon-mode", enabled);
-        localStorage.setItem("neonEffect", enabled ? "enabled" : "disabled");
-        if (!enabled) window.clearNeonProximity();
-      };
-
-      window.clearNeonProximity = function() {
-        document.querySelectorAll(".neon-prox-0, .neon-prox-1, .neon-prox-2, .neon-prox-3").forEach(el => {
-          el.classList.remove("neon-prox-0", "neon-prox-1", "neon-prox-2", "neon-prox-3");
-        });
-      };
-
-      window.applyNeonProximity = function(targetCard) {
-        if (!document.body.classList.contains("neon-mode") || !targetCard) return;
-        window.clearNeonProximity();
-        targetCard.classList.add("neon-prox-0");
-        if (targetCard.previousElementSibling) targetCard.previousElementSibling.classList.add("neon-prox-1");
-        if (targetCard.nextElementSibling) targetCard.nextElementSibling.classList.add("neon-prox-1");
-      };
-
-      document.addEventListener("pointerdown", (e) => {
-        if (!document.body.classList.contains("neon-mode")) return;
-        const card = e.target.closest(".card, .student-grid-card, .tb-table-card, .daily-reward-card");
-        if (card) {
-          window.applyNeonProximity(card);
-        } else {
-          window.clearNeonProximity();
-        }
-      }, { passive: true });
-
-      window.applyActiveTheme();
-      if (localStorage.getItem("moreAnimations") === "enabled") {
-        document.body.classList.add("more-animations");
-        if (document.getElementById("moreAnimToggleChk")) document.getElementById("moreAnimToggleChk").checked = true;
-      }
-      if (localStorage.getItem("neonEffect") === "enabled") {
-        document.body.classList.add("neon-mode");
-        if (document.getElementById("neonEffectToggleChk")) document.getElementById("neonEffectToggleChk").checked = true;
-      }
-
-      addSafeListener("darkModeCheckbox", "change", (e) => {
-        if (e.target.checked) {
-          document.body.classList.add("dark-mode");
-          localStorage.setItem("darkMode", "enabled");
-        } else {
-          document.body.classList.remove("dark-mode");
-          localStorage.setItem("darkMode", "disabled");
-        }
-
-        if (typeof window.refreshAdminSyllabusGraph === "function" && document.getElementById("mgmtTabStudyMaterial")?.classList.contains("active")) {
-          window.refreshAdminSyllabusGraph();
-        }
-        if (currentRole === "student" && typeof window.renderSyllabusGraphs === "function") {
-          window.renderSyllabusGraphs();
-        }
-        if (document.getElementById("studentProfileModal")?.classList.contains("active") && document.getElementById("spStudyStatusSection")?.classList.contains("active")) {
-          const admn = document.getElementById("profStudentAdmn")?.value;
-          const cls = document.getElementById("profClassSelect")?.value;
-          if (admn && cls && typeof window.refreshProfileStudyGraph === "function") {
-            window.refreshProfileStudyGraph(admn, cls);
-          }
-        }
-      });
-
-      function updateAppRoleIcon(role) {
-        const dynamicIcon = document.getElementById("dynamicAppIcon");
-        const appleIcon = document.getElementById("appleAppIcon");
-        if (dynamicIcon) dynamicIcon.href = ICON_PORTAL;
-        if (appleIcon) appleIcon.href = ICON_PORTAL;
-      }
-
-      // --- APP LOCK & BIOMETRIC AUTHENTICATION ---
-      window.saveAppLockSettings = async function() {
-        const pin1 = document.getElementById("secNewPin").value.trim();
-        const pin2 = document.getElementById("secConfirmPin").value.trim();
-        const bioEnabled = document.getElementById("secBiometricChk").checked;
-        const loggedUser = localStorage.getItem("loggedUser");
-
-        if (!loggedUser) {
-          window.showCustomAlert("Please login first.");
-          return;
-        }
-
-        if (pin1.length !== 4 || isNaN(pin1)) {
-          window.showCustomAlert("PIN must be exactly 4 numeric digits.");
-          return;
-        }
-
-        if (pin1 !== pin2) {
-          window.showCustomAlert("Both PINs must match perfectly.");
-          return;
-        }
-
-        const btn = document.getElementById("btnSaveAppLock");
-        if (btn) {
-          btn.disabled = true;
-          btn.innerText = "Securing Vault...";
-        }
-
-        try {
-          if (!window.AccuEngine || typeof window.AccuEngine.setAppLock !== "function") {
-            localStorage.setItem(`lock_pin_${loggedUser}`, btoa(pin1));
-            localStorage.setItem(`lock_bio_${loggedUser}`, bioEnabled ? "true" : "false");
-            localStorage.setItem(`lock_active_${loggedUser}`, "true");
-            window.showCustomAlert("✔ Security Lock Activated!\nYou will be required to authenticate on launch.");
-            window.closeModal("secureAppModal");
-            document.getElementById("secNewPin").value = "";
-            document.getElementById("secConfirmPin").value = "";
-            return;
-          }
-
-          const success = await window.AccuEngine.setAppLock(loggedUser, pin1, bioEnabled);
-          if (success) {
-            localStorage.setItem(`lock_active_${loggedUser}`, "true");
-            window.showCustomAlert("✔ Security Lock Activated!\nYou will be required to authenticate with your PIN or Biometrics on launch.");
-            window.closeModal("secureAppModal");
-            document.getElementById("secNewPin").value = "";
-            document.getElementById("secConfirmPin").value = "";
-          } else {
-            window.showCustomAlert("Unable to activate security lock. Please try again.");
-          }
-        } catch (e) {
-          window.showCustomAlert("Security configuration error: " + e.message);
-        } finally {
-          if (btn) {
-            btn.disabled = false;
-            btn.innerText = "🔒 Secure & Save Lock";
-          }
-        }
-      };
-
-      window.checkAppLockOnStartup = async function() {
-        const loggedUser = localStorage.getItem("loggedUser");
-        if (!loggedUser) return;
-
-        const isLockActive = localStorage.getItem(`lock_active_${loggedUser}`);
-        if (!isLockActive) return;
-
-        let lockConfig = null;
-        if (window.AccuEngine && typeof window.AccuEngine.getAppLockConfig === "function") {
-          lockConfig = await window.AccuEngine.getAppLockConfig(loggedUser);
-        } else {
-          lockConfig = {
-            enabled: isLockActive === "true",
-            biometricEnabled: localStorage.getItem(`lock_bio_${loggedUser}`) === "true"
-          };
-        }
-
-        if (!lockConfig || !lockConfig.enabled) return;
-
-        const overlay = document.getElementById("appLockScreenOverlay");
-        if (overlay) {
-          overlay.style.display = "flex";
-          const userTxt = document.getElementById("lockScreenUserText");
-          if (userTxt) userTxt.innerText = `Account: ${loggedUser}`;
-
-          if (lockConfig.biometricEnabled) {
-            setTimeout(() => { window.triggerBiometricUnlock(); }, 400);
-          }
-        }
-      };
-
-      window.submitPinUnlock = async function() {
-        const pinInput = document.getElementById("unlockPinInput");
-        const errEl = document.getElementById("unlockErrorText");
-        const loggedUser = localStorage.getItem("loggedUser");
-        const entered = pinInput ? pinInput.value.trim() : "";
-
-        if (entered.length !== 4) return;
-
-        let isValid = false;
-        if (window.AccuEngine && typeof window.AccuEngine.verifyPin === "function") {
-          isValid = await window.AccuEngine.verifyPin(loggedUser, entered);
-        } else {
-          const storedPinHash = localStorage.getItem(`lock_pin_${loggedUser}`);
-          isValid = storedPinHash && storedPinHash === btoa(entered);
-        }
-
-        if (isValid) {
-          if (pinInput) pinInput.value = "";
-          if (errEl) errEl.style.display = "none";
-          const overlay = document.getElementById("appLockScreenOverlay");
-          if (overlay) overlay.style.display = "none";
-        } else {
-          if (errEl) {
-            errEl.style.display = "block";
-            errEl.innerText = "Invalid 4-digit PIN.";
-          }
-          if (pinInput) {
-            pinInput.value = "";
-            pinInput.focus();
-          }
-        }
-      };
-
-      window.triggerBiometricUnlock = async function() {
-        const loggedUser = localStorage.getItem("loggedUser");
-        const errEl = document.getElementById("unlockErrorText");
-        try {
-          if (window.AccuEngine && typeof window.AccuEngine.promptBiometrics === "function") {
-            await window.AccuEngine.promptBiometrics(loggedUser);
-            if (errEl) errEl.style.display = "none";
-            const overlay = document.getElementById("appLockScreenOverlay");
-            if (overlay) overlay.style.display = "none";
-          }
-        } catch (err) {
-          console.warn("Biometric check bypassed to PIN:", err);
-          if (errEl) {
-            errEl.style.display = "block";
-            errEl.innerText = "Biometric authentication failed. Please enter your 4-digit PIN.";
-          }
-          const pinInp = document.getElementById("unlockPinInput");
-          if (pinInp) pinInp.focus();
-        }
-      };
-
-      document.getElementById("unlockPinInput")?.addEventListener("input", (e) => {
-        if (e.target.value.length === 4) {
-          window.submitPinUnlock();
-        }
-      });
-
-      // --- SCREEN BLUR & CONTENT PROTECTION ---
-      window.addEventListener("blur", () => {
-        document.body.classList.add("screen-protected");
-      });
-
-      window.addEventListener("focus", () => {
-        document.body.classList.remove("screen-protected");
-      });
-
-      document.addEventListener("visibilitychange", () => {
-        if (document.hidden) {
-          document.body.classList.add("screen-protected");
-        } else {
-          document.body.classList.remove("screen-protected");
-        }
-      });
-
-      document.addEventListener("contextmenu", (e) => {
-        if (e.target.closest("#sStudyMatSubSection, #inAppPdfModal")) {
-          e.preventDefault();
-          return false;
-        }
-      });
-
-      // --- NAVIGATION, MODALS & DRAWER CONTROLS ---
-      let isProgrammaticNav = false;
-
-      function getHomeTabId() {
-        if (currentRole === "student") return "studentTabHome";
-        if (currentRole === "teacher") return "teacherTabHome";
-        return "adminTabHome";
-      }
-
-      function pushNavState(type, id) {
-        history.pushState({ appNav: true, type: type, id: id }, "");
-      }
-
-      window.openModal = function(id) {
-        window.closeDrawer();
-        const modal = document.getElementById(id);
-        if (modal) {
-          modal.classList.remove("closing");
-          if (typeof window.applyModalGenieOrigin === "function") window.applyModalGenieOrigin(modal);
-          modal.classList.add("active");
-          pushNavState("modal", id);
-        }
-
-        if (id === "weeklyRewardDetailsModal" && typeof window.renderWeeklyScheduleModal === "function") {
-          window.renderWeeklyScheduleModal();
-        }
-        if (id === "adminLeaderboardModal") {
-          isAdminLbEditMode = false;
-          const clsVal = document.getElementById("adminLbClassSelect") ? document.getElementById("adminLbClassSelect").value : "1";
-          if (typeof window.renderAdminClassLeaderboard === "function") window.renderAdminClassLeaderboard(clsVal);
-        }
-        if (id === "adminTeacherLeaderboardModal" && typeof window.loadAdminTeacherLeaderboard === "function") {
-          window.loadAdminTeacherLeaderboard();
-        }
-        if (id === "addTeacherPointsModal" && typeof window.populateAdminTeacherDropdown === "function") {
-          window.populateAdminTeacherDropdown();
-        }
-        if (id === "registerStudentModal") {
-          const liveSts = getLiveStudents();
-          let maxAdmn = 0;
-          liveSts.forEach(s => {
-            if (s && s.admn) {
-              const num = parseInt(s.admn, 10);
-              if (!isNaN(num) && num > maxAdmn) maxAdmn = num;
-            }
-          });
-          const nextNum = (maxAdmn > 0 ? maxAdmn : liveSts.length) + 1;
-          if (document.getElementById("regSrNo")) document.getElementById("regSrNo").value = nextNum;
-          if (document.getElementById("regAdmn")) document.getElementById("regAdmn").value = nextNum;
-          if (document.getElementById("regStd")) {
-            if (currentRole === "teacher") {
-              document.getElementById("regStd").value = assignedClass;
-              document.getElementById("regStd").disabled = true;
-            } else {
-              document.getElementById("regStd").value = "";
-              document.getElementById("regStd").disabled = false;
-            }
-          }
-        }
-        if (id === "bulkStudentModal" && typeof generateBulkStudentTable === "function") {
-          generateBulkStudentTable();
-        }
-        if (id === "addSubjectModal") {
-          const admBox = document.getElementById("adminAddSubClassBox");
-          if (admBox) admBox.style.display = currentRole === "admin" ? "block" : "none";
-        }
-        if (id === "addStudyMaterialModal") {
-          let targetClsForSub = assignedClass;
-          if (currentRole === "admin") {
-            if (document.getElementById("adminMatClassBox")) document.getElementById("adminMatClassBox").style.display = "block";
-            if (document.getElementById("teacherMatClassBox")) document.getElementById("teacherMatClassBox").style.display = "none";
-            targetClsForSub = document.getElementById("matAdminClassSelect") ? document.getElementById("matAdminClassSelect").value || "1" : "1";
-          } else {
-            if (document.getElementById("adminMatClassBox")) document.getElementById("adminMatClassBox").style.display = "none";
-            if (document.getElementById("teacherMatClassBox")) document.getElementById("teacherMatClassBox").style.display = "block";
-            if (document.getElementById("matAssignedClassDisplay")) document.getElementById("matAssignedClassDisplay").value = `Class ${assignedClass}`;
-          }
-          if (typeof window.populateStudyMaterialSubjects === "function") {
-            window.populateStudyMaterialSubjects(targetClsForSub);
-          }
-          if (document.getElementById("matChapterNoInput")) document.getElementById("matChapterNoInput").value = "";
-          if (document.getElementById("matTypeSelect")) document.getElementById("matTypeSelect").value = "PDF LINK";
-          if (document.getElementById("matTitleInput")) document.getElementById("matTitleInput").value = "";
-          if (document.getElementById("matLinkInput")) document.getElementById("matLinkInput").value = "";
-        }
-        if (id === "manageStudyMaterialModal") {
-          if (currentRole === "admin") {
-            if (document.getElementById("adminManageClassBox")) document.getElementById("adminManageClassBox").style.display = "block";
-            const adminClsSelect = document.getElementById("matAdminManageClassSelect");
-            const clsVal = adminClsSelect ? adminClsSelect.value : "1";
-            if (document.getElementById("manageClassText")) document.getElementById("manageClassText").innerText = `Materials for Class ${clsVal}`;
-            if (typeof loadTeacherStudyMaterials === "function") loadTeacherStudyMaterials(clsVal);
-          } else {
-            if (document.getElementById("adminManageClassBox")) document.getElementById("adminManageClassBox").style.display = "none";
-            if (document.getElementById("manageClassText")) document.getElementById("manageClassText").innerText = `Materials for Class ${assignedClass}`;
-            if (typeof loadTeacherStudyMaterials === "function") loadTeacherStudyMaterials(assignedClass);
-          }
-        }
-        if (id === "uploadHomeworkModal" && document.getElementById("hwAssignedClassDisplay")) {
-          document.getElementById("hwAssignedClassDisplay").value = `Class ${assignedClass}`;
-        }
-        if (id === "studentUpdateModal" && typeof window.openStudentSelfUpdateModal === "function") {
-          window.openStudentSelfUpdateModal();
-        }
-        if (id === "studentAllowedModal") {
-          const clsSel = document.getElementById("stuAllowClassSelect");
-          if (clsSel) clsSel.value = "ALL";
-          if (typeof window.loadStudentAllowedSettings === "function") window.loadStudentAllowedSettings("ALL");
-        }
-        if (id === "studentProfileDrawerModal") {
-          getStudentRecord(currentStudentAdmn).then(student => {
-            if (student) {
-              if (document.getElementById("sProfFullName")) document.getElementById("sProfFullName").value = student.name || "";
-              if (document.getElementById("sProfDob")) document.getElementById("sProfDob").value = student.dob || "-";
-              if (document.getElementById("sProfPhone")) document.getElementById("sProfPhone").value = student.phone || "-";
-            }
-          });
-        }
-        if (id === "deleteTestDataModal" && typeof populateDelTestStudentDropdown === "function") {
-          populateDelTestStudentDropdown();
-        }
-        if (id === "bulkAddTestModal") {
-          if (document.getElementById("bulkStep1")) document.getElementById("bulkStep1").style.display = "block";
-          if (document.getElementById("bulkStep2")) document.getElementById("bulkStep2").style.display = "none";
-          if (document.getElementById("bulkTestNameInput")) document.getElementById("bulkTestNameInput").value = "";
-          if (document.getElementById("bulkTotalMarksInput")) document.getElementById("bulkTotalMarksInput").value = "";
-        }
-        if (id === "createOnlineTestModal") {
-          if (typeof populateClassSubjectsDropdown === "function") populateClassSubjectsDropdown();
-          if (document.getElementById("testFormConfigStep")) document.getElementById("testFormConfigStep").style.display = "block";
-          if (document.getElementById("testQuestionsBuilderStep")) document.getElementById("testQuestionsBuilderStep").style.display = "none";
-          if (!autoFilledJsonQuestions) {
-            const numQInput = document.getElementById("cTestNumQuestions");
-            if (numQInput) {
-              numQInput.disabled = false;
-              numQInput.style.backgroundColor = "";
-              numQInput.style.cursor = "";
-              numQInput.value = "";
-            }
-          }
-        }
-        if (id === "credentialsModal" && typeof loadCredentialsVault === "function") loadCredentialsVault();
-        if (id === "manageTeacherListModal" && typeof window.loadManageTeacherList === "function") window.loadManageTeacherList();
-        if (id === "onlineTestHistoryModal" && typeof window.loadTeacherTestHistory === "function") window.loadTeacherTestHistory();
-      };
-
-      window.closeModal = function(id) {
-        const modal = document.getElementById(id);
-        if (modal && modal.classList.contains("active")) {
-          modal.classList.add("closing");
-          setTimeout(() => {
-            modal.classList.remove("active", "closing");
-          }, 220);
-
-          if (history.state && history.state.type === "modal" && history.state.id === id) {
-            isProgrammaticNav = true;
-            history.back();
-          }
-        }
-        if (id === "registerStudentModal") {
-          const regStd = document.getElementById("regStd");
-          if (regStd) regStd.disabled = false;
-        }
-        if (id === "teacherMusterModal" && typeof musterClockInterval !== "undefined") {
-          clearInterval(musterClockInterval);
-        }
-        if (id === "studentLiveTestModal" && typeof activeLiveTestTimer !== "undefined") {
-          clearInterval(activeLiveTestTimer);
-        }
-      };
-
-      window.switchTab = function(tabId, el, event) {
-        const targetTab = document.getElementById(tabId);
-        if (!targetTab) return;
-
-        const homeTabId = getHomeTabId();
-
-        if (tabId !== homeTabId && tabId !== "loginScreen") {
-          if (history.state && history.state.type === "tab") {
-            history.replaceState({ appNav: true, type: "tab", id: tabId }, "");
-          } else {
-            pushNavState("tab", tabId);
-          }
-        } else if (tabId === homeTabId && history.state && history.state.type === "tab") {
-          isProgrammaticNav = true;
-          history.back();
-        }
-
-        document.querySelectorAll(".tab-section").forEach(t => {
-          t.classList.remove("active", "animate-in");
-        });
-
-        if (tabId === "adminTabEntry" && typeof window.calculateAdminEntryTabAnalytics === "function") {
-          window.calculateAdminEntryTabAnalytics();
-        }
-
-        if (el) {
-          const rect = el.getBoundingClientRect();
-          targetTab.style.transformOrigin = `${rect.left + rect.width / 2}px ${rect.top + rect.height / 2}px`;
-        }
-
-        targetTab.classList.add("active");
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            targetTab.classList.add("animate-in");
-          });
-        });
-
-        document.querySelectorAll(".nav-item").forEach(n => n.classList.remove("active"));
-        if (el) el.classList.add("active");
-
-        if (tabId === "adminTabHome") {
-          if (typeof window.renderAdminHomeTeacherboardCards === "function") window.renderAdminHomeTeacherboardCards();
-          if (typeof window.renderMentorsProgression === "function") {
-            window.renderMentorsProgression("admin", "5", document.getElementById("admGraphBtn5d"));
-          }
-        }
-        if (tabId === "adminTabStudents" && typeof renderAdminStudentsDirectory === "function") {
-          renderAdminStudentsDirectory();
-        }
-        if (tabId === "adminTabExpns") {
-          if (document.getElementById("expCurrentDateDisplay")) {
-            document.getElementById("expCurrentDateDisplay").value = getTodayFormattedDate();
-          }
-          if (typeof loadTeachersInExpenseDropdown === "function") loadTeachersInExpenseDropdown();
-        }
-        if (tabId === "teacherTabAttend" && typeof loadTeacherTodayAttendance === "function") {
-          loadTeacherTodayAttendance();
-        }
-        if (tabId === "teacherTabStudents" && typeof loadTeacherStudentsDirectory === "function") {
-          loadTeacherStudentsDirectory();
-        }
-        if (tabId === "teacherTabPerform") {
-          if (typeof window.loadTeacherLeaderboard === "function") window.loadTeacherLeaderboard();
-          if (typeof populateTeacherStudentDropdowns === "function") populateTeacherStudentDropdowns();
-        }
-        if (tabId === "studentTabTest" && typeof loadStudentDueTests === "function") {
-          loadStudentDueTests();
-        }
-      };
-
-      // --- HARDWARE / GESTURE POPSTATE HANDLER ---
-      window.addEventListener("popstate", (e) => {
-        if (isProgrammaticNav) {
-          isProgrammaticNav = false;
-          return;
-        }
-
-        const activeModals = Array.from(document.querySelectorAll(".modal-overlay.active:not(.closing)"));
-        if (activeModals.length > 0) {
-          const topModal = activeModals[activeModals.length - 1];
-          window.closeModal(topModal.id);
-          return;
-        }
-
-        const leftDrawer = document.getElementById("leftDrawer");
-        const rightDrawer = document.getElementById("rightDrawer");
-        if (leftDrawer && leftDrawer.classList.contains("active")) {
-          leftDrawer.classList.remove("active");
-          document.getElementById("drawerOverlay")?.classList.remove("active");
-          return;
-        }
-        if (rightDrawer && rightDrawer.classList.contains("active")) {
-          rightDrawer.classList.remove("active");
-          document.getElementById("rightDrawerOverlay")?.classList.remove("active");
-          return;
-        }
-
-        const homeTabId = getHomeTabId();
-        const currentTab = document.querySelector(".tab-section.active:not(#loginScreen)");
-        if (currentTab && currentTab.id !== homeTabId) {
-          const bNav = document.getElementById("bottomNav");
-          const homeBtn = bNav ? bNav.children[0] : null;
-          window.switchTab(homeTabId, homeBtn);
-        }
-      });
-
-      // --- DRAWER NAVIGATION & EVENTS ---
-      addSafeListener("hamburgerBtn", "click", () => {
-        document.getElementById("leftDrawer")?.classList.add("active");
-        document.getElementById("drawerOverlay")?.classList.add("active");
-        pushNavState("drawer", "left");
-      });
-
-      window.closeDrawer = function() {
-        const d = document.getElementById("leftDrawer");
-        if (d && d.classList.contains("active")) {
-          d.classList.remove("active");
-          document.getElementById("drawerOverlay")?.classList.remove("active");
-          if (history.state && history.state.type === "drawer" && history.state.id === "left") {
-            isProgrammaticNav = true;
-            history.back();
-          }
-        }
-      };
-      addSafeListener("closeDrawerBtn", "click", window.closeDrawer);
-      addSafeListener("drawerOverlay", "click", window.closeDrawer);
-
-      addSafeListener("notifBellBtn", "click", () => {
-        document.getElementById("rightDrawer")?.classList.add("active");
-        document.getElementById("rightDrawerOverlay")?.classList.add("active");
-        const badge = document.getElementById("notifBadgeCount");
-        if (badge) badge.style.display = "none";
-        pushNavState("drawer", "right");
-      });
-
-      window.closeRightDrawer = function() {
-        const d = document.getElementById("rightDrawer");
-        if (d && d.classList.contains("active")) {
-          d.classList.remove("active");
-          document.getElementById("rightDrawerOverlay")?.classList.remove("active");
-          if (history.state && history.state.type === "drawer" && history.state.id === "right") {
-            isProgrammaticNav = true;
-            history.back();
-          }
-        }
-      };
-      addSafeListener("closeRightDrawerBtn", "click", window.closeRightDrawer);
-      addSafeListener("rightDrawerOverlay", "click", window.closeRightDrawer);
-
-      addSafeListener("threeDotBtn", "click", (e) => {
-        e.stopPropagation();
-        document.getElementById("menuDropdown")?.classList.toggle("active");
-      });
-
-      document.addEventListener("click", (e) => {
-        if (!e.target.closest("#threeDotBtn") && !e.target.closest("#menuDropdown")) {
-          const menu = document.getElementById("menuDropdown");
-          if (menu) menu.classList.remove("active");
-        }
-      });
 
 
         // =========================================================================
@@ -12707,10 +12059,12 @@ Exact Output JSON Format Required:
           }
         }, 200);
       });
-    </script>
 
-  
+
+
+
+
         
-        
+    </script>        
 </body>
 </html>
