@@ -6787,34 +6787,50 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       });
     });
 
-                 function getLiveStudents() {
+          function getLiveStudents() {
       try { 
-        const data = window.MM_STORE.students || {};
-        let list = [];
-        if (Array.isArray(data)) {
-          list = data.filter(Boolean);
-        } else {
-          list = Object.values(data).filter(item => item && typeof item === 'object');
-        }
-        // Normalize class strings automatically so filtering never fails
+        // 🎯 Single Source of Truth: Root 'users' collection se students filter
+        const allUsers = window.MM_STORE.users || {};
+        let list = Object.values(allUsers).filter(u => u && (u.role === "student" || u.admn));
+        
         return list.map(st => ({
           ...st,
-          class: cleanClassStr(st.class)
+          admn: String(st.admn || st.userId || ""),
+          name: st.name || st.username || "Student",
+          class: cleanClassStr(st.class || st.assignedClass || ""),
+          points: Number(st.points) || 0,
+          phone: (st.Details && st.Details.phone) || st.phone || "",
+          dob: (st.Details && st.Details.DOB) || st.dob || "-"
         }));
       } catch(e) { return []; }
     }
 
-
-    async function getStudentRecord(admnId) {
-
+          async function getStudentRecord(admnId) {
       if (!admnId) return null;
+      const sId = String(admnId);
       let students = getLiveStudents();
-      let found = students.find(s => String(s.admn) === String(admnId));
+      let found = students.find(s => String(s.admn) === sId);
       if (found) return found;
-      const studentData = await safeDataFetch(`students/${admnId}`);
-      if (studentData) { inMemoryStudentsData[admnId] = studentData; return studentData; }
+
+      // 🎯 Direct fetch from unified users collection
+      const uData = await safeDataFetch(`users/${sId}`);
+      if (uData && (uData.role === "student" || uData.admn)) {
+        const normalized = {
+          ...uData,
+          admn: sId,
+          name: uData.name || uData.username || "Student",
+          class: cleanClassStr(uData.class || uData.assignedClass || ""),
+          points: Number(uData.points) || 0,
+          phone: (uData.Details && uData.Details.phone) || uData.phone || "",
+          dob: (uData.Details && uData.Details.DOB) || uData.dob || "-"
+        };
+        if (!window.MM_STORE.users) window.MM_STORE.users = {};
+        window.MM_STORE.users[sId] = normalized;
+        return normalized;
+      }
       return null;
     }
+
 
          // Left Drawer Logic
     addSafeListener("hamburgerBtn", "click", () => {
@@ -10150,7 +10166,6 @@ document.getElementById("hwTitleInput").value = "";
     });
 
 
-
           addSafeListener("saveTeacherBtn", "click", () => {
       const btn = document.getElementById("saveTeacherBtn");
       runWithBtnSpinner(btn, "Create Teacher", async () => {
@@ -10161,71 +10176,85 @@ document.getElementById("hwTitleInput").value = "";
         const email = document.getElementById("tRegEmail") ? document.getElementById("tRegEmail").value.trim() : "";
         const fileInput = document.getElementById("tRegPhotoFile");
 
-        const checkedClasses = Array.from(document.querySelectorAll(".t-reg-chk:checked")).map(c => c.value);
+        const checkedClasses = Array.from(document.querySelectorAll(".t-reg-chk:checked")).map(c => cleanClassStr(c.value));
         const cls = checkedClasses.join(",");
 
-        if(!name || !user || !pass || !cls) { alert("Please fill Name, Username, Password and tick at least 1 class."); return; }
+        if (!name || !user || !pass || !cls) {
+          window.showCustomAlert("Please fill Name, Username, Password and tick at least 1 class.");
+          return;
+        }
 
-        let photoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=7c3aed&color=fff&bold=true`;
+        let photoUrl = "";
         const croppedData = window.croppedPhotosMap && window.croppedPhotosMap["tRegPhotoFile"];
         if (croppedData) {
-          photoUrl = await window.saveMediaToFirestore("teacher_photos", user, croppedData, { name: name, assignedClass: cls });
+          photoUrl = croppedData;
           delete window.croppedPhotosMap["tRegPhotoFile"];
         } else if (fileInput && fileInput.files && fileInput.files.length > 0) {
           const uploadedPhoto = await readFileAsDataURL(fileInput.files[0], 500, 0.72);
-          if (uploadedPhoto) {
-            photoUrl = await window.saveMediaToFirestore("teacher_photos", user, uploadedPhoto, { name: name, assignedClass: cls });
-          }
+          if (uploadedPhoto) photoUrl = uploadedPhoto;
         }
 
-                     const teacherRecord = {
+        const uidStr = String(user);
+
+        // 🎯 NEW UNIFIED PAYLOAD: users/{username}
+        const teacherUserPayload = {
+          userId: uidStr,
+          username: uidStr,
           name: name,
-          username: user,
+          role: "teacher",
+          password: pass,
           assignedClass: cls,
-          phone: phone,
-          email: email,
           photo: photoUrl,
           points: 0,
-          regDate: getTodayFormattedDate()
+          Details: {
+            phone: phone,
+            email: email,
+            regDate: getTodayFormattedDate(),
+            updatedAt: new Date().toISOString()
+          }
         };
 
-        // 🚀 1. Write to Firestore 'teachers' & 'users'
-        await setDoc(doc(fsDb, "teachers", String(user)), teacherRecord, { merge: true });
-               // Firestore mein Teacher credentials save karna (Email included)
-        await setDoc(doc(fsDb, "users", String(user)), {
-          password: pass,
-          role: "teacher",
-          assignedClass: cls,
-          email: email || "",
-          createdAt: new Date().toISOString()
-        }, { merge: true });
+        try {
+          // 🚀 1. Pure Firestore Direct Write to users/{userId}
+          await setDoc(doc(fsDb, "users", uidStr), teacherUserPayload, { merge: true });
 
+          // 🚀 2. Local Memory (MM_STORE) & IndexedDB (Igris) Update
+          if (!window.MM_STORE.users) window.MM_STORE.users = {};
+          window.MM_STORE.users[uidStr] = teacherUserPayload;
 
-        // 🚀 2. Local AccuEngine Cache Instant Update
-        if (window.AccuEngine) {
-          await window.AccuEngine.setLocal("teachers", user, teacherRecord);
+          const Sentinel = window.Igris || window.AccuEngine;
+          if (Sentinel && typeof Sentinel.setLocal === "function") {
+            await Sentinel.setLocal("users", uidStr, teacherUserPayload);
+            if (typeof Sentinel.bumpSyncVersion === "function") {
+              await Sentinel.bumpSyncVersion();
+            }
+          }
+
+          // 🚀 3. RTDB Session / Email Lookup
+          const rtdbPayload = { [`user_status/${uidStr}`]: "active" };
+          if (email && typeof window.encodeEmailKey === "function") {
+            rtdbPayload[`email_lookup/${window.encodeEmailKey(email)}`] = uidStr;
+          }
+          await update(ref(db), rtdbPayload).catch(() => {});
+
+          window.showCustomAlert(`✔ Teacher account for ${name} created successfully!`);
+
+          document.getElementById("tRegName").value = "";
+          document.getElementById("tRegUser").value = "";
+          document.getElementById("tRegPass").value = "";
+          if (document.getElementById("tRegPhone")) document.getElementById("tRegPhone").value = "";
+          if (document.getElementById("tRegEmail")) document.getElementById("tRegEmail").value = "";
+          if (fileInput) fileInput.value = "";
+          if (document.getElementById("tRegAvatarPreview")) document.getElementById("tRegAvatarPreview").src = "https://via.placeholder.com/150";
+          document.querySelectorAll(".t-reg-chk").forEach(c => c.checked = false);
+
+          window.closeModal("registerTeacherModal");
+          if (typeof window.loadManageTeacherList === "function") window.loadManageTeacherList();
+          if (typeof window.renderAdminHomeTeacherboardCards === "function") window.renderAdminHomeTeacherboardCards();
+
+        } catch (err) {
+          window.showCustomAlert("Error saving teacher: " + err.message);
         }
-
-        // 🚀 3. RTDB Lightweight Sentinel & Email Lookup
-        const rtdbPayload = { [`user_status/${user}`]: "active" };
-        if (email && typeof window.encodeEmailKey === "function") {
-          rtdbPayload[`email_lookup/${window.encodeEmailKey(email)}`] = String(user);
-        }
-        await update(ref(db), rtdbPayload).catch(() => {});
-
-        alert("✔ Teacher account created successfully!");
-
-        document.getElementById("tRegName").value = "";
-        document.getElementById("tRegUser").value = "";
-        document.getElementById("tRegPass").value = "";
-        if(document.getElementById("tRegPhone")) document.getElementById("tRegPhone").value = "";
-        if(document.getElementById("tRegEmail")) document.getElementById("tRegEmail").value = "";
-        if(fileInput) fileInput.value = "";
-        if(document.getElementById("tRegAvatarPreview")) document.getElementById("tRegAvatarPreview").src = "https://via.placeholder.com/150";
-        document.querySelectorAll(".t-reg-chk").forEach(c => c.checked = false);
-
-        window.closeModal("registerTeacherModal");
-        window.loadManageTeacherList();
       });
     });
 
@@ -10331,102 +10360,8 @@ document.getElementById("hwTitleInput").value = "";
       window.openModal("editTeacherModal");
     };
 
-    // 💾 Admin: Save Updated Teacher Details (Pure Firestore Save)
-    window.saveUpdatedTeacherDetails = function() {
-      const btn = document.getElementById("updateTeacherBtn");
-      runWithBtnSpinner(btn, "💾 Update Teacher Profile", async () => {
-        const oldUser = document.getElementById("editTeacherOldUsername").value;
-        const newUser = document.getElementById("editTeacherUser").value.trim();
-        const name = document.getElementById("editTeacherName").value.trim();
-        const pass = document.getElementById("editTeacherPass").value.trim();
-        const phone = document.getElementById("editTeacherPhone").value.trim();
-        const email = document.getElementById("editTeacherEmail").value.trim();
-        const pts = parseInt(document.getElementById("editTeacherPointsInput").value) || 0;
+      
 
-        const checkedClasses = Array.from(document.querySelectorAll(".t-edit-chk:checked")).map(c => cleanClassStr(c.value));
-        const assignedCls = checkedClasses.join(",");
-
-        if (!newUser || !name || !pass || checkedClasses.length === 0) {
-          window.showCustomAlert("Name, Username, Password bharna aur kam az kam 1 class assign karna zaroori hai.");
-          return;
-        }
-
-        const currentTeacher = (window.MM_STORE && window.MM_STORE.teachers && window.MM_STORE.teachers[oldUser]) || {};
-        let photoUrl = currentTeacher.photo || "";
-
-        const croppedData = window.croppedPhotosMap && window.croppedPhotosMap["editTeacherPhotoInput"];
-        if (croppedData) {
-          photoUrl = croppedData;
-          delete window.croppedPhotosMap["editTeacherPhotoInput"];
-        }
-
-        const updatedTeacher = {
-          ...currentTeacher,
-          name: name,
-          username: String(newUser),
-          assignedClass: assignedCls,
-          phone: phone,
-          email: email,
-          points: pts,
-          photo: photoUrl,
-          updatedAt: new Date().toISOString()
-        };
-
-        const userData = {
-          password: pass,
-          role: "teacher",
-          assignedClass: assignedCls,
-          email: email,
-          username: String(newUser),
-          updatedAt: new Date().toISOString()
-        };
-
-        try {
-          // 🚀 1. Pure Firestore Updates
-          if (oldUser !== newUser) {
-            await deleteDoc(doc(fsDb, "teachers", String(oldUser))).catch(() => {});
-            await deleteDoc(doc(fsDb, "users", String(oldUser))).catch(() => {});
-            if (window.MM_STORE && window.MM_STORE.teachers) {
-              delete window.MM_STORE.teachers[oldUser];
-            }
-          }
-
-          await setDoc(doc(fsDb, "teachers", String(newUser)), updatedTeacher, { merge: true });
-          await setDoc(doc(fsDb, "users", String(newUser)), userData, { merge: true });
-
-          // 🚀 2. Local Memory & IndexedDB Instant Sync
-          if (window.MM_STORE && window.MM_STORE.teachers) {
-            window.MM_STORE.teachers[newUser] = updatedTeacher;
-          }
-          if (window.MM_STORE && window.MM_STORE.users) {
-            window.MM_STORE.users[newUser] = userData;
-          }
-
-          const Sentinel = window.Igris || window.AccuEngine;
-          if (Sentinel && typeof Sentinel.setLocal === "function") {
-            await Sentinel.setLocal("teachers", newUser, updatedTeacher);
-            await Sentinel.setLocal("users", newUser, userData);
-            if (oldUser !== newUser) {
-              await Sentinel.invalidate("teachers", oldUser);
-              await Sentinel.invalidate("users", oldUser);
-            }
-          }
-
-          window.closeModal("editTeacherModal");
-          if (typeof window.loadManageTeacherList === "function") {
-            window.loadManageTeacherList();
-          }
-          if (typeof window.renderAdminHomeTeacherboardCards === "function") {
-            window.renderAdminHomeTeacherboardCards();
-          }
-
-          window.showCustomAlert(`✔ Teacher ${name} ki details Firestore me successfully update ho gayi hain!`);
-
-        } catch(err) {
-          window.showCustomAlert("Error updating teacher in Firestore: " + err.message);
-        }
-      });
-    };
 
     // 🗑️ Admin: Delete Teacher from Modal
     window.deleteTeacherFromModal = function() {
@@ -11400,16 +11335,31 @@ document.getElementById("hwTitleInput").value = "";
       window.closeDrawer(); window.switchTab('adminTabTeachers', null, e); window.loadManageTeacherList();
     };
 
-
           window.loadManageTeacherList = async function() {
       const container = document.getElementById("adminTeachersDirectoryContainer");
       const countEl = document.getElementById("adminTeacherCountText");
       if (!container) return;
 
       try {
-        const teachers = await safeDataFetch("teachers") || {};
-        const users = await safeDataFetch("users") || {};
-        const searchInput = document.getElementById("adminTeacherSearchInput");
+        // 🎯 Direct fetch from unified users collection (filtered by role === 'teacher')
+        const allUsers = await safeDataFetch("users") || {};
+        const teachers = {};
+        Object.entries(allUsers).forEach(([uid, u]) => {
+          if (u && u.role === "teacher") {
+            teachers[uid] = {
+              username: uid,
+              name: u.username || u.name || uid,
+              assignedClass: u.assignedClass || u.class || "1",
+              phone: (u.Details && u.Details.phone) || u.phone || "",
+              email: (u.Details && u.Details.email) || u.email || "",
+              photo: u.photo || "",
+              points: Number(u.points) || 0,
+              password: u.password || "123456"
+            };
+          }
+        });
+        const users = allUsers;
+const searchInput = document.getElementById("adminTeacherSearchInput");
         const query = searchInput ? searchInput.value.toLowerCase().trim() : "";
 
         let teacherArray = Object.values(teachers).filter(t => t && t.username);
@@ -12025,10 +11975,11 @@ document.getElementById("hwTitleInput").value = "";
       window.openModal("editTeacherModal");
     };
 
+        // 🎯 Unified Teacher Update Engine (Single Standard Instance)
     window.saveUpdatedTeacherDetails = function() {
       const btn = document.getElementById("updateTeacherBtn");
       runWithBtnSpinner(btn, "💾 Update Teacher Profile", async () => {
-        const oldUser = document.getElementById("editTeacherOldUsername").value;
+        const oldUser = document.getElementById("editTeacherOldUsername").value.trim();
         const newUser = document.getElementById("editTeacherUser").value.trim();
         const name = document.getElementById("editTeacherName").value.trim();
         const pass = document.getElementById("editTeacherPass").value.trim();
@@ -12037,60 +11988,80 @@ document.getElementById("hwTitleInput").value = "";
         const pts = parseInt(document.getElementById("editTeacherPointsInput").value) || 0;
         const photoFile = document.getElementById("editTeacherPhotoInput");
 
-        const checkedClasses = Array.from(document.querySelectorAll(".t-edit-chk:checked")).map(c => c.value);
+        const checkedClasses = Array.from(document.querySelectorAll(".t-edit-chk:checked")).map(c => cleanClassStr(c.value));
         const assignedCls = checkedClasses.join(",");
 
-        if(!name || !newUser || !pass || !assignedCls) { alert("Name, Username, Password and at least 1 class are required."); return; }
+        if (!newUser || !name || !pass || checkedClasses.length === 0) {
+          window.showCustomAlert("Name, Username, Password bharna aur kam az kam 1 class assign karna zaroori hai.");
+          return;
+        }
 
-        const currentTeacher = await safeDataFetch(`teachers/${oldUser}`) || {};
-        let photoUrl = currentTeacher.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=7c3aed&color=fff&bold=true`;
+        const existingUser = (window.MM_STORE && window.MM_STORE.users && window.MM_STORE.users[oldUser]) || {};
+        let photoUrl = existingUser.photo || "";
 
         const croppedData = window.croppedPhotosMap && window.croppedPhotosMap["editTeacherPhotoInput"];
         if (croppedData) {
-          photoUrl = await window.saveMediaToFirestore("teacher_photos", newUser, croppedData, { name: name, assignedClass: assignedCls });
+          photoUrl = croppedData;
           delete window.croppedPhotosMap["editTeacherPhotoInput"];
         } else if (photoFile && photoFile.files && photoFile.files.length > 0) {
           const uploadedPhoto = await readFileAsDataURL(photoFile.files[0], 500, 0.72);
-          if (uploadedPhoto) {
-            photoUrl = await window.saveMediaToFirestore("teacher_photos", newUser, uploadedPhoto, { name: name, assignedClass: assignedCls });
-          }
+          if (uploadedPhoto) photoUrl = uploadedPhoto;
         }
 
-        const updates = {};
-        if (oldUser !== newUser) {
-          updates[`teachers/${oldUser}`] = null;
-          updates[`users/${oldUser}`] = null;
-        }
-
-        updates[`teachers/${newUser}`] = {
-          ...currentTeacher,
+        const updatedTeacherPayload = {
+          ...existingUser,
+          userId: String(newUser),
+          username: String(newUser),
           name: name,
-          username: newUser,
+          role: "teacher",
+          password: pass,
           assignedClass: assignedCls,
-          phone: phone,
-          email: email,
           points: pts,
-          photo: photoUrl
+          photo: photoUrl,
+          Details: {
+            ...(existingUser.Details || {}),
+            phone: phone,
+            email: email,
+            updatedAt: new Date().toISOString()
+          }
         };
-                updates[`users/${newUser}`] = { password: pass, role: "teacher", assignedClass: assignedCls, email: email || "" };
-        await setDoc(doc(fsDb, "users", String(newUser)), { password: pass, role: "teacher", assignedClass: assignedCls, email: email || "" }, { merge: true });
 
-        if (typeof window.encodeEmailKey === "function") {
-          if (currentTeacher.email && currentTeacher.email !== email) {
-            updates[`email_lookup/${window.encodeEmailKey(currentTeacher.email)}`] = null;
+        try {
+          if (oldUser !== newUser) {
+            await deleteDoc(doc(fsDb, "users", String(oldUser))).catch(() => {});
+            if (window.MM_STORE && window.MM_STORE.users) {
+              delete window.MM_STORE.users[oldUser];
+            }
           }
-          if (email) {
-            updates[`email_lookup/${window.encodeEmailKey(email)}`] = String(newUser);
+
+          await setDoc(doc(fsDb, "users", String(newUser)), updatedTeacherPayload, { merge: true });
+
+          if (!window.MM_STORE.users) window.MM_STORE.users = {};
+          window.MM_STORE.users[newUser] = updatedTeacherPayload;
+
+          const Sentinel = window.Igris || window.AccuEngine;
+          if (Sentinel && typeof Sentinel.setLocal === "function") {
+            await Sentinel.setLocal("users", newUser, updatedTeacherPayload);
+            if (oldUser !== newUser) {
+              await Sentinel.invalidate("users", oldUser);
+            }
+            if (typeof Sentinel.bumpSyncVersion === "function") {
+              await Sentinel.bumpSyncVersion();
+            }
           }
+
+          window.closeModal("editTeacherModal");
+          if (typeof window.loadManageTeacherList === "function") window.loadManageTeacherList();
+          if (typeof window.renderAdminHomeTeacherboardCards === "function") window.renderAdminHomeTeacherboardCards();
+
+          window.showCustomAlert(`✔ Teacher ${name} ki details successfully update ho gayi hain!`);
+
+        } catch (err) {
+          window.showCustomAlert("Error updating teacher: " + err.message);
         }
-
-        await update(ref(db), updates);
-        alert("✔ Teacher Profile Updated Successfully!");
-        window.closeModal("editTeacherModal");
-        window.loadManageTeacherList();
-        window.renderAdminHomeTeacherboardCards();
       });
     };
+
 
     window.deleteTeacherFromModal = function() {
       const username = document.getElementById("editTeacherOldUsername").value;
