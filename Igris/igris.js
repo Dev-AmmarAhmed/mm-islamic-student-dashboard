@@ -1,6 +1,6 @@
 /**
  * ====================================================================
- * IGRIS v10.0 - ENTERPRISE REALTIME SYNC & LOCAL CACHE SENTINEL
+ * IGRIS v11.0 - UNIFIED USER SUB-COLLECTIONS & LOCAL CACHE SENTINEL
  * M.M ISLAMIC ENGLISH SCHOOL ERP
  * ====================================================================
  */
@@ -8,40 +8,32 @@
 (function (window) {
   "use strict";
 
-  const IGRIS_SIGNATURE = "IGRIS_CORE_SECURE_VAULT_7789";
+  const IGRIS_SIGNATURE = "IGRIS_CORE_SECURE_VAULT_8890";
   const DB_NAME = "AccuEngine_Storage";
-  const DB_VERSION = 20; // Upgraded for user_muster & cross-device realtime pipe
+  const DB_VERSION = 25; // Upgraded for unified users & nested sub-collection vaults
 
+  // Stores optimized for Unified Root Users + Specific Sub-Collection Caches
   const STORES = [
-    "users",
-    "user_muster", // Added for new sub-collection cache
-    "students",
-    "teachers",
-    "fees_matrix",
-    "fees_entries",
-    "attendance",
-    "study_material",
-    "homework",
-    "timetable",
-    "leaves",
-    "leave_applications",
-    "teacher_leave_applications",
-    "subjects",
-    "syllabus_config",
-    "syllabus_chapters",
-    "syllabus_progress",
-    "muster",
-    "expenses",
-    "daily_claims",
-    "teacher_daily_claims",
-    "teacher_permissions",
-    "teacher_points_logs",
-    "email_lookup",
-    "tests",
-    "online_tests",
-    "test_attempts",
-    "sync_queue",
-    "secure_keys"
+    "users",                  // Root User profile docs (Admin, Teacher, Student)
+    "user_muster",           // Composite: {userId}_{YYYY-MM}
+    "user_leaves",           // Composite: {userId}_{leaveId}
+    "user_tests",            // Composite: {userId}_{testId}
+    "user_fees_matrix",      // Composite: {userId}_current
+    "user_fees_entries",     // Composite: {userId}_{entryId}
+    "user_daily_claims",     // Composite: {userId}_{todayKey}
+    "user_syllabus_progress",// Composite: {userId}_{subject}
+    "subjects",              // Root Collection
+    "syllabus_config",       // Root Collection
+    "syllabus_chapters",     // Root Collection
+    "study_material",        // Root Collection
+    "homework",              // Root Collection
+    "timetable",             // Root Collection
+    "expenses",              // Root Collection
+    "teacher_points_logs",   // Root Collection
+    "teacher_permissions",   // Root Collection
+    "student_permissions",   // Root Collection
+    "sync_queue",            // Offline Operations Queue
+    "secure_keys"            // App Lock & Biometric Vault
   ];
 
   let idbInstance = null;
@@ -179,6 +171,20 @@
     }
   }
 
+  // --- SUB-COLLECTION TO IDB STORE MAPPER ---
+  function getSubCollectionStoreName(subCol) {
+    switch (subCol) {
+      case "muster": return "user_muster";
+      case "leaves": return "user_leaves";
+      case "tests": return "user_tests";
+      case "fees_matrix": return "user_fees_matrix";
+      case "fees_entries": return "user_fees_entries";
+      case "daily_claims": return "user_daily_claims";
+      case "syllabus_progress": return "user_syllabus_progress";
+      default: return `user_${subCol}`;
+    }
+  }
+
   // ==========================================
   // IGRIS CORE INSTANCE
   // ==========================================
@@ -189,14 +195,14 @@
 
     init: function (config) {
       modules = config;
-      console.log("⚡ [Igris v10.0] Realtime Sync Engine Initialized.");
+      console.log("⚡ [Igris v11.0] Unified Architecture Sentinel Online.");
 
       // 1. Flush offline queue if connected
       if (navigator.onLine) {
         this.triggerBackgroundSync();
       }
 
-      // 2. Attach Cross-Device Realtime Listener
+      // 2. Attach Cross-Device Realtime Sentinel
       this.attachCrossDeviceLiveListener();
     },
 
@@ -205,14 +211,14 @@
       if (!navigator.onLine || !modules) return;
       try {
         const { db: rtdb, ref, set } = modules;
-        if (typeof set !== "function") return;
+        if (typeof set !== "function" || !rtdb) return;
         const newVer = Date.now().toString();
         localStorage.setItem("igris_local_version", newVer);
         await set(ref(rtdb, "sync_triggers/version"), newVer);
       } catch (e) {}
     },
 
-    // 🛰️ Cross-Device Realtime Sentinel (Detects updates from other devices)
+    // 🛰️ Cross-Device Realtime Listener
     attachCrossDeviceLiveListener: function () {
       if (rtdbListenerAttached || !modules) return;
       const { db: rtdb, ref, onValue } = modules;
@@ -233,14 +239,12 @@
           return;
         }
 
-        // Agar cloud par naya version aaya hai jo is device ka nahi hai:
         if (String(cloudVersion) !== String(localVersion)) {
-          console.log(`🔔 [Igris Remote Sync] New update detected from another device (${cloudVersion}). Pulling...`);
+          console.log(`🔔 [Igris Remote Sync] New cloud version detected (${cloudVersion}). Pulling...`);
           localStorage.setItem("igris_local_version", String(cloudVersion));
           
           const didSync = await Igris.checkAndSyncData(true);
           if (didSync) {
-            // Screen ko bina refresh kiye naye data ke sath render karein
             const currentRole = localStorage.getItem("loggedRole");
             if (currentRole && typeof window.hydrateRoleDashboard === "function") {
               await window.hydrateRoleDashboard(currentRole, false);
@@ -250,7 +254,7 @@
       });
     },
 
-    // --- FULL FIRESTORE SYNC WITH SUB-COLLECTION MUSTER ---
+    // --- FULL FIRESTORE SYNC (USERS & SUB-COLLECTIONS) ---
     checkAndSyncData: async function (force = false) {
       if (!modules) return false;
       if (this._syncInProgress) return false;
@@ -259,46 +263,42 @@
       this._syncInProgress = true;
 
       try {
-        console.log("📥 [Igris] Running live sync sweep from Cloud Firestore...");
+        console.log("📥 [Igris] Running live sync sweep for Unified Architecture...");
 
-        const collectionsToSync = [
+        // 1. Sync Root Shared Collections
+        const rootCollections = [
           "users",
-          "fees_matrix",
-          "fees_entries",
           "subjects",
           "syllabus_config",
           "syllabus_chapters",
-          "syllabus_progress",
           "expenses",
-          "leaves",
-          "daily_claims",
-          "teacher_daily_claims",
-          "teacher_permissions",
           "teacher_points_logs",
+          "teacher_permissions",
+          "student_permissions",
           "study_material",
           "homework",
-          "timetable",
-          "tests"
+          "timetable"
         ];
 
         const results = await Promise.allSettled(
-          collectionsToSync.map((colName) => getDocs(collection(fsDb, colName)))
+          rootCollections.map((colName) => getDocs(collection(fsDb, colName)))
         );
 
         let totalSyncedDocs = 0;
+        const usersMap = {};
 
-        for (let i = 0; i < collectionsToSync.length; i++) {
-          const colName = collectionsToSync[i];
+        for (let i = 0; i < rootCollections.length; i++) {
+          const colName = rootCollections[i];
           const res = results[i];
 
           if (res.status === "fulfilled" && res.value) {
             const map = {};
             res.value.forEach((d) => {
               const dt = d.data();
-              if (colName === "fees_matrix") {
-                map[d.id] = dt.matrix || dt;
-              } else if (colName === "daily_claims" || colName === "teacher_daily_claims") {
-                map[d.id] = dt.claims || dt;
+              if (colName === "users") {
+                const norm = window.normalizeUserData ? window.normalizeUserData(dt, d.id) : dt;
+                map[d.id] = norm;
+                usersMap[d.id] = norm;
               } else if (colName === "timetable") {
                 map[d.id] = dt.schedule || dt;
               } else {
@@ -309,33 +309,47 @@
 
             await idbSetBatch(colName, map, true);
 
-            // Memory store MM_STORE ko bhi update karein
             if (window.MM_STORE && colName in window.MM_STORE) {
               window.MM_STORE[colName] = map;
             }
           }
         }
 
-        // Sub-collection muster sync for current active month
-        const now = new Date();
-        const activeMonth = now.toISOString().slice(0, 7);
-        const usersMap = await idbGetAllMap("users");
-        const musterStoreMap = {};
+        // 2. Active User Sub-collection Sync (Logged User / Selected Role Context)
+        const loggedUser = localStorage.getItem("loggedUser");
+        const loggedRole = localStorage.getItem("loggedRole");
+        const currentStudentAdmn = localStorage.getItem("studentAdmn");
 
-        for (const uid of Object.keys(usersMap)) {
-          try {
-            const mSnap = await getDocs(collection(fsDb, "users", uid, "muster"));
-            mSnap.forEach((mDoc) => {
-              musterStoreMap[`${uid}_${mDoc.id}`] = mDoc.data();
-            });
-          } catch (e) {}
+        const targetUserIds = new Set();
+        if (loggedUser) targetUserIds.add(String(loggedUser));
+        if (currentStudentAdmn) targetUserIds.add(String(currentStudentAdmn));
+
+        // If admin is syncing, sweep all users' active month muster & active leaves
+        if (loggedRole === "admin") {
+          Object.keys(usersMap).forEach(uid => targetUserIds.add(uid));
         }
 
-        if (Object.keys(musterStoreMap).length > 0) {
-          await idbSetBatch("user_muster", musterStoreMap, false);
+        const subCols = ["muster", "fees_matrix", "fees_entries", "leaves", "tests", "daily_claims", "syllabus_progress"];
+        const nowMonth = new Date().toISOString().slice(0, 7);
+
+        for (const uid of targetUserIds) {
+          for (const sub of subCols) {
+            try {
+              const storeName = getSubCollectionStoreName(sub);
+              const subSnap = await getDocs(collection(fsDb, "users", uid, sub));
+              const subBatch = {};
+              subSnap.forEach(d => {
+                const compKey = `${uid}_${d.id}`;
+                subBatch[compKey] = d.data();
+              });
+              if (Object.keys(subBatch).length > 0) {
+                await idbSetBatch(storeName, subBatch, false);
+              }
+            } catch (subErr) {}
+          }
         }
 
-        console.log(`✔ [Igris] Sync Finished: ${totalSyncedDocs} core docs and muster records updated locally.`);
+        console.log(`✔ [Igris v11.0] Sweep complete: ${totalSyncedDocs} root documents & user vaults synchronized.`);
         await this.triggerBackgroundSync();
         return true;
       } catch (err) {
@@ -346,18 +360,18 @@
       }
     },
 
-    // --- SMART PATH RESOLVER ---
+    // --- SMART PATH RESOLVER (SUPPORTS 1, 2, 3, AND 4 SEGMENT PATHS) ---
     fetch: async function (path) {
       if (!path) return null;
-      const parts = path.split("/");
+      const parts = path.split("/").map(p => p.trim()).filter(Boolean);
       const root = parts[0];
 
-      // 1 Segment: e.g. "users" -> complete map
+      // Segment 1: e.g. "users" -> returns entire users map
       if (parts.length === 1) {
         return await idbGetAllMap(root);
       }
 
-      // 2 Segments: e.g. "users/101" or "fees_entries/101"
+      // Segment 2: e.g. "users/101" or "timetable/1"
       if (parts.length === 2) {
         const direct = await idbGet(root, parts[1]);
         if (direct !== null && direct !== undefined) return direct;
@@ -379,23 +393,45 @@
         return all[parts[1]] || null;
       }
 
-      // 3 Segments: e.g. "users/101/muster" or "muster/2026-10"
-      if (parts.length >= 3) {
-        if (parts[2] === "muster" || root === "muster") {
-          const compKey = `${parts[1]}_${parts[2]}`;
-          const res = await idbGet("user_muster", compKey);
-          if (res) return res;
+      // Segment 3: e.g. "users/101/muster" or "users/101/leaves"
+      if (parts.length === 3) {
+        const [rootCol, uid, subCol] = parts;
+        if (rootCol === "users") {
+          const storeName = getSubCollectionStoreName(subCol);
+          const allSubDocs = await idbGetAllMap(storeName);
+          const prefix = `${uid}_`;
+          const result = {};
+
+          for (const [k, v] of Object.entries(allSubDocs)) {
+            if (k.startsWith(prefix)) {
+              const docId = k.replace(prefix, "");
+              result[docId] = v;
+            }
+          }
+          return Object.keys(result).length > 0 ? result : null;
         }
 
-        const compositeKey = `${parts[1]}_${parts[2]}`;
-        const res = await idbGet(root, compositeKey);
+        // Generic composite fallback for 3-part custom path
+        const compKey = `${parts[1]}_${parts[2]}`;
+        const res = await idbGet(root, compKey);
         if (res !== null && res !== undefined) return res;
+        return null;
+      }
 
-        const directSecond = await idbGet(root, parts[2]);
-        if (directSecond !== null && directSecond !== undefined) return directSecond;
+      // Segment 4: e.g. "users/101/muster/2026-10" or "users/101/fees_matrix/current"
+      if (parts.length === 4) {
+        const [rootCol, uid, subCol, subDocId] = parts;
+        if (rootCol === "users") {
+          const storeName = getSubCollectionStoreName(subCol);
+          const compKey = `${uid}_${subDocId}`;
+          const res = await idbGet(storeName, compKey);
+          if (res !== null && res !== undefined) return res;
+        }
 
-        const all = await idbGetAllMap(root);
-        return all[compositeKey] || (all[parts[1]] && all[parts[1]][parts[2]]) || null;
+        const compKey = `${parts[1]}_${parts[3]}`;
+        const res = await idbGet(root, compKey);
+        if (res !== null && res !== undefined) return res;
+        return null;
       }
 
       return null;
@@ -403,15 +439,34 @@
 
     // --- LOCAL MUTATIONS ---
     setLocal: async function (storeName, key, value) {
-      if (arguments.length === 2 && typeof key === "object") {
-        await idbSetBatch(storeName, key, false);
+      let resolvedStore = storeName;
+
+      // Map dynamic sub-collection prefixes from safeDataFetch/MasterUserEngine
+      if (storeName.startsWith("users_")) {
+        const parts = storeName.split("_");
+        const subCol = parts[parts.length - 1];
+        resolvedStore = getSubCollectionStoreName(subCol);
+        const uid = parts[1];
+        key = `${uid}_${key}`;
+      }
+
+      if (arguments.length === 2 && typeof key === "object" && key !== null) {
+        await idbSetBatch(resolvedStore, key, false);
       } else {
-        await idbSet(storeName, key, value);
+        await idbSet(resolvedStore, key, value);
       }
     },
 
     invalidate: async function (storeName, key) {
-      await idbSet(storeName, key, null);
+      let resolvedStore = storeName;
+      if (storeName.startsWith("users_")) {
+        const parts = storeName.split("_");
+        const subCol = parts[parts.length - 1];
+        resolvedStore = getSubCollectionStoreName(subCol);
+        const uid = parts[1];
+        key = `${uid}_${key}`;
+      }
+      await idbSet(resolvedStore, key, null);
     },
 
     clearStore: async function (storeName) {
@@ -464,7 +519,7 @@
       } catch (err) {}
     },
 
-    // --- SECURE APP LOCK ---
+    // --- SECURE APP LOCK & BIOMETRICS ---
     setAppLock: async function (userId, pin, enableBiometrics) {
       if (!userId || !pin || pin.length !== 4) return false;
       const lockConfig = {
