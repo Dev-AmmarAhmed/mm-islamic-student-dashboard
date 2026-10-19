@@ -1,4 +1,4 @@
-(default)<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -4958,6 +4958,7 @@ Exact Output JSON Format Required:
     import { getAuth, signInAnonymously, onAuthStateChanged, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
     import { getFirestore, doc, setDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
     import { syncWithIgrisCache } from '/Igris/igris.js';
+
       
     // M.M ISLAMIC ENGLISH SCHOOL FIREBASE CREDENTIALS
     const firebaseConfig = {
@@ -5075,11 +5076,10 @@ Exact Output JSON Format Required:
             let dbSaveTimeout = null;
 
             let studentsListenerAttached = false;
-      window.attachSmartStudentsListener = function(role, sAdmn) {
+            window.attachSmartStudentsListener = function(role, sAdmn) {
         if (studentsListenerAttached) return;
         studentsListenerAttached = true;
 
-        // Agar Student login hai, toh poore school ko real-time listen mat karo! Sirf us student ka profile listen karo
         if (role === "student" && sAdmn) {
           onValue(ref(db, `students/${sAdmn}`), (snap) => {
             if (snap.exists()) {
@@ -5089,32 +5089,13 @@ Exact Output JSON Format Required:
           return;
         }
 
-        // --- NAYA IGRIS CACHE SYSTEM YAHAN LAGA HAI ---
-  syncWithIgrisCache(db, 'students', 'igris_students_cache', 'timestamp', (cachedData) => {
-    inMemoryStudentsData = cachedData;
-    
-    // UI Updates
-    if (currentRole === "admin") renderAdminStudentsDirectory(true);
-    if (currentRole === "teacher") { 
-      refreshAllTeacherData(); 
-      window.loadTeacherLeaderboard(); 
-    }
-  });
-};
-
-        // Sirf Admin ya Teacher ke liye students list load karo
-        onValue(ref(db, 'students'), (snap) => {
-          if (snap.exists()) {
-            inMemoryStudentsData = snap.val();
-            if(dbSaveTimeout) clearTimeout(dbSaveTimeout);
-            dbSaveTimeout = setTimeout(() => {
-                localStorage.setItem("offlineDbCache_students", JSON.stringify(inMemoryStudentsData));
-            }, 5000); 
-
-            if(currentRole === "admin") renderAdminStudentsDirectory(true);
-            if(currentRole === "teacher") { refreshAllTeacherData(); window.loadTeacherLeaderboard(); }
-          } else {
-            inMemoryStudentsData = {};
+        // --- IGRIS CACHE SYSTEM ---
+        syncWithIgrisCache(db, 'students', 'offlineDbCache_students', 'timestamp', (cachedData) => {
+          inMemoryStudentsData = cachedData;
+          if (currentRole === "admin") renderAdminStudentsDirectory(true);
+          if (currentRole === "teacher") { 
+            refreshAllTeacherData(); 
+            window.loadTeacherLeaderboard(); 
           }
         });
       };
@@ -6456,7 +6437,8 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
             if(name && phone) {
               count++;
               const admnKey = "S" + (baseTimestamp + i).toString().slice(-5);
-              const studentObj = { admn: admnKey, name: name, class: cls, phone: phone, photo: "", points: 0, regDate: getTodayFormattedDate(), timestamp: Date.now() };  updates[`students/${admnKey}`] = studentObj;
+              const studentObj = { admn: admnKey, name: name, class: cls, phone: phone, photo: "", points: 0, regDate: getTodayFormattedDate(), timestamp: Date.now() };
+              updates[`students/${admnKey}`] = studentObj;
               updates[`users/${admnKey}`] = { password: "MM", role: "student", admn: admnKey, assignedClass: cls };
             }
           }
@@ -8023,7 +8005,8 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
         }
 
         const updates = {};
-        updates[`students/${finalAdmn}`] = { srNo: finalAdmn, admn: finalAdmn, name: name, class: std, phone: rawPhone.replace(/[^0-9]/g, ''), dob: dob || "-", photo: photoUrl, regDate: getTodayFormattedDate(), points: 0, timestamp: Date.now() };   updates[`users/${finalAdmn}`] = { password: "MM", role: "student", admn: finalAdmn, assignedClass: std };
+        updates[`students/${finalAdmn}`] = { srNo: finalAdmn, admn: finalAdmn, name: name, class: std, phone: rawPhone.replace(/[^0-9]/g, ''), dob: dob || "-", photo: photoUrl, regDate: getTodayFormattedDate(), points: 0, timestamp: Date.now() };
+        updates[`users/${finalAdmn}`] = { password: "MM", role: "student", admn: finalAdmn, assignedClass: std };
 
         await update(ref(db), updates);
         if(currentRole === "teacher") await refreshAllTeacherData(); else renderAdminStudentsDirectory();
