@@ -1,6 +1,6 @@
 /**
  * ====================================================================
- * IGRIS v9.0 - ENTERPRISE HIGH-SPEED SECURE CACHE & SYNC SENTINEL
+ * IGRIS v10.0 - ENTERPRISE REALTIME SYNC & LOCAL CACHE SENTINEL
  * M.M ISLAMIC ENGLISH SCHOOL ERP
  * ====================================================================
  */
@@ -10,10 +10,11 @@
 
   const IGRIS_SIGNATURE = "IGRIS_CORE_SECURE_VAULT_7789";
   const DB_NAME = "AccuEngine_Storage";
-  const DB_VERSION = 18; // Upgraded for complete store support & stability
+  const DB_VERSION = 20; // Upgraded for user_muster & cross-device realtime pipe
 
   const STORES = [
     "users",
+    "user_muster", // Added for new sub-collection cache
     "students",
     "teachers",
     "fees_matrix",
@@ -45,6 +46,7 @@
 
   let idbInstance = null;
   let modules = null;
+  let rtdbListenerAttached = false;
 
   // --- SAFE IDB OPEN WITH MIGRATION ---
   function openIDB() {
@@ -187,69 +189,96 @@
 
     init: function (config) {
       modules = config;
-      console.log("⚡ [Igris v9.0] Enterprise Sentinel Active (Complete IDB Vault).");
-      // Auto-flush pending queue when online
+      console.log("⚡ [Igris v10.0] Realtime Sync Engine Initialized.");
+
+      // 1. Flush offline queue if connected
       if (navigator.onLine) {
         this.triggerBackgroundSync();
       }
+
+      // 2. Attach Cross-Device Realtime Listener
+      this.attachCrossDeviceLiveListener();
     },
 
+    // 📡 Global Version Broadcaster (Bumps when any device writes)
     bumpSyncVersion: async function () {
       if (!navigator.onLine || !modules) return;
       try {
         const { db: rtdb, ref, set } = modules;
         if (typeof set !== "function") return;
         const newVer = Date.now().toString();
-        await set(ref(rtdb, "sync_triggers/version"), newVer);
         localStorage.setItem("igris_local_version", newVer);
+        await set(ref(rtdb, "sync_triggers/version"), newVer);
       } catch (e) {}
     },
 
-    // --- FULL FIRESTORE SYNC WITH DEEP SWEEP ---
+    // 🛰️ Cross-Device Realtime Sentinel (Detects updates from other devices)
+    attachCrossDeviceLiveListener: function () {
+      if (rtdbListenerAttached || !modules) return;
+      const { db: rtdb, ref, onValue } = modules;
+      if (!rtdb || typeof onValue !== "function") return;
+
+      rtdbListenerAttached = true;
+      let isInitialListenerLoad = true;
+
+      onValue(ref(rtdb, "sync_triggers/version"), async (snap) => {
+        const cloudVersion = snap.val();
+        if (!cloudVersion) return;
+
+        const localVersion = localStorage.getItem("igris_local_version");
+
+        if (isInitialListenerLoad) {
+          isInitialListenerLoad = false;
+          if (!localVersion) localStorage.setItem("igris_local_version", String(cloudVersion));
+          return;
+        }
+
+        // Agar cloud par naya version aaya hai jo is device ka nahi hai:
+        if (String(cloudVersion) !== String(localVersion)) {
+          console.log(`🔔 [Igris Remote Sync] New update detected from another device (${cloudVersion}). Pulling...`);
+          localStorage.setItem("igris_local_version", String(cloudVersion));
+          
+          const didSync = await Igris.checkAndSyncData(true);
+          if (didSync) {
+            // Screen ko bina refresh kiye naye data ke sath render karein
+            const currentRole = localStorage.getItem("loggedRole");
+            if (currentRole && typeof window.hydrateRoleDashboard === "function") {
+              await window.hydrateRoleDashboard(currentRole, false);
+            }
+          }
+        }
+      });
+    },
+
+    // --- FULL FIRESTORE SYNC WITH SUB-COLLECTION MUSTER ---
     checkAndSyncData: async function (force = false) {
       if (!modules) return false;
       if (this._syncInProgress) return false;
 
       const { fsDb, getDocs, collection } = modules;
-      const localStudents = await idbGetAllMap("students");
-      const hasLocalData = Object.keys(localStudents).length > 0;
-
-      // Agar offline hain aur data pehle se hai toh cache se chalao
-      if (!force && hasLocalData && !navigator.onLine) {
-        return false;
-      }
-
       this._syncInProgress = true;
+
       try {
-        console.log("📥 [Igris] Initiating deep sync from Cloud Firestore...");
+        console.log("📥 [Igris] Running live sync sweep from Cloud Firestore...");
 
         const collectionsToSync = [
-          "students",
-          "teachers",
           "users",
           "fees_matrix",
           "fees_entries",
-          "attendance",
-          "study_material",
-          "homework",
-          "timetable",
-          "leaves",
-          "leave_applications",
-          "teacher_leave_applications",
           "subjects",
           "syllabus_config",
           "syllabus_chapters",
           "syllabus_progress",
-          "muster",
           "expenses",
+          "leaves",
           "daily_claims",
           "teacher_daily_claims",
           "teacher_permissions",
           "teacher_points_logs",
-          "email_lookup",
-          "tests",
-          "online_tests",
-          "test_attempts"
+          "study_material",
+          "homework",
+          "timetable",
+          "tests"
         ];
 
         const results = await Promise.allSettled(
@@ -268,8 +297,6 @@
               const dt = d.data();
               if (colName === "fees_matrix") {
                 map[d.id] = dt.matrix || dt;
-              } else if (colName === "attendance") {
-                map[d.id] = dt.days || dt;
               } else if (colName === "daily_claims" || colName === "teacher_daily_claims") {
                 map[d.id] = dt.claims || dt;
               } else if (colName === "timetable") {
@@ -280,18 +307,36 @@
               totalSyncedDocs++;
             });
 
-            // Clean update: Purana deleted data hatakar naya clean map save karein
             await idbSetBatch(colName, map, true);
+
+            // Memory store MM_STORE ko bhi update karein
+            if (window.MM_STORE && colName in window.MM_STORE) {
+              window.MM_STORE[colName] = map;
+            }
           }
         }
 
-        const freshVer = Date.now().toString();
-        localStorage.setItem("igris_local_version", freshVer);
-        console.log(`✔ [Igris] Master Sync Complete: ${totalSyncedDocs} documents cached in IndexedDB.`);
+        // Sub-collection muster sync for current active month
+        const now = new Date();
+        const activeMonth = now.toISOString().slice(0, 7);
+        const usersMap = await idbGetAllMap("users");
+        const musterStoreMap = {};
 
-        // Pending offline queue execute karein
+        for (const uid of Object.keys(usersMap)) {
+          try {
+            const mSnap = await getDocs(collection(fsDb, "users", uid, "muster"));
+            mSnap.forEach((mDoc) => {
+              musterStoreMap[`${uid}_${mDoc.id}`] = mDoc.data();
+            });
+          } catch (e) {}
+        }
+
+        if (Object.keys(musterStoreMap).length > 0) {
+          await idbSetBatch("user_muster", musterStoreMap, false);
+        }
+
+        console.log(`✔ [Igris] Sync Finished: ${totalSyncedDocs} core docs and muster records updated locally.`);
         await this.triggerBackgroundSync();
-
         return true;
       } catch (err) {
         console.error("Igris sync error:", err);
@@ -301,24 +346,22 @@
       }
     },
 
-    // --- SMART PATH RESOLVER (Supports 1, 2, and 3 segments & composite keys) ---
+    // --- SMART PATH RESOLVER ---
     fetch: async function (path) {
       if (!path) return null;
       const parts = path.split("/");
       const root = parts[0];
 
-      // 1 Segment: e.g. "students" -> return complete dictionary map
+      // 1 Segment: e.g. "users" -> complete map
       if (parts.length === 1) {
         return await idbGetAllMap(root);
       }
 
-      // 2 Segments: e.g. "students/101" or "fees_entries/101"
+      // 2 Segments: e.g. "users/101" or "fees_entries/101"
       if (parts.length === 2) {
-        // Direct key hit check
         const direct = await idbGet(root, parts[1]);
         if (direct !== null && direct !== undefined) return direct;
 
-        // Composite / Prefix matching (e.g. fees_entries, study_material, tests)
         const all = await idbGetAllMap(root);
         const prefix = parts[1] + "_";
         const subMap = {};
@@ -326,7 +369,7 @@
         for (const [k, v] of Object.entries(all)) {
           if (
             k.startsWith(prefix) ||
-            (v && (String(v.admn) === parts[1] || String(v.class) === parts[1] || String(v.username) === parts[1]))
+            (v && (String(v.admn) === parts[1] || String(v.userId) === parts[1] || String(v.class) === parts[1] || String(v.username) === parts[1]))
           ) {
             subMap[k] = v;
           }
@@ -336,22 +379,23 @@
         return all[parts[1]] || null;
       }
 
-      // 3 Segments: e.g. "attendance/101/September" or "timetable/1/schedule"
+      // 3 Segments: e.g. "users/101/muster" or "muster/2026-10"
       if (parts.length >= 3) {
+        if (parts[2] === "muster" || root === "muster") {
+          const compKey = `${parts[1]}_${parts[2]}`;
+          const res = await idbGet("user_muster", compKey);
+          if (res) return res;
+        }
+
         const compositeKey = `${parts[1]}_${parts[2]}`;
         const res = await idbGet(root, compositeKey);
         if (res !== null && res !== undefined) return res;
 
-        // Fallback direct check
         const directSecond = await idbGet(root, parts[2]);
         if (directSecond !== null && directSecond !== undefined) return directSecond;
 
         const all = await idbGetAllMap(root);
-        if (all[compositeKey]) return all[compositeKey];
-        if (all[parts[1]] && typeof all[parts[1]] === "object") {
-          return all[parts[1]][parts[2]] || null;
-        }
-        return null;
+        return all[compositeKey] || (all[parts[1]] && all[parts[1]][parts[2]]) || null;
       }
 
       return null;
@@ -385,10 +429,8 @@
           timestamp: Date.now()
         };
         await idbSet("sync_queue", actionId, actionItem);
-        console.log(`⚡ [Igris Queue] Offline action registered: ${actionType}`);
         return true;
       } catch (e) {
-        console.warn("Queue error:", e);
         return false;
       }
     },
@@ -400,43 +442,29 @@
         const items = Object.values(queue);
         if (items.length === 0) return;
 
-        console.log(`🔄 [Igris Queue] Flushing ${items.length} pending offline actions...`);
         const { fsDb, setDoc, doc } = modules;
 
         for (const item of items) {
           try {
             if (item.type === "attendance_batch" && Array.isArray(item.payload)) {
               for (const att of item.payload) {
-                await setDoc(doc(fsDb, "attendance", att.key), {
-                  admn: String(att.admn),
+                await setDoc(doc(fsDb, "users", String(att.admn), "muster", att.month), {
+                  userId: String(att.admn),
                   month: att.month,
-                  days: att.daysData,
+                  Days: att.daysData,
                   updatedAt: new Date().toISOString()
                 }, { merge: true });
               }
-            } else if (item.type === "offline_test" && item.payload) {
-              await setDoc(doc(fsDb, "tests", item.payload.testDocId), item.payload.testData, { merge: true });
-              await setDoc(doc(fsDb, "students", String(item.payload.admn)), { points: item.payload.newPoints }, { merge: true });
-            } else if (item.type === "online_test" && item.payload) {
-              await setDoc(doc(fsDb, "online_tests", String(item.payload.testId)), item.payload.testData, { merge: true });
-            } else if (item.type === "student_update" && item.payload) {
-              await setDoc(doc(fsDb, "students", String(item.payload.admn)), item.payload.studentData, { merge: true });
-              await setDoc(doc(fsDb, "users", String(item.payload.admn)), item.payload.userData, { merge: true });
             }
-
-            // Successfully processed item ko queue se wipe karein
             await idbSet("sync_queue", item.id, null);
           } catch (itemErr) {
-            console.warn(`Retry queued for item ${item.id}:`, itemErr);
+            console.warn(`Retry queued for ${item.id}:`, itemErr);
           }
         }
-        console.log("✔ [Igris Queue] All pending offline operations synchronized.");
-      } catch (err) {
-        console.warn("Queue flush error:", err);
-      }
+      } catch (err) {}
     },
 
-    // --- SECURE APP LOCK & BIOMETRIC GATE ---
+    // --- SECURE APP LOCK ---
     setAppLock: async function (userId, pin, enableBiometrics) {
       if (!userId || !pin || pin.length !== 4) return false;
       const lockConfig = {
@@ -477,7 +505,6 @@
     }
   };
 
-  // Anti-tamper Freeze Gate
   Object.freeze(Igris);
   window.Igris = Igris;
   window.AccuEngine = Igris;
