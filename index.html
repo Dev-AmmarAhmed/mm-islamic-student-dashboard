@@ -5739,18 +5739,57 @@ Exact Output JSON Format Required:
 
     
 
-   // ⚡ Universal Safe Data Fetch (Auto Unpacks fees_matrix & fees_entries)
-  async function safeDataFetch(refPath) {
+  // 🔄 Background Sync Worker (Updates cache silently)
+  window.backgroundFirestoreSync = async function(refPath) {
+      if (!refPath) return;
+      const Sentinel = window.Igris || window.AccuEngine;
+      if (!Sentinel || typeof Sentinel.setLocal !== "function") return;
+      
+      try {
+          const parts = refPath.split("/");
+          let collectionName = parts[0];
+          const targetCol = (collectionName === "enabled_syllabus") ? "syllabus_config" : collectionName;
+
+          if (parts.length === 1) {
+              const snap = await getDocs(collection(fsDb, targetCol));
+              snap.forEach(d => {
+                  let dt = d.data();
+                  if (targetCol === "fees_matrix") dt = dt.matrix || dt;
+                  else if (targetCol === "syllabus_config") dt = dt.subjects || dt;
+                  Sentinel.setLocal(collectionName, d.id, dt);
+              });
+          } else if (parts.length === 2) {
+              const cleanSecond = cleanClassStr(parts[1]);
+              let docSnap = await getDoc(doc(fsDb, targetCol, parts[1]));
+              if (!docSnap.exists()) docSnap = await getDoc(doc(fsDb, targetCol, cleanSecond));
+              
+              if (docSnap.exists()) {
+                  let docData = docSnap.data();
+                  if (targetCol === "fees_matrix") docData = docData.matrix || docData;
+                  else if (targetCol === "syllabus_config") docData = docData.subjects || docData;
+                  Sentinel.setLocal(collectionName, parts[1], docData);
+              }
+          }
+      } catch (e) {
+          // Silent fail for background sync
+      }
+  };
+
+  // ⚡ Universal Safe Data Fetch (With Stale-While-Revalidate Engine)
+  async function safeDataFetch(refPath, forceNetwork = false) {
     if (!refPath) return null;
     const Sentinel = window.Igris || window.AccuEngine;
 
-    // 1. Local Igris cache check
-    if (Sentinel && typeof Sentinel.fetch === "function") {
+    // 1. Local Igris cache check (Skip if forceNetwork is true)
+    if (!forceNetwork && Sentinel && typeof Sentinel.fetch === "function") {
       const cached = await Sentinel.fetch(refPath);
       if (cached !== null && cached !== undefined && (typeof cached !== "object" || Object.keys(cached).length > 0)) {
+        // 🔥 Trigger Background Sync to keep cache updated across devices!
+        setTimeout(() => window.backgroundFirestoreSync(refPath), 500);
         return cached;
       }
     }
+
 
     // 2. Firestore fallback if cache miss
     try {
@@ -9522,41 +9561,131 @@ document.getElementById("hwTitleInput").value = "";
         const headerRow = document.getElementById("editMatrixHeaderRow");
         headerRow.innerHTML = `<th style="min-width:160px; text-align:left; padding-left:10px;">Name</th>`;
         for(let d=1; d<=daysCount; d++) { headerRow.innerHTML += `<th>${d}</th>`; }
-
-        const tbody = document.getElementById("editMatrixBody");
+                const tbody = document.getElementById("editMatrixBody");
         tbody.innerHTML = "";
 
+        // 🎯 TILL DATE LOGIC: Check if selected month is the active running month
+        const now = new Date();
+        const currentYearMonth = now.toISOString().slice(0, 7); // e.g. "2026-10"
+        const currentRunningDay = now.getDate(); // e.g. 19
+        const isCurrentActiveMonth = (month === currentYearMonth);
+
         if (students.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="${daysCount + 1}" style="color:var(--text-muted);">No students registered in Class ${std}</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="${daysCount + 1}" style="color:var(--text-muted); padding:12px; text-align:center;">No students registered in Class ${std}</td></tr>`;
         } else {
-          students.forEach(st => {
-            const studentMonthData = allAtt[st.admn] && allAtt[st.admn][month] ? allAtt[st.admn][month] : {};
+          for (let st of students) {
+            const uidStr = String(st.admn);
+            
+            // 🚀 Fetch from Sub-collection: users/{admn}/muster/{month}
+            let daysMap = {};
+            try {
+              const musterSnap = await getDoc(doc(fsDb, "users", uidStr, "muster", month));
+              if (musterSnap.exists()) {
+                daysMap = musterSnap.data().Days || {};
+              } else {
+                // Fallback to old attendance collection if legacy record
+                const oldSnap = await getDoc(doc(fsDb, "attendance", `${uidStr}_${month}`));
+                if (oldSnap.exists()) {
+                  daysMap = oldSnap.data().days || {};
+                }
+              }
+            } catch (e) {
+              console.warn("Muster fetch error for student:", st.admn, e);
+            }
+
             let rowHtml = `<tr><td style="text-align:left; padding-left:10px; font-weight:700;">${st.name}</td>`;
+            
             for(let d=1; d<=daysCount; d++) {
-              const key = `day_${d}`;
-              rowHtml += `<td><input type="checkbox" class="att-matrix-chk" data-admn="${st.admn}" data-day="${d}" ${studentMonthData[key] === true ? "checked" : ""}></td>`;
+              const dayStr = d < 10 ? "0" + d : String(d);
+              const dayObj = daysMap[`Day_${dayStr}`] || daysMap[`day_${d}`] || {};
+              const statusVal = typeof dayObj === "object" ? dayObj.status : dayObj;
+              const isPresent = (statusVal === "P" || statusVal === "Present" || statusVal === true);
+
+              // 🎯 Future Day Check: Agar aaj 19 hai toh 20 se 31 tak disabled aur '-'
+              if (isCurrentActiveMonth && d > currentRunningDay) {
+                rowHtml += `<td style="color:var(--text-muted); font-size:13px; font-weight:700;">-</td>`;
+              } else {
+                rowHtml += `<td><input type="checkbox" class="att-matrix-chk" data-admn="${st.admn}" data-day="${dayStr}" ${isPresent ? "checked" : ""}></td>`;
+              }
             }
             rowHtml += `</tr>`;
             tbody.innerHTML += rowHtml;
-          });
+          }
         }
+
         document.getElementById("editingMatrixCard").style.display = "block";
       });
     });
 
-    addSafeListener("saveAttendanceChangesBtn", "click", () => {
+        addSafeListener("saveAttendanceChangesBtn", "click", () => {
       const btn = document.getElementById("saveAttendanceChangesBtn");
       runWithBtnSpinner(btn, "Save Changes to Record", async () => {
         const month = document.getElementById("attEditMonthSelect").value;
         const chks = document.querySelectorAll(".att-matrix-chk");
-        const updates = {};
-        chks.forEach(chk => { updates[`attendance/${chk.getAttribute("data-admn")}/${month}/day_${chk.getAttribute("data-day")}`] = chk.checked; });
-        await update(ref(db), updates);
-        alert("Attendance Matrix saved successfully.");
+        if (!chks || chks.length === 0) {
+          alert("No attendance records to save.");
+          return;
+        }
+
+        // 1. Student-wise din group karein
+        const studentDaysMap = {};
+        chks.forEach(chk => {
+          const admn = chk.getAttribute("data-admn");
+          const day = chk.getAttribute("data-day");
+          if (!studentDaysMap[admn]) studentDaysMap[admn] = {};
+          studentDaysMap[admn][`day_${day}`] = chk.checked;
+        });
+
+        const Sentinel = window.Igris || window.AccuEngine;
+        const savePromises = [];
+
+        // 2. Direct Sub-collection: users/{admn}/muster/{month} mein save
+        for (const [admn, daysObj] of Object.entries(studentDaysMap)) {
+          const uidStr = String(admn);
+          const docRef = doc(fsDb, "users", uidStr, "muster", month);
+
+          const formattedDays = {};
+          for (const [dKey, isChecked] of Object.entries(daysObj)) {
+            const cleanD = dKey.replace("day_", "").replace("Day_", "");
+            const formattedKey = `Day_${cleanD.length < 2 ? "0" + cleanD : cleanD}`;
+            formattedDays[formattedKey] = {
+              status: isChecked ? "P" : "A"
+            };
+          }
+
+          const fsPromise = setDoc(docRef, {
+            userId: uidStr,
+            month: month,
+            Days: formattedDays,
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+
+          savePromises.push(fsPromise);
+
+          if (Sentinel && typeof Sentinel.setLocal === "function") {
+            Sentinel.setLocal("user_muster", `${uidStr}_${month}`, {
+              userId: uidStr,
+              month: month,
+              Days: formattedDays
+            });
+          }
+        }
+
+        try {
+          await Promise.all(savePromises);
+          if (Sentinel && typeof Sentinel.bumpSyncVersion === "function") {
+            Sentinel.bumpSyncVersion();
+          }
+          alert("✔ Attendance matrix changes saved successfully.");
+        } catch (err) {
+          console.error("Attendance matrix save error:", err);
+          alert("Failed to save attendance changes. Please check your connection.");
+        }
       });
     });
 
-    async function generateAttendanceReport(stdVal, selectedAdmnVal, monthVal, targetContainerId) {
+
+          async function generateAttendanceReport(stdVal, selectedAdmnVal, monthVal, targetContainerId) {
       const daysCount = getDaysInMonth(monthVal);
       const monthIndex = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].indexOf(monthVal);
       const year = new Date().getFullYear();
@@ -9564,29 +9693,59 @@ document.getElementById("hwTitleInput").value = "";
       let students = getLiveStudents().filter(s => cleanClassStr(s.class) === cleanClassStr(stdVal));
       if(selectedAdmnVal !== "ALL") students = students.filter(s => String(s.admn) === String(selectedAdmnVal));
 
-           const reportDiv = document.getElementById(targetContainerId);
+      const reportDiv = document.getElementById(targetContainerId);
       reportDiv.innerHTML = "";
 
-      if(selectedAdmnVal !== "ALL" && students.length > 0) {
-        const st = students[0];
-        const mData = await safeDataFetch(`attendance/${st.admn}/${monthVal}`) || {};
-      }
-      const allAtt = (selectedAdmnVal === "ALL") ? (await safeDataFetch("attendance") || {}) : {};
+      // 🎯 TILL DATE LOGIC: Check running date to avoid marking future days as Absent
+      const now = new Date();
+      const currentYearMonth = now.toISOString().slice(0, 7);
+      const currentRunningDay = now.getDate();
+      const isCurrentActiveMonth = (monthVal === currentYearMonth);
 
       if(selectedAdmnVal !== "ALL" && students.length > 0) {
         const st = students[0];
-        const mData = await safeDataFetch(`attendance/${st.admn}/${monthVal}`) || {};
- let totalWorkingDays = 0, presentDays = 0, absentDays = 0, tableRows = "";
+        let mData = {};
+        try {
+            const snap = await getDoc(doc(fsDb, "users", String(st.admn), "muster", monthVal));
+            if(snap.exists()) mData = snap.data().Days || {};
+            else {
+                const oldSnap = await getDoc(doc(fsDb, "attendance", `${st.admn}_${monthVal}`));
+                if(oldSnap.exists()) mData = oldSnap.data().days || {};
+            }
+        } catch(e) {}
+        
+        let totalWorkingDays = 0, presentDays = 0, absentDays = 0, tableRows = "";
+        
         for(let d = 1; d <= daysCount; d++) {
           const dateObj = new Date(year, monthIndex, d);
           const isSunday = dateObj.getDay() === 0;
-          const val = mData[`day_${d}`];
+          const dayStr = d < 10 ? "0" + d : String(d);
+          const dayObj = mData[`Day_${dayStr}`] || mData[`day_${d}`] || {};
+          const val = typeof dayObj === "object" ? dayObj.status : dayObj;
+          
           let status = "-", badgeColor = "#64748b";
 
-          if(isSunday) { status = "SUN"; badgeColor = "#ea580c"; } 
-          else if(val === "H") { status = "H"; badgeColor = "#9333ea"; } 
-          else if(val === true) { status = "P"; badgeColor = "#16a34a"; presentDays++; totalWorkingDays++; } 
-          else if(val === false || val === undefined) { status = "A"; badgeColor = "#dc2626"; absentDays++; totalWorkingDays++; }
+          // 🎯 Future Day Rule: Agar aaj ke aage ka din hai toh '-' dikhao, absent mat maano
+          if (isCurrentActiveMonth && d > currentRunningDay) {
+              status = "-"; 
+              badgeColor = "var(--text-muted)";
+          } else if(isSunday) { 
+              status = "SUN"; 
+              badgeColor = "#ea580c"; 
+          } else if(val === "H") { 
+              status = "H"; 
+              badgeColor = "#9333ea"; 
+          } else if(val === true || val === "P" || val === "Present") { 
+              status = "P"; 
+              badgeColor = "#16a34a"; 
+              presentDays++; 
+              totalWorkingDays++; 
+          } else { 
+              status = "A"; 
+              badgeColor = "#dc2626"; 
+              absentDays++; 
+              totalWorkingDays++; 
+          }
           tableRows += `<tr><td>${String(d).padStart(2, '0')}/${String(monthIndex + 1).padStart(2, '0')}/${year}</td><td>${daysNames[dateObj.getDay()]}</td><td><b style="color:${badgeColor}; font-size:12px;">${status}</b></td></tr>`;
         }
         reportDiv.innerHTML = `<div style="text-align:center; margin-bottom:12px; border-bottom:2px solid var(--border-color); padding-bottom:8px;"><h3 style="font-size:16px; font-weight:900; color:#0288d1;">${st.name}</h3><p style="font-size:11px; font-weight:700; color:var(--text-muted);">Admn No: ${st.admn} | Class: ${st.class} | Month: ${monthVal}</p></div><div class="table-container"><table style="min-width:100%;"><thead><tr><th>Date</th><th>Day</th><th>Status (P/A/SUN/H)</th></tr></thead><tbody>${tableRows}</tbody></table></div><div class="stats-grid" style="margin-top:14px; grid-template-columns: 1fr 1fr 1fr;"><div class="stat-card blue" style="padding:10px;"><span style="font-size:10px;">Working Days</span><h3 style="font-size:16px;">${totalWorkingDays}</h3></div><div class="stat-card" style="background:linear-gradient(135deg, #16a34a 0%, #15803d 100%); padding:10px;"><span style="font-size:10px;">Present (P)</span><h3 style="font-size:16px;">${presentDays}</h3></div><div class="stat-card red" style="padding:10px;"><span style="font-size:10px;">Absent (A)</span><h3 style="font-size:16px;">${absentDays}</h3></div></div>`;
@@ -9594,26 +9753,56 @@ document.getElementById("hwTitleInput").value = "";
         let headerDays = "", tableRows = "";
         for(let d = 1; d <= daysCount; d++) { headerDays += `<th>${d}</th>`; }
        
-                students.forEach(st => {
-          const rawMData = allAtt[`${st.admn}_${monthVal}`] || (allAtt[st.admn] && allAtt[st.admn][monthVal]) || {};
-          const mData = rawMData.days || rawMData;
+        for (let st of students) {
+          let mData = {};
+          try {
+              const snap = await getDoc(doc(fsDb, "users", String(st.admn), "muster", monthVal));
+              if(snap.exists()) mData = snap.data().Days || {};
+              else {
+                  const oldSnap = await getDoc(doc(fsDb, "attendance", `${st.admn}_${monthVal}`));
+                  if(oldSnap.exists()) mData = oldSnap.data().days || {};
+              }
+          } catch(e) {}
+          
           let presentDays = 0, absentDays = 0, totalWorkingDays = 0, studentDaysCells = "";
           for(let d = 1; d <= daysCount; d++) {
             const isSunday = new Date(year, monthIndex, d).getDay() === 0;
-            const val = mData[`day_${d}`];
+            const dayStr = d < 10 ? "0" + d : String(d);
+            const dayObj = mData[`Day_${dayStr}`] || mData[`day_${d}`] || {};
+            const val = typeof dayObj === "object" ? dayObj.status : dayObj;
+            
             let statusText = "-", textColor = "var(--text-color)";
-            if(isSunday) { statusText = "SUN"; textColor = "#ea580c"; } 
-            else if(val === "H") { statusText = "H"; textColor = "#9333ea"; } 
-            else if(val === true || val === "Present" || val === "P") { statusText = "P"; textColor = "#16a34a"; presentDays++; totalWorkingDays++; } 
-            else { statusText = "A"; textColor = "#dc2626"; absentDays++; totalWorkingDays++; }
-            studentDaysCells += `<td style="color:${textColor}; font-weight:800;">${statusText}</td>`;
+            
+            // 🎯 Future Day Rule
+            if (isCurrentActiveMonth && d > currentRunningDay) {
+                statusText = "-"; 
+                textColor = "var(--text-muted)";
+            } else if(isSunday) { 
+                statusText = "SUN"; 
+                textColor = "#ea580c"; 
+            } else if(val === "H") { 
+                statusText = "H"; 
+                textColor = "#9333ea"; 
+            } else if(val === true || val === "Present" || val === "P") { 
+                statusText = "P"; 
+                textColor = "#16a34a"; 
+                presentDays++; 
+                totalWorkingDays++; 
+            } else { 
+                statusText = "A"; 
+                textColor = "#dc2626"; 
+                absentDays++; 
+                totalWorkingDays++; 
+            }
+            studentDaysCells += `<td style="color:${textColor}; font-weight:800; text-align:center;">${statusText}</td>`;
           }
-          tableRows += `<tr><td style="text-align:left; padding-left:8px; font-weight:700; min-width:140px;">${st.name}</td>${studentDaysCells}<td style="font-weight:900; background:rgba(2, 136, 209, 0.1);">${totalWorkingDays}</td><td style="font-weight:900; color:#16a34a; background:rgba(220, 38, 38, 0.1);">${presentDays}</td><td style="font-weight:900; color:#dc2626; background:rgba(220, 38, 38, 0.1);">${absentDays}</td></tr>`;
-        });
+          tableRows += `<tr><td style="text-align:left; padding-left:8px; font-weight:700; min-width:140px;">${st.name}</td>${studentDaysCells}<td style="font-weight:900; background:rgba(2, 136, 209, 0.1); text-align:center;">${totalWorkingDays}</td><td style="font-weight:900; color:#16a34a; background:rgba(220, 38, 38, 0.1); text-align:center;">${presentDays}</td><td style="font-weight:900; color:#dc2626; background:rgba(220, 38, 38, 0.1); text-align:center;">${absentDays}</td></tr>`;
+        }
 
         reportDiv.innerHTML = `<div class="table-container"><table><thead><tr><th style="min-width:140px; text-align:left; padding-left:8px;">Name</th>${headerDays}<th style="background:#0288d1; color:white !important;">Total</th><th style="background:#16a34a; color:white !important;">P</th><th style="background:#dc2626; color:white !important;">A</th></tr></thead><tbody>${tableRows}</tbody></table></div>`;
       }
     }
+
 
     addSafeListener("trackAttendanceBtn", "click", () => {
       const btn = document.getElementById("trackAttendanceBtn");
@@ -12075,24 +12264,43 @@ document.getElementById("hwTitleInput").value = "";
       const todayNum = new Date().getDate();
       const nowTime = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
       
-            // 🚀 Firestore + AccuEngine (Muster In/Out)
-      let monthMuster = {};
-      if (window.AccuEngine) {
-        monthMuster = await window.AccuEngine.fetch(`muster/${currentMonth}`) || {};
-      }
-      if (!monthMuster[`day_${todayNum}`]) monthMuster[`day_${todayNum}`] = {};
-      if (!monthMuster[`day_${todayNum}`][loggedUser]) monthMuster[`day_${todayNum}`][loggedUser] = {};
-      monthMuster[`day_${todayNum}`][loggedUser][type] = nowTime;
-
-      await setDoc(doc(fsDb, "muster", currentMonth), monthMuster, { merge: true });
-      if (window.AccuEngine) {
-        await window.AccuEngine.setLocal("muster", currentMonth, monthMuster);
-      }
-      await update(ref(db), {
-        [`muster/${currentMonth}/day_${todayNum}/${loggedUser}/${type}`]: nowTime
-      }).catch(() => {});
+     
+            // 🚀 NEW UNIFIED ARCHITECTURE: users/{userId}/muster/{YYYY-MM}
+      const uidStr = String(loggedUser);
+      // Day formatting: "Day_01", "Day_02" ... "Day_31"
+      const dayStr = todayNum < 10 ? "0" + todayNum : todayNum;
+      const dayKey = `Day_${dayStr}`;
+      const timeKey = (type === "in") ? "checkIn" : "checkOut";
       
-      alert(`${actionText} time saved successfully!`);
+      const docRef = doc(fsDb, "users", uidStr, "muster", currentMonth);
+      let monthDoc = { Days: {} };
+      
+      try {
+          // Fetch existing month data from Firestore
+          const snap = await getDoc(docRef);
+          if (snap.exists()) monthDoc = snap.data();
+      } catch (e) {
+          console.warn("Failed to fetch existing muster, creating new.", e);
+      }
+      
+      if (!monthDoc.Days) monthDoc.Days = {};
+      if (!monthDoc.Days[dayKey]) monthDoc.Days[dayKey] = { status: "A" };
+      
+      // Assign time & mark Present automatically
+      monthDoc.Days[dayKey][timeKey] = nowTime;
+      monthDoc.Days[dayKey].status = "P"; 
+      monthDoc.updatedAt = new Date().toISOString();
+
+      await setDoc(docRef, monthDoc, { merge: true });
+      
+      const Sentinel = window.Igris || window.AccuEngine;
+      if (Sentinel && typeof Sentinel.setLocal === "function") {
+          // Store in Igris with composite key for instant local retrieval
+          await Sentinel.setLocal("user_muster", `${uidStr}_${currentMonth}`, monthDoc);
+          if (typeof Sentinel.bumpSyncVersion === "function") Sentinel.bumpSyncVersion();
+      }
+      
+      alert(`✔ ${actionText} time recorded successfully!`);
 window.checkMusterButtonStates();
 
       if(type === 'in') {
@@ -12160,31 +12368,27 @@ window.checkMusterButtonStates();
       
       if(!username) { alert("Please select a teacher first."); return; }
       
-            if(confirm(`Are you sure you want to completely delete muster data for this teacher in ${month}?`)) {
-        const daysCount = getDaysInMonth(month);
-        let monthMuster = {};
-        if (window.AccuEngine) {
-          monthMuster = await window.AccuEngine.fetch(`muster/${month}`) || {};
+        
+            if(confirm(`Are you sure you want to delete muster records for this teacher in ${month}?`)) {
+        const uidStr = String(username);
+        const docRef = doc(fsDb, "users", uidStr, "muster", month);
+        
+        try {
+            // Delete the entire month document for this specific teacher
+            await deleteDoc(docRef);
+            
+            const Sentinel = window.Igris || window.AccuEngine;
+            if (Sentinel && typeof Sentinel.setLocal === "function") {
+                await Sentinel.setLocal("user_muster", `${uidStr}_${month}`, null);
+                if (typeof Sentinel.bumpSyncVersion === "function") Sentinel.bumpSyncVersion();
+            }
+            alert("✔ Muster records deleted successfully.");
+        } catch(err) {
+            console.error(err);
+            alert("Failed to delete muster records.");
         }
-        for(let d=1; d<=daysCount; d++) {
-          if (monthMuster[`day_${d}`] && monthMuster[`day_${d}`][username]) {
-            delete monthMuster[`day_${d}`][username];
-          }
-        }
-        await setDoc(doc(fsDb, "muster", month), monthMuster);
-        if (window.AccuEngine) {
-          await window.AccuEngine.setLocal("muster", month, monthMuster);
-          window.AccuEngine.bumpSyncVersion();
-        }
-
-        const updates = {};
-        for(let d=1; d<=daysCount; d++) {
-          updates[`muster/${month}/day_${d}/${username}`] = null;
-        }
-        await update(ref(db), updates).catch(() => {});
-        alert("✔ Muster data deleted successfully!");
-  window.closeModal('deleteMusterModal');
-        if(document.getElementById("adminMusterTableCard").style.display === "block") {
+        window.closeModal('deleteMusterModal');
+      if(document.getElementById("adminMusterTableCard").style.display === "block") {
           window.loadAdminMusterTable();
         }
       }
@@ -15506,7 +15710,85 @@ if (perms.photo && window.croppedPhotosMap["sUpdatePhotoInput"]) {
         if(role === 'admin') mentorsProgChartAdmin = newChart;
         else mentorsProgChartTeacher = newChart;
       };
-   
+
+        // 🏗️ PHASE 2: NEW UNIFIED FIRESTORE ARCHITECTURE ENGINE
+  window.MasterUserEngine = {
+      // Create or Update User in the new `users` Root Collection
+      saveUser: async function(userId, role, basicData, detailsData = {}) {
+          if (!userId) return false;
+          const uidStr = String(userId);
+          const payload = {
+              userId: uidStr,
+              username: basicData.name || basicData.username || "",
+              role: role, // "admin", "teacher", "student"
+              photo: basicData.photo || "",
+              class: basicData.class || "", // Important for students
+              Details: {
+                  ...detailsData,
+                  phone: detailsData.phone || basicData.phone || "",
+                  DOB: detailsData.DOB || basicData.DOB || "",
+                  updatedAt: new Date().toISOString()
+              }
+          };
+          
+          try {
+              // Save to unified root collection
+              await setDoc(doc(fsDb, "users", uidStr), payload, { merge: true });
+              
+              // Update local Igris cache
+              const Sentinel = window.Igris || window.AccuEngine;
+              if (Sentinel && typeof Sentinel.setLocal === "function") {
+                  await Sentinel.setLocal("users", uidStr, payload);
+              }
+              return true;
+          } catch (e) {
+              console.error("Failed to save to users collection:", e);
+              return false;
+          }
+      },
+
+      // Get single user profile
+      getUser: async function(userId) {
+          if (!userId) return null;
+          const uidStr = String(userId);
+          const Sentinel = window.Igris || window.AccuEngine;
+          
+          if (Sentinel && typeof Sentinel.fetch === "function") {
+              const cached = await Sentinel.fetch(`users/${uidStr}`);
+              if (cached) return cached;
+          }
+          
+          try {
+              const snap = await getDoc(doc(fsDb, "users", uidStr));
+              if (snap.exists()) {
+                  const data = snap.data();
+                  if (Sentinel) Sentinel.setLocal("users", uidStr, data);
+                  return data;
+              }
+          } catch(e) {}
+          return null;
+      },
+
+      // Get ALL users by role (Migration friendly)
+      getUsersByRole: async function(role) {
+          const Sentinel = window.Igris || window.AccuEngine;
+          try {
+              const q = query(collection(fsDb, "users"), where("role", "==", role));
+              const snap = await getDocs(q);
+              const list = [];
+              snap.forEach(d => {
+                  const data = d.data();
+                  list.push(data);
+                  if (Sentinel) Sentinel.setLocal("users", d.id, data);
+              });
+              return list;
+          } catch (e) {
+              console.error("Failed to fetch users by role:", e);
+              return [];
+          }
+      }
+  };
+
 
 
     </script>
