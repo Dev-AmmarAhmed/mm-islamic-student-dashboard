@@ -56,10 +56,14 @@
         triggerSecurityLockout("ERR_IGRIS_CORE_ABSENT");
       }
 
-      // Check 2: Cryptographic Signature Verification
-      if (window.Igris.signature !== "IGRIS_CORE_SECURE_VAULT_8890") {
+           // Check 2: Cryptographic Signature Verification (Supports both v10 & v11 signatures)
+      if (
+        window.Igris.signature !== "IGRIS_CORE_SECURE_VAULT_7789" &&
+        window.Igris.signature !== "IGRIS_CORE_SECURE_VAULT_8890"
+      ) {
         triggerSecurityLockout("ERR_IGRIS_SIGNATURE_TAMPERED");
       }
+
 
       // Check 3: Immutability Check (Nobody can override Igris methods)
       if (!Object.isFrozen(window.Igris)) {
@@ -5587,11 +5591,597 @@ Exact Output JSON Format Required:
         }
       };
 
-              // =========================================================================
-      // DIVISION 2: AUTHENTICATION, LOGIN, APP LOCK & SESSION MANAGEMENT
+                // =========================================================================
+      // DIVISION 2: AUTHENTICATION, DASHBOARD RENDERER, NAVIGATION & UI ENGINE
       // =========================================================================
 
-      // --- 1. RESOLVE USER BY EMAIL ---
+      // --- 1. UNIVERSAL SYNC & ROLE HYDRATION CONTROLLERS ---
+      window.ensureUniversalIgrisSync = async function(force = false) {
+        const Sentinel = window.Igris || window.AccuEngine;
+        try {
+          await window.ensureFirebaseAuth();
+          if (Sentinel && typeof Sentinel.checkAndSyncData === "function") {
+            await Sentinel.checkAndSyncData(force);
+          }
+          const usersMap = await safeDataFetch("users", force) || {};
+          window.MM_STORE.users = usersMap;
+          cachedUsersMap = usersMap;
+          return true;
+        } catch (err) {
+          console.warn("Universal Sync warning:", err);
+          return false;
+        }
+      };
+
+      window.hydrateRoleDashboard = async function(role, force = false) {
+        await window.ensureUniversalIgrisSync(force);
+
+        if (role === "admin") {
+          if (typeof renderAdminStudentsDirectory === "function") await renderAdminStudentsDirectory(true);
+          if (typeof window.renderAdminHomeTeacherboardCards === "function") await window.renderAdminHomeTeacherboardCards();
+          if (typeof window.calculateAdminEntryTabAnalytics === "function") await window.calculateAdminEntryTabAnalytics();
+          if (typeof window.loadManageTeacherList === "function") await window.loadManageTeacherList();
+        } else if (role === "teacher") {
+          if (typeof refreshAllTeacherData === "function") await refreshAllTeacherData();
+          if (typeof window.renderTeacherboardCardsTable === "function") await window.renderTeacherboardCardsTable();
+          if (typeof window.checkTeacherDailyClaimStatus === "function") await window.checkTeacherDailyClaimStatus();
+        } else if (role === "student") {
+          if (typeof refreshStudentDashboard === "function") await refreshStudentDashboard();
+        }
+      };
+
+      window.loadAdminDashboardData = async function(force = false) {
+        await window.hydrateRoleDashboard("admin", force);
+      };
+
+      window.refreshAllAdminData = async function() {
+        await window.hydrateRoleDashboard("admin", true);
+      };
+
+      async function refreshAllTeacherData() {
+        if (!window.MM_STORE.users || Object.keys(window.MM_STORE.users).length === 0) {
+          await window.ensureUniversalIgrisSync(false);
+        }
+        if (typeof window.loadTeacherTodayAttendance === "function") await window.loadTeacherTodayAttendance();
+        if (typeof loadTeacherStudentsDirectory === "function") loadTeacherStudentsDirectory();
+        if (typeof window.loadTeacherLeaderboard === "function") window.loadTeacherLeaderboard();
+        if (typeof populateTeacherStudentDropdowns === "function") populateTeacherStudentDropdowns();
+        if (typeof window.loadTeacherActiveOnlineTests === "function") window.loadTeacherActiveOnlineTests();
+      }
+
+      window.refreshTeacherDashboardData = async function() {
+        const loggedUser = localStorage.getItem("loggedUser");
+        if (loggedUser) {
+          const tData = await getStudentRecord(loggedUser);
+          const welcomeEl = document.getElementById("tWelcomeTeacherName");
+          if (welcomeEl && tData && tData.name) {
+            welcomeEl.innerText = tData.name + " Teacher";
+          }
+        }
+        await refreshAllTeacherData();
+        if (typeof window.checkTeacherDailyClaimStatus === "function") await window.checkTeacherDailyClaimStatus();
+        if (typeof window.renderTeacherboardCardsTable === "function") await window.renderTeacherboardCardsTable();
+      };
+
+      function populateTeacherStudentDropdowns() {
+        const students = getLiveStudents().filter(s => cleanClassStr(s.class) === cleanClassStr(assignedClass));
+        const options = `<option value="">-- Select Student --</option>` + students.map(s => `<option value="${s.admn}">${s.name}</option>`).join("");
+        if (document.getElementById("performStudentSelect")) document.getElementById("performStudentSelect").innerHTML = options;
+        if (document.getElementById("testStudentSelect")) document.getElementById("testStudentSelect").innerHTML = options;
+        if (document.getElementById("trackTestStudentSelect")) document.getElementById("trackTestStudentSelect").innerHTML = options;
+      }
+
+      async function refreshStudentDashboard() {
+        if (!window.MM_STORE.users || Object.keys(window.MM_STORE.users).length === 0) {
+          await window.ensureUniversalIgrisSync(false);
+        }
+        const student = await getStudentRecord(currentStudentAdmn);
+        if (!student) return;
+        assignedClass = cleanClassStr(student.class);
+
+        if (typeof updateHeaderStarBadge === "function") await updateHeaderStarBadge();
+        if (typeof checkAndRenderDailyRewardStatus === "function") await checkAndRenderDailyRewardStatus(student);
+
+        const avatarEl = document.getElementById("sHomeAvatar");
+        const nameEl = document.getElementById("sHomeName");
+        const classBadgeEl = document.getElementById("sHomeClassBadge");
+
+        if (avatarEl) avatarEl.src = window.getAvatarSrc(student, "#0288d1");
+        if (nameEl) nameEl.innerText = student.name;
+        if (classBadgeEl) classBadgeEl.innerText = `Class ${student.class}`;
+
+        // Attendance summary from users/{admn}/muster/{YYYY-MM}
+        const currentMonthKey = getCurrentYearMonth();
+        const monthDoc = await safeDataFetch(`users/${student.admn}/muster/${currentMonthKey}`);
+        const daysMap = monthDoc && monthDoc.Days ? monthDoc.Days : {};
+        let pCount = 0;
+        let aCount = 0;
+        Object.values(daysMap).forEach(dObj => {
+          const st = typeof dObj === "object" ? dObj.status : dObj;
+          if (st === "P" || st === "Present" || st === true) pCount++;
+          else if (st === "A" || st === false) aCount++;
+        });
+        if (document.getElementById("sHomePresentCount")) document.getElementById("sHomePresentCount").innerText = pCount;
+        if (document.getElementById("sHomeAbsentCount")) document.getElementById("sHomeAbsentCount").innerText = aCount;
+
+        if (typeof calculateRealtimeStudentDues === "function") await calculateRealtimeStudentDues(student);
+
+        const classStudents = getLiveStudents().filter(s => cleanClassStr(s.class) === cleanClassStr(student.class));
+        classStudents.sort((a, b) => (Number(b.points) || 0) - (Number(a.points) || 0));
+
+        const myRankIndex = classStudents.findIndex(s => String(s.admn) === String(student.admn));
+        const rankStr = myRankIndex !== -1 ? `#${myRankIndex + 1}` : "#-";
+        const pts = Number(student.points) || 0;
+        const stars = Math.floor(pts / 10);
+
+        if (document.getElementById("sHomeRankText")) document.getElementById("sHomeRankText").innerText = `Class Rank: ${rankStr}`;
+        if (document.getElementById("sPerformRankBig")) document.getElementById("sPerformRankBig").innerText = rankStr;
+        if (document.getElementById("sPerformTotalPtsChip")) document.getElementById("sPerformTotalPtsChip").innerText = `Total Points: ${pts} (${stars} ⭐)`;
+
+        if (typeof loadStudentStudyMaterials === "function") loadStudentStudyMaterials();
+        if (typeof loadStudentHomework === "function") loadStudentHomework();
+        if (typeof loadStudentDueTests === "function") loadStudentDueTests();
+        if (typeof window.loadStudentTimetable === "function") window.loadStudentTimetable(assignedClass);
+
+        const lbContainer = document.getElementById("sLeaderboardContainer");
+        if (lbContainer) {
+          lbContainer.innerHTML = "";
+          classStudents.forEach((st, idx) => {
+            const isMe = String(st.admn) === String(currentStudentAdmn);
+            const sPts = Number(st.points) || 0;
+            const sStars = Math.floor(sPts / 10);
+            lbContainer.innerHTML += `<div class="lb-row" style="${isMe ? "background:rgba(2, 136, 209, 0.12); font-weight:800;" : ""}"><div style="display:flex; align-items:center;"><div class="lb-badge" style="${isMe ? "background:#0288d1;" : ""}">${idx + 1}</div><span style="font-size:13px;">${st.name} ${isMe ? "(You)" : ""}</span></div><span class="pts-chip" style="background:#fbbf24; color:#0f172a !important;">⭐ ${sStars} (${sPts} PTS)</span></div>`;
+          });
+        }
+      }
+
+      // --- 2. DASHBOARD ROLE RENDERER & NAVIGATION ENGINE ---
+      let isProgrammaticNav = false;
+
+      function getHomeTabId() {
+        if (currentRole === "student") return "studentTabHome";
+        if (currentRole === "teacher") return "teacherTabHome";
+        return "adminTabHome";
+      }
+
+      function pushNavState(type, id) {
+        try {
+          history.pushState({ appNav: true, type: type, id: id }, "");
+        } catch (e) {}
+      }
+
+      function updateAppRoleIcon(role) {
+        const dynamicIcon = document.getElementById("dynamicAppIcon");
+        const appleIcon = document.getElementById("appleAppIcon");
+        if (dynamicIcon) dynamicIcon.href = ICON_PORTAL;
+        if (appleIcon) appleIcon.href = ICON_PORTAL;
+      }
+
+      window.changeTeacherActiveClass = async function(newClass) {
+        assignedClass = cleanClassStr(newClass);
+        const badge = document.getElementById("classBadgeContainer");
+        if (badge) badge.innerText = `Class: ${assignedClass}`;
+        await window.hydrateRoleDashboard("teacher", false);
+      };
+
+      function renderDashboardForRole(role, aClass, sAdmn) {
+        currentRole = String(role || "student").toLowerCase();
+        const loggedUser = localStorage.getItem("loggedUser");
+        window.syncAuthSessionRole(currentRole, loggedUser || sAdmn, aClass);
+
+        const tClasses = String(aClass || "1").split(",").map(c => cleanClassStr(c)).filter(Boolean);
+        assignedClass = currentRole === "teacher" ? (tClasses[0] || "1") : cleanClassStr(aClass || "1");
+        currentStudentAdmn = sAdmn || localStorage.getItem("studentAdmn") || loggedUser;
+
+        const mainContainer = document.getElementById("mainContainer");
+        const loginScreen = document.getElementById("loginScreen");
+        const topBar = document.getElementById("topBar");
+        const bottomNav = document.getElementById("bottomNav");
+
+        if (mainContainer) mainContainer.classList.remove("login-mode");
+        if (loginScreen) loginScreen.classList.remove("active");
+        if (topBar) topBar.style.display = "flex";
+        if (bottomNav) bottomNav.style.display = "flex";
+
+        if (typeof window.listenToNotifications === "function") {
+          window.listenToNotifications();
+        }
+
+        updateAppRoleIcon(currentRole);
+        document.body.classList.remove("admin-mode", "teacher-mode", "student-mode");
+        document.body.classList.add(currentRole + "-mode");
+        if (typeof window.applyActiveTheme === "function") window.applyActiveTheme();
+
+        if (currentRole === "student") {
+          document.getElementById("portalRoleSubHeader").innerText = "STUDENT DASHBOARD PRO";
+          document.getElementById("classBadgeContainer").style.display = "none";
+          document.getElementById("studentStarsContainer").style.display = "inline-flex";
+
+          document.querySelectorAll(".admin-only").forEach(e => e.style.display = "none");
+          document.querySelectorAll(".teacher-only").forEach(e => e.style.display = "none");
+          document.querySelectorAll(".student-only").forEach(e => e.style.display = "block");
+
+          bottomNav.innerHTML = `
+            <div class="nav-item active" onclick="switchTab('studentTabHome', this, event)"><div class="nav-icon">🏠</div>Home</div>
+            <div class="nav-item" onclick="switchTab('studentTabAttend', this, event)"><div class="nav-icon">📅</div>Attend</div>
+            <div class="nav-item" onclick="switchTab('studentTabStudy', this, event)"><div class="nav-icon">📖</div>Study</div>
+            <div class="nav-item" onclick="switchTab('studentTabPerform', this, event)"><div class="nav-icon">⭐</div>Perform</div>
+            <div class="nav-item" onclick="switchTab('studentTabTest', this, event)"><div class="nav-icon">📋</div>Test</div>
+          `;
+          window.switchTab("studentTabHome", bottomNav.children[0]);
+        } else if (currentRole === "teacher") {
+          document.getElementById("portalRoleSubHeader").innerText = "TEACHERS DASHBOARD PRO";
+          document.getElementById("classBadgeContainer").style.display = "inline-block";
+          document.getElementById("classBadgeContainer").innerText = `Class: ${assignedClass}`;
+          document.getElementById("studentStarsContainer").style.display = "none";
+
+          document.querySelectorAll(".admin-only").forEach(e => e.style.display = "none");
+          document.querySelectorAll(".student-only").forEach(e => e.style.display = "none");
+          document.querySelectorAll(".teacher-only").forEach(e => e.style.display = "block");
+
+          bottomNav.innerHTML = `
+            <div class="nav-item active" onclick="switchTab('teacherTabHome', this, event)"><div class="nav-icon">🏠</div>Home</div>
+            <div class="nav-item" data-tfeat="attend" onclick="window.runTeacherFeature('attend', () => switchTab('teacherTabAttend', this, event))"><div class="nav-icon">📅</div>Attend</div>
+            <div class="nav-item" data-tfeat="trackAtt" onclick="window.runTeacherFeature('trackAtt', () => switchTab('teacherTabTrackAtt', this, event))"><div class="nav-icon">🔍</div>Track</div>
+            <div class="nav-item" onclick="switchTab('teacherTabStudents', this, event)"><div class="nav-icon">👤</div>Students</div>
+            <div class="nav-item" data-tfeat="perform" onclick="window.runTeacherFeature('perform', () => switchTab('teacherTabPerform', this, event))"><div class="nav-icon">⭐</div>Perform</div>
+            <div class="nav-item" data-tfeat="tests" onclick="window.runTeacherFeature('tests', () => switchTab('teacherTabTest', this, event))"><div class="nav-icon">📋</div>Test</div>
+          `;
+
+          const activeSelect = document.getElementById("teacherActiveSelect");
+          if (activeSelect) {
+            activeSelect.innerHTML = "";
+            tClasses.forEach(c => { activeSelect.innerHTML += `<option value="${c}">Class ${c}</option>`; });
+            activeSelect.value = assignedClass;
+          }
+          window.switchTab("teacherTabHome", bottomNav.children[0]);
+        } else {
+          document.getElementById("portalRoleSubHeader").innerText = "ADMINISTRATOR DASHBOARD PRO";
+          document.getElementById("classBadgeContainer").style.display = "none";
+          document.getElementById("studentStarsContainer").style.display = "none";
+
+          document.querySelectorAll(".teacher-only").forEach(e => e.style.display = "none");
+          document.querySelectorAll(".student-only").forEach(e => e.style.display = "none");
+          document.querySelectorAll(".admin-only").forEach(e => e.style.display = "block");
+
+          bottomNav.innerHTML = `
+            <div class="nav-item active" onclick="switchTab('adminTabHome', this, event)"><div class="nav-icon">🏠</div>Home</div>
+            <div class="nav-item" onclick="switchTab('adminTabStudents', this, event)"><div class="nav-icon">👤</div>Students</div>
+            <div class="nav-item" onclick="switchTab('adminTabEntry', this, event)"><div class="nav-icon">📝</div>Entry</div>
+            <div class="nav-item" onclick="switchTab('adminTabTrack', this, event)"><div class="nav-icon">🔍</div>Track</div>
+            <div class="nav-item" onclick="switchTab('adminTabAttend', this, event)"><div class="nav-icon">📅</div>Attend</div>
+            <div class="nav-item" onclick="switchTab('adminTabCard', this, event)"><div class="nav-icon">💳</div>Card</div>
+            <div class="nav-item" onclick="switchTab('adminTabExpns', this, event)"><div class="nav-icon">📊</div>Expns</div>
+          `;
+          window.switchTab("adminTabHome", bottomNav.children[0]);
+        }
+      }
+
+      window.runTeacherFeature = function(featureKey, callback) {
+        const featMap = (window.activeTeacherPermsCache && window.activeTeacherPermsCache.features) || {};
+        if (featMap[featureKey] === false) {
+          window.closeDrawer();
+          window.showCustomAlert("🔒 Locked by Admin: This feature has been disabled by the Administrator.");
+          return;
+        }
+        if (typeof callback === "function") callback();
+      };
+
+      // --- 3. TAB SWITCHER, MODALS & DRAWERS ENGINE ---
+      window.switchTab = function(tabId, el, event) {
+        const targetTab = document.getElementById(tabId);
+        if (!targetTab) return;
+
+        const homeTabId = getHomeTabId();
+        if (tabId !== homeTabId && tabId !== "loginScreen") {
+          if (history.state && history.state.type === "tab") {
+            history.replaceState({ appNav: true, type: "tab", id: tabId }, "");
+          } else {
+            pushNavState("tab", tabId);
+          }
+        }
+
+        document.querySelectorAll(".tab-section").forEach(t => t.classList.remove("active", "animate-in"));
+        targetTab.classList.add("active");
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => { targetTab.classList.add("animate-in"); });
+        });
+
+        document.querySelectorAll(".nav-item").forEach(n => n.classList.remove("active"));
+        if (el) el.classList.add("active");
+
+        if (tabId === "adminTabHome" && typeof window.renderAdminHomeTeacherboardCards === "function") {
+          window.renderAdminHomeTeacherboardCards();
+        }
+        if (tabId === "adminTabStudents" && typeof renderAdminStudentsDirectory === "function") {
+          renderAdminStudentsDirectory();
+        }
+        if (tabId === "adminTabEntry" && typeof window.calculateAdminEntryTabAnalytics === "function") {
+          window.calculateAdminEntryTabAnalytics();
+        }
+        if (tabId === "adminTabExpns") {
+          const expDateEl = document.getElementById("expCurrentDateDisplay");
+          if (expDateEl) expDateEl.value = getTodayFormattedDate();
+        }
+        if (tabId === "teacherTabAttend" && typeof window.loadTeacherTodayAttendance === "function") {
+          window.loadTeacherTodayAttendance();
+        }
+        if (tabId === "teacherTabStudents" && typeof loadTeacherStudentsDirectory === "function") {
+          loadTeacherStudentsDirectory();
+        }
+        if (tabId === "teacherTabPerform") {
+          if (typeof window.loadTeacherLeaderboard === "function") window.loadTeacherLeaderboard();
+          populateTeacherStudentDropdowns();
+        }
+        if (tabId === "studentTabTest" && typeof loadStudentDueTests === "function") {
+          loadStudentDueTests();
+        }
+      };
+
+      window.openModal = function(id) {
+        window.closeDrawer();
+        const modal = document.getElementById(id);
+        if (modal) {
+          modal.classList.remove("closing");
+          modal.classList.add("active");
+          pushNavState("modal", id);
+        }
+
+        if (id === "weeklyRewardDetailsModal" && typeof window.renderWeeklyScheduleModal === "function") window.renderWeeklyScheduleModal();
+        if (id === "adminLeaderboardModal" && typeof window.renderAdminClassLeaderboard === "function") {
+          isAdminLbEditMode = false;
+          const clsVal = document.getElementById("adminLbClassSelect") ? document.getElementById("adminLbClassSelect").value : "1";
+          window.renderAdminClassLeaderboard(clsVal);
+        }
+        if (id === "adminTeacherLeaderboardModal" && typeof window.loadAdminTeacherLeaderboard === "function") window.loadAdminTeacherLeaderboard();
+        if (id === "addTeacherPointsModal" && typeof window.populateAdminTeacherDropdown === "function") window.populateAdminTeacherDropdown();
+        if (id === "registerStudentModal") {
+          const liveSts = getLiveStudents();
+          let maxAdmn = 0;
+          liveSts.forEach(s => {
+            const num = parseInt(s.admn, 10);
+            if (!isNaN(num) && num > maxAdmn) maxAdmn = num;
+          });
+          const nextNum = (maxAdmn > 0 ? maxAdmn : liveSts.length) + 1;
+          if (document.getElementById("regSrNo")) document.getElementById("regSrNo").value = nextNum;
+          if (document.getElementById("regAdmn")) document.getElementById("regAdmn").value = nextNum;
+          if (document.getElementById("regStd")) {
+            if (currentRole === "teacher") {
+              document.getElementById("regStd").value = assignedClass;
+              document.getElementById("regStd").disabled = true;
+            } else {
+              document.getElementById("regStd").value = "";
+              document.getElementById("regStd").disabled = false;
+            }
+          }
+        }
+        if (id === "bulkStudentModal" && typeof generateBulkStudentTable === "function") generateBulkStudentTable();
+        if (id === "addSubjectModal") {
+          const box = document.getElementById("adminAddSubClassBox");
+          if (box) box.style.display = currentRole === "admin" ? "block" : "none";
+        }
+        if (id === "addStudyMaterialModal") {
+          let targetClsForSub = assignedClass;
+          if (currentRole === "admin") {
+            document.getElementById("adminMatClassBox").style.display = "block";
+            document.getElementById("teacherMatClassBox").style.display = "none";
+            targetClsForSub = document.getElementById("matAdminClassSelect").value || "1";
+          } else {
+            document.getElementById("adminMatClassBox").style.display = "none";
+            document.getElementById("teacherMatClassBox").style.display = "block";
+            document.getElementById("matAssignedClassDisplay").value = `Class ${assignedClass}`;
+          }
+          if (typeof window.populateStudyMaterialSubjects === "function") window.populateStudyMaterialSubjects(targetClsForSub);
+        }
+        if (id === "uploadHomeworkModal" && document.getElementById("hwAssignedClassDisplay")) {
+          document.getElementById("hwAssignedClassDisplay").value = `Class ${assignedClass}`;
+        }
+        if (id === "studentAllowedModal" && typeof window.loadStudentAllowedSettings === "function") {
+          const clsSel = document.getElementById("stuAllowClassSelect");
+          if (clsSel) clsSel.value = "ALL";
+          window.loadStudentAllowedSettings("ALL");
+        }
+        if (id === "deleteTestDataModal" && typeof window.populateDelTestStudentDropdown === "function") window.populateDelTestStudentDropdown();
+        if (id === "createOnlineTestModal" && typeof populateClassSubjectsDropdown === "function") {
+          populateClassSubjectsDropdown();
+          document.getElementById("testFormConfigStep").style.display = "block";
+          document.getElementById("testQuestionsBuilderStep").style.display = "none";
+        }
+        if (id === "credentialsModal" && typeof loadCredentialsVault === "function") loadCredentialsVault();
+        if (id === "onlineTestHistoryModal" && typeof window.loadTeacherTestHistory === "function") window.loadTeacherTestHistory();
+        if (id === "teacherMusterModal") {
+          if (typeof window.startMusterClock === "function") window.startMusterClock();
+          if (typeof window.checkMusterButtonStates === "function") window.checkMusterButtonStates();
+        }
+        if (id === "teacherMusterDetailsModal") {
+          const monthSel = document.getElementById("myMusterMonthSelect");
+          if (monthSel) monthSel.value = getAutoMonthName();
+          if (typeof window.loadMyMusterDetails === "function") window.loadMyMusterDetails();
+        }
+        if (id === "adminSendNotifModal" && typeof window.toggleNotifTargetUI === "function") window.toggleNotifTargetUI();
+      };
+
+      window.closeModal = function(id) {
+        const modal = document.getElementById(id);
+        if (modal && modal.classList.contains("active")) {
+          modal.classList.add("closing");
+          setTimeout(() => {
+            modal.classList.remove("active", "closing");
+          }, 220);
+        }
+        if (id === "teacherMusterModal" && typeof musterClockInterval !== "undefined") clearInterval(musterClockInterval);
+        if (id === "studentLiveTestModal" && typeof activeLiveTestTimer !== "undefined") clearInterval(activeLiveTestTimer);
+      };
+
+      // Left Drawer, Right Drawer & 3-Dot Menu Listeners
+      addSafeListener("hamburgerBtn", "click", () => {
+        document.getElementById("leftDrawer").classList.add("active");
+        document.getElementById("drawerOverlay").classList.add("active");
+        pushNavState("drawer", "left");
+      });
+
+      window.closeDrawer = function() {
+        const d = document.getElementById("leftDrawer");
+        if (d && d.classList.contains("active")) {
+          d.classList.remove("active");
+          document.getElementById("drawerOverlay").classList.remove("active");
+        }
+      };
+      addSafeListener("closeDrawerBtn", "click", window.closeDrawer);
+      addSafeListener("drawerOverlay", "click", window.closeDrawer);
+
+      addSafeListener("notifBellBtn", "click", () => {
+        document.getElementById("rightDrawer").classList.add("active");
+        document.getElementById("rightDrawerOverlay").classList.add("active");
+        const badge = document.getElementById("notifBadgeCount");
+        if (badge) badge.style.display = "none";
+        pushNavState("drawer", "right");
+      });
+
+      window.closeRightDrawer = function() {
+        const d = document.getElementById("rightDrawer");
+        if (d && d.classList.contains("active")) {
+          d.classList.remove("active");
+          document.getElementById("rightDrawerOverlay").classList.remove("active");
+        }
+      };
+      addSafeListener("closeRightDrawerBtn", "click", window.closeRightDrawer);
+      addSafeListener("rightDrawerOverlay", "click", window.closeRightDrawer);
+
+      addSafeListener("threeDotBtn", "click", (e) => {
+        e.stopPropagation();
+        document.getElementById("menuDropdown").classList.toggle("active");
+      });
+      document.addEventListener("click", (e) => {
+        if (!e.target.closest("#threeDotBtn") && !e.target.closest("#menuDropdown")) {
+          const menu = document.getElementById("menuDropdown");
+          if (menu) menu.classList.remove("active");
+        }
+      });
+
+      window.syncStudentStudyHeight = function() {
+        const container = document.querySelector(".slide-container");
+        const activePane = document.querySelector(".slide-pane.active");
+        if (container && activePane) {
+          container.style.height = (activePane.scrollHeight + 50) + "px";
+        }
+      };
+
+      window.syncProfileModalHeight = function() {
+        const container = document.querySelector(".prof-slide-container");
+        const activePane = document.querySelector(".prof-slide-pane.active");
+        if (container && activePane) {
+          container.style.height = (activePane.scrollHeight + 50) + "px";
+        }
+      };
+
+      // --- 4. THEMES, DARK MODE & APP LOCK ---
+      const ALL_THEME_CLASSES = [
+        "theme-navy", "theme-amethyst", "theme-cyan", "theme-emerald",
+        "theme-rose", "theme-amber", "theme-indigo", "theme-slate"
+      ];
+
+      window.applyActiveTheme = function() {
+        const savedTheme = localStorage.getItem("appTheme") || "default";
+        document.body.classList.remove(...ALL_THEME_CLASSES);
+        if (savedTheme !== "default") {
+          document.body.classList.add("theme-" + savedTheme);
+        }
+        const sel = document.getElementById("customThemeSelect");
+        if (sel) sel.value = savedTheme;
+      };
+
+      window.setAppTheme = function(themeName) {
+        localStorage.setItem("appTheme", themeName);
+        window.applyActiveTheme();
+      };
+
+      window.toggleMoreAnimations = function(enabled) {
+        document.body.classList.toggle("more-animations", enabled);
+        localStorage.setItem("moreAnimations", enabled ? "enabled" : "disabled");
+      };
+
+      window.toggleNeonEffect = function(enabled) {
+        document.body.classList.toggle("neon-mode", enabled);
+        localStorage.setItem("neonEffect", enabled ? "enabled" : "disabled");
+      };
+
+      const darkModeChk = document.getElementById("darkModeCheckbox");
+      const savedDarkPref = localStorage.getItem("darkMode");
+      if (savedDarkPref === "enabled") {
+        document.body.classList.add("dark-mode");
+        if (darkModeChk) darkModeChk.checked = true;
+      }
+      addSafeListener("darkModeCheckbox", "change", (e) => {
+        document.body.classList.toggle("dark-mode", e.target.checked);
+        localStorage.setItem("darkMode", e.target.checked ? "enabled" : "disabled");
+      });
+      window.applyActiveTheme();
+
+      // App Lock & Biometrics
+      window.saveAppLockSettings = async function() {
+        const pin1 = document.getElementById("secNewPin").value.trim();
+        const pin2 = document.getElementById("secConfirmPin").value.trim();
+        const bioEnabled = document.getElementById("secBiometricChk").checked;
+        const loggedUser = localStorage.getItem("loggedUser");
+        if (!loggedUser) return;
+        if (pin1.length !== 4 || isNaN(pin1) || pin1 !== pin2) {
+          window.showCustomAlert("Please enter matching 4-digit numeric PINs.");
+          return;
+        }
+        const success = await window.AccuEngine.setAppLock(loggedUser, pin1, bioEnabled);
+        if (success) {
+          window.showCustomAlert("✔ Security Lock Activated!");
+          window.closeModal("secureAppModal");
+        }
+      };
+
+      window.checkAppLockOnStartup = async function() {
+        const loggedUser = localStorage.getItem("loggedUser");
+        if (!loggedUser || !localStorage.getItem(`lock_active_${loggedUser}`)) return;
+        const lockConfig = await window.AccuEngine.getAppLockConfig(loggedUser);
+        if (!lockConfig || !lockConfig.enabled) return;
+        const overlay = document.getElementById("appLockScreenOverlay");
+        if (overlay) {
+          overlay.style.display = "flex";
+          document.getElementById("lockScreenUserText").innerText = `Account: ${loggedUser}`;
+        }
+      };
+
+      window.submitPinUnlock = async function() {
+        const pinInput = document.getElementById("unlockPinInput");
+        const errEl = document.getElementById("unlockErrorText");
+        const loggedUser = localStorage.getItem("loggedUser");
+        if (!pinInput || pinInput.value.trim().length !== 4) return;
+        const isValid = await window.AccuEngine.verifyPin(loggedUser, pinInput.value.trim());
+        if (isValid) {
+          pinInput.value = "";
+          if (errEl) errEl.style.display = "none";
+          document.getElementById("appLockScreenOverlay").style.display = "none";
+        } else {
+          if (errEl) {
+            errEl.style.display = "block";
+            errEl.innerText = "Invalid 4-digit PIN.";
+          }
+          pinInput.value = "";
+        }
+      };
+
+      window.triggerBiometricUnlock = async function() {
+        const loggedUser = localStorage.getItem("loggedUser");
+        try {
+          await window.AccuEngine.promptBiometrics(loggedUser);
+          document.getElementById("appLockScreenOverlay").style.display = "none";
+        } catch (err) {
+          const errEl = document.getElementById("unlockErrorText");
+          if (errEl) {
+            errEl.style.display = "block";
+            errEl.innerText = "Biometrics failed. Please enter your 4-digit PIN.";
+          }
+        }
+      };
+
+      // --- 5. RESOLVE USER BY EMAIL & LOGIN ENGINE ---
       window.resolveUserIdByEmail = async function(emailInput) {
         const cleanEmail = String(emailInput || "").trim().toLowerCase();
         if (!cleanEmail || !cleanEmail.includes("@")) return null;
@@ -5600,7 +6190,6 @@ Exact Output JSON Format Required:
         const mappedId = await safeDataFetch(`email_lookup/${emailKey}`);
         if (mappedId) return String(mappedId);
 
-        // Fallback: Check in memory store users
         const allUsers = Object.values(window.MM_STORE.users || {});
         const found = allUsers.find(u => u && u.Details && u.Details.email && u.Details.email.toLowerCase() === cleanEmail);
         if (found) return String(found.userId || found.admn);
@@ -5608,7 +6197,6 @@ Exact Output JSON Format Required:
         return null;
       };
 
-      // --- 2. COMPLETE PORTAL LOGIN SESSION ---
       window.completePortalLoginSession = async function(resolvedUserId, uData) {
         const previousUser = localStorage.getItem("loggedUser");
         if (previousUser && previousUser !== resolvedUserId) {
@@ -5630,16 +6218,13 @@ Exact Output JSON Format Required:
           window.initNativePushAndSW();
         }
 
-        // Render UI
         renderDashboardForRole(uData.role, uData.assignedClass, uidStr);
 
-        // Hydrate in background
         if (typeof window.hydrateRoleDashboard === "function") {
           await window.hydrateRoleDashboard(uData.role, false);
         }
       };
 
-      // --- 3. STANDARD LOGIN HANDLER ---
       let lockoutTimerInterval;
       function startLiveLockoutTimer() {
         const lockoutTime = localStorage.getItem("lockoutUntil");
@@ -5729,12 +6314,38 @@ Exact Output JSON Format Required:
             targetUserId = resolved;
           }
 
-          // Directly fetch from unified users/{targetUserId}
+          // 1. Direct Fetch from Firestore `users/{targetUserId}`
           let uData = await getFirestoreUser(targetUserId);
 
-          // Fallback to cache / memory store
-          if (!uData && window.MM_STORE && window.MM_STORE.users && window.MM_STORE.users[targetUserId]) {
-            uData = window.MM_STORE.users[targetUserId];
+          // 2. Case-Insensitive / Username Fallback Search in `users` collection
+          if (!uData) {
+            const allUsersMap = await safeDataFetch("users") || {};
+            window.MM_STORE.users = allUsersMap;
+            const matchEntry = Object.entries(allUsersMap).find(([k, u]) =>
+              k.toLowerCase() === targetUserId.toLowerCase() ||
+              (u && u.username && String(u.username).toLowerCase() === targetUserId.toLowerCase())
+            );
+            if (matchEntry) {
+              targetUserId = matchEntry[0];
+              uData = matchEntry[1];
+            }
+          }
+
+          // 3. Auto-Bootstrap Master Admin if logging in with adminnn123 and doc was wiped
+          if (!uData && targetUserId.toLowerCase() === "adminnn123") {
+            const adminDefault = {
+              userId: "adminnn123",
+              admn: "adminnn123",
+              username: "adminnn123",
+              name: "Administrator",
+              role: "admin",
+              assignedClass: "All",
+              class: "All",
+              password: p,
+              Details: { regDate: getTodayFormattedDate() }
+            };
+            await setDoc(doc(fsDb, "users", "adminnn123"), adminDefault, { merge: true });
+            uData = window.normalizeUserData(adminDefault, "adminnn123");
           }
 
           if (uData && String(uData.password) === String(p)) {
@@ -5748,7 +6359,7 @@ Exact Output JSON Format Required:
         });
       });
 
-      // --- 4. GOOGLE SIGN-IN ---
+      // Google Sign-In
       addSafeListener("googleLoginBtn", "click", () => {
         const btn = document.getElementById("googleLoginBtn");
         const originalHtml = btn.innerHTML;
@@ -5787,7 +6398,7 @@ Exact Output JSON Format Required:
         });
       });
 
-      // --- 5. LOGOUT ---
+      // Logout
       addSafeListener("logoutBtn", "click", async () => {
         try {
           if (auth.currentUser) {
@@ -5805,6 +6416,376 @@ Exact Output JSON Format Required:
 
         window.location.replace(window.location.pathname);
       });
+
+              // Auto-Restore Active Login Session on Startup
+      setTimeout(() => {
+        const savedUser = localStorage.getItem("loggedUser");
+        const savedRole = localStorage.getItem("loggedRole");
+        const savedClass = localStorage.getItem("assignedClass");
+        const savedAdmn = localStorage.getItem("studentAdmn");
+        if (savedUser && savedRole) {
+          renderDashboardForRole(savedRole, savedClass, savedAdmn || savedUser);
+          window.hydrateRoleDashboard(savedRole, false);
+        }
+      }, 100);
+
+      // =========================================================================
+      // PHASE 2: STUDENT SEARCH AUTOCOMPLETE, EXPENSES, SUBJECTS & FEATURE LOCKS
+      // =========================================================================
+
+      // --- 1. STUDENT SEARCH AUTOCOMPLETE ENGINE ---
+      function setupStudentSearch(inputId, resultsBoxId, hiddenAdmnId, filterStdId = null) {
+        const input = document.getElementById(inputId);
+        const resultsBox = document.getElementById(resultsBoxId);
+        const hiddenAdmn = document.getElementById(hiddenAdmnId);
+        if (!input || !resultsBox) return;
+
+        input.addEventListener("input", () => {
+          const q = input.value.toLowerCase().trim();
+          if (!q) {
+            resultsBox.style.display = "none";
+            return;
+          }
+
+          let students = getLiveStudents();
+          if (filterStdId) {
+            const stdVal = document.getElementById(filterStdId)?.value;
+            if (stdVal) students = students.filter(s => cleanClassStr(s.class) === cleanClassStr(stdVal));
+          } else if (currentRole === "teacher") {
+            students = students.filter(s => cleanClassStr(s.class) === cleanClassStr(assignedClass));
+          }
+
+          const filtered = students.filter(s => s && s.name && (s.name.toLowerCase().includes(q) || String(s.admn).includes(q)));
+          resultsBox.innerHTML = "";
+
+          if (inputId === "attTrackSearchInput" || inputId === "tAttTrackSearchInput") {
+            const allItem = document.createElement("div");
+            allItem.className = "search-result-item";
+            allItem.innerText = "🌟 All Students (Entire Class)";
+            allItem.onclick = () => {
+              input.value = "All Students";
+              if (hiddenAdmn) hiddenAdmn.value = "ALL";
+              resultsBox.style.display = "none";
+            };
+            resultsBox.appendChild(allItem);
+          }
+
+          if (filtered.length === 0 && inputId !== "attTrackSearchInput" && inputId !== "tAttTrackSearchInput") {
+            resultsBox.innerHTML = `<div class="search-result-item">No students found</div>`;
+          } else {
+            filtered.forEach(s => {
+              const item = document.createElement("div");
+              item.className = "search-result-item";
+              item.innerText = `${s.name} (${s.admn})`;
+              item.onclick = () => {
+                input.value = s.name;
+                if (hiddenAdmn) hiddenAdmn.value = s.admn;
+                resultsBox.style.display = "none";
+              };
+              resultsBox.appendChild(item);
+            });
+          }
+          resultsBox.style.display = "block";
+        });
+      }
+
+      setupStudentSearch("feeStudentSearchInput", "feeSearchResultsBox", "feeSelectedStudentAdmn", "feeModalStd");
+      setupStudentSearch("cardSearchInput", "cardSearchResultsBox", "cardSelectedAdmn", "cardStdSelect");
+      setupStudentSearch("rmFeeSearchInput", "rmFeeSearchResultsBox", "rmFeeSelectedAdmn");
+      setupStudentSearch("attTrackSearchInput", "attTrackResultsBox", "attTrackSelectedAdmn", "attTrackStdSelect");
+      setupStudentSearch("tAttTrackSearchInput", "tAttTrackResultsBox", "tAttTrackSelectedAdmn");
+      setupStudentSearch("concessionSearchInput", "concessionSearchResultsBox", "concessionSelectedAdmn", "concessionStdSelect");
+
+      // --- 2. ADD & MANAGE SUBJECTS ENGINE ---
+      addSafeListener("saveSubjectBtn", "click", () => {
+        const btn = document.getElementById("saveSubjectBtn");
+        runWithBtnSpinner(btn, "💾 Save Subject", async () => {
+          const subjectName = document.getElementById("newSubjectNameInput").value.trim();
+          if (!subjectName) {
+            window.showCustomAlert("Please enter a subject name.");
+            return;
+          }
+
+          const targetClass = currentRole === "admin" ? document.getElementById("subAdminClassSelect").value : assignedClass;
+          const classKey = cleanClassStr(targetClass);
+          const subjId = Date.now().toString();
+          const subDocKey = `${classKey}_${subjId}`;
+          const subPayload = { id: subjId, docKey: subDocKey, name: subjectName, class: classKey, date: getTodayFormattedDate() };
+
+          try {
+            await setDoc(doc(fsDb, "subjects", subDocKey), subPayload, { merge: true });
+            const Sentinel = window.Igris || window.AccuEngine;
+            if (Sentinel && typeof Sentinel.setLocal === "function") {
+              await Sentinel.setLocal("subjects", subDocKey, subPayload);
+              if (typeof Sentinel.bumpSyncVersion === "function") Sentinel.bumpSyncVersion();
+            }
+
+            window.showCustomAlert(`✔ Subject "${subjectName}" saved successfully for Class ${classKey}!`);
+            document.getElementById("newSubjectNameInput").value = "";
+            window.closeModal("addSubjectModal");
+          } catch (err) {
+            window.showCustomAlert("Error saving subject: " + err.message);
+          }
+        });
+      });
+
+      // --- 3. EXPENSES MANAGEMENT ENGINE ---
+      async function loadTeachersInExpenseDropdown() {
+        const select = document.getElementById("expTeacherNameSelect");
+        if (!select) return;
+        const teachers = await window.MasterUserEngine.getUsersByRole("teacher");
+        select.innerHTML = '<option value="">-- Select Teacher --</option>';
+        teachers.forEach(t => {
+          if (t && t.name) select.innerHTML += `<option value="${t.name}">${t.name}</option>`;
+        });
+      }
+
+      addSafeListener("expType", "change", (e) => {
+        const type = e.target.value;
+        const tBox = document.getElementById("expTeacherBox");
+        const dBox = document.getElementById("expDescBox");
+        if (tBox) tBox.style.display = type === "Teacher Salary" ? "block" : "none";
+        if (dBox) dBox.style.display = type === "Teacher Salary" ? "none" : "block";
+      });
+
+      addSafeListener("submitExpBtn", "click", () => {
+        const btn = document.getElementById("submitExpBtn");
+        runWithBtnSpinner(btn, "Submit Entry", async () => {
+          const type = document.getElementById("expType").value;
+          const amount = document.getElementById("expAmount").value.trim();
+          const teacherName = document.getElementById("expTeacherNameSelect") ? document.getElementById("expTeacherNameSelect").value : "";
+          const desc = document.getElementById("expDescInput") ? document.getElementById("expDescInput").value.trim() : "";
+          const month = document.getElementById("expGenMonthSelect") ? document.getElementById("expGenMonthSelect").value : getAutoMonthName();
+
+          if (!type || !amount) {
+            window.showCustomAlert("Please fill all expense details.");
+            return;
+          }
+
+          const expId = Date.now().toString();
+          const detail = type === "Teacher Salary" ? teacherName : (desc || "Others Expense");
+          const expDocKey = `${month}_${expId}`;
+          const expPayload = {
+            id: expId,
+            docKey: expDocKey,
+            date: getTodayFormattedDate(),
+            month: month,
+            type: type,
+            detail: detail,
+            amount: amount,
+            updatedAt: new Date().toISOString()
+          };
+
+          try {
+            await setDoc(doc(fsDb, "expenses", expDocKey), expPayload, { merge: true });
+            const Sentinel = window.Igris || window.AccuEngine;
+            if (Sentinel && typeof Sentinel.setLocal === "function") {
+              await Sentinel.setLocal("expenses", expDocKey, expPayload);
+              if (typeof Sentinel.bumpSyncVersion === "function") Sentinel.bumpSyncVersion();
+            }
+
+            window.showCustomAlert("✔ Expense entry saved successfully.");
+            document.getElementById("expAmount").value = "";
+            if (document.getElementById("expDescInput")) document.getElementById("expDescInput").value = "";
+          } catch (err) {
+            window.showCustomAlert("Error saving expense: " + err.message);
+          }
+        });
+      });
+
+      addSafeListener("generateExpenseSheetBtn", "click", () => {
+        const btn = document.getElementById("generateExpenseSheetBtn");
+        runWithBtnSpinner(btn, "Generate Expense Sheet", async () => {
+          const month = document.getElementById("expGenMonthSelect").value;
+          const allExp = await safeDataFetch("expenses") || {};
+          const tbody = document.getElementById("expSheetBody");
+          if (!tbody) return;
+          tbody.innerHTML = "";
+
+          let count = 0;
+          Object.values(allExp).forEach(ex => {
+            if (ex && ex.month === month) {
+              count++;
+              tbody.innerHTML += `<tr><td>${ex.date}</td><td>${ex.type}</td><td>${ex.detail || "-"}</td><td>₹${ex.amount}</td></tr>`;
+            }
+          });
+
+          const displayArea = document.getElementById("expenseSheetDisplayArea");
+          if (displayArea) displayArea.style.display = count > 0 ? "block" : "none";
+          if (count === 0) window.showCustomAlert(`No expense records found for ${month}.`);
+        });
+      });
+
+      addSafeListener("loadRmExpenseSheetBtn", "click", async () => {
+        const month = document.getElementById("rmExpGenMonthSelect").value;
+        const allExp = await safeDataFetch("expenses") || {};
+        const tbody = document.getElementById("rmExpSheetBody");
+        if (!tbody) return;
+        tbody.innerHTML = "";
+
+        let count = 0;
+        Object.entries(allExp).forEach(([key, ex]) => {
+          if (ex && ex.month === month) {
+            count++;
+            tbody.innerHTML += `<tr><td>${ex.date}</td><td>${ex.type}</td><td>${ex.detail || "-"}</td><td>₹${ex.amount}</td><td><button class="btn-sm-del" onclick="window.deleteExpenseEntry('${key}')">Delete</button></td></tr>`;
+          }
+        });
+
+        const displayArea = document.getElementById("rmExpenseSheetDisplayArea");
+        if (displayArea) displayArea.style.display = count > 0 ? "block" : "none";
+        if (count === 0) window.showCustomAlert(`No expense records available for ${month}.`);
+      });
+
+      window.deleteExpenseEntry = async function(expKey) {
+        window.showCustomConfirm("Are you sure you want to remove this expense entry?", async () => {
+          try {
+            await deleteDoc(doc(fsDb, "expenses", expKey));
+            const Sentinel = window.Igris || window.AccuEngine;
+            if (Sentinel && typeof Sentinel.invalidate === "function") {
+              await Sentinel.invalidate("expenses", expKey);
+            }
+            window.showCustomAlert("✔ Expense entry removed successfully.");
+            const loadBtn = document.getElementById("loadRmExpenseSheetBtn");
+            if (loadBtn) loadBtn.click();
+          } catch (err) {
+            window.showCustomAlert("Error deleting expense: " + err.message);
+          }
+        });
+      };
+
+      // --- 4. TEACHER FEATURE LOCKS & REALTIME SYNC ---
+      window.syncTeacherFeatureLocksRealtime = function() {
+        const loggedUser = localStorage.getItem("loggedUser");
+        if (!loggedUser || currentRole !== "teacher") return;
+
+        const applyLocksUI = (permData) => {
+          const feat = (permData && permData.features) ? permData.features : {};
+          window.activeTeacherPermsCache = {
+            profile: (permData && permData.profile) ? permData.profile : {},
+            features: feat
+          };
+
+          document.querySelectorAll("[data-tfeat]").forEach(el => {
+            const key = el.getAttribute("data-tfeat");
+            const locked = feat[key] === false;
+            el.style.opacity = locked ? "0.55" : "1";
+
+            let badge = el.querySelector(".admin-lock-pill");
+            if (locked) {
+              if (!badge && el.classList.contains("drawer-item")) {
+                badge = document.createElement("span");
+                badge.className = "admin-lock-pill";
+                badge.style.cssText = "margin-left:auto; font-size:9px; font-weight:900; background:rgba(239,68,68,0.15); color:#ef4444; padding:2px 7px; border-radius:6px;";
+                badge.innerText = "🔒 Locked by Admin";
+                el.appendChild(badge);
+              }
+            } else if (badge) {
+              badge.remove();
+            }
+          });
+        };
+
+        safeDataFetch(`teacher_permissions/${loggedUser}`).then(res => {
+          if (res) applyLocksUI(res);
+          else {
+            safeDataFetch("teacher_permissions/ALL").then(globalRes => applyLocksUI(globalRes || {}));
+          }
+        });
+      };
+
+      // --- 5. ADMIN CONTROLS: TEACHER PERMISSIONS ---
+      window.switchControlsSubTab = async function(tab) {
+        document.getElementById("ctrlSubTabStudentBtn").classList.toggle("active", tab === "student");
+        document.getElementById("ctrlSubTabTeacherBtn").classList.toggle("active", tab === "teacher");
+        document.getElementById("ctrlStudentPane").style.display = tab === "student" ? "block" : "none";
+        document.getElementById("ctrlTeacherPane").style.display = tab === "teacher" ? "block" : "none";
+
+        if (tab === "teacher") {
+          const sel = document.getElementById("tchAllowTargetSelect");
+          if (!sel) return;
+          const teachers = await window.MasterUserEngine.getUsersByRole("teacher");
+          sel.innerHTML = `<option value="ALL">🌟 All Teachers (Global Default)</option>`;
+          teachers.forEach(t => {
+            if (t && t.username) sel.innerHTML += `<option value="${t.username}">👩‍🏫 ${t.name} (${t.username})</option>`;
+          });
+          window.loadTeacherAllowedSettings("ALL");
+        }
+      };
+
+      window.loadTeacherAllowedSettings = async function(targetKey) {
+        const key = targetKey || "ALL";
+        let data = await safeDataFetch(`teacher_permissions/${key}`);
+        if (!data && key !== "ALL") {
+          data = await safeDataFetch("teacher_permissions/ALL");
+        }
+        const prof = (data && data.profile) ? data.profile : {};
+        const feat = (data && data.features) ? data.features : {};
+
+        document.getElementById("allowTchNameChk").checked = !!prof.name;
+        document.getElementById("allowTchUserChk").checked = !!prof.username;
+        document.getElementById("allowTchPassChk").checked = !!prof.password;
+        document.getElementById("allowTchPhoneChk").checked = !!prof.phone;
+        document.getElementById("allowTchEmailChk").checked = !!prof.email;
+        document.getElementById("allowTchPhotoChk").checked = !!prof.photo;
+
+        const isFeatOn = (k) => feat[k] !== false;
+        document.getElementById("featTchMusterChk").checked = isFeatOn("muster");
+        document.getElementById("featTchRegStudentChk").checked = isFeatOn("regStudent");
+        document.getElementById("featTchAttendChk").checked = isFeatOn("attend");
+        document.getElementById("featTchTrackAttChk").checked = isFeatOn("trackAtt");
+        document.getElementById("featTchPerformChk").checked = isFeatOn("perform");
+        document.getElementById("featTchTestsChk").checked = isFeatOn("tests");
+        document.getElementById("featTchHomeworkChk").checked = isFeatOn("homework");
+        document.getElementById("featTchStudyMatChk").checked = isFeatOn("studyMat");
+        document.getElementById("featTchTimetableChk").checked = isFeatOn("timetable");
+        document.getElementById("featTchLeavesChk").checked = isFeatOn("leaves");
+      };
+
+      window.saveTeacherAllowedSettings = function() {
+        const btn = document.getElementById("saveTeacherAllowedBtn");
+        runWithBtnSpinner(btn, "💾 Save Teacher Controls", async () => {
+          const targetKey = document.getElementById("tchAllowTargetSelect").value || "ALL";
+          const payload = {
+            profile: {
+              name: document.getElementById("allowTchNameChk").checked,
+              username: document.getElementById("allowTchUserChk").checked,
+              password: document.getElementById("allowTchPassChk").checked,
+              phone: document.getElementById("allowTchPhoneChk").checked,
+              email: document.getElementById("allowTchEmailChk").checked,
+              photo: document.getElementById("allowTchPhotoChk").checked
+            },
+            features: {
+              muster: document.getElementById("featTchMusterChk").checked,
+              regStudent: document.getElementById("featTchRegStudentChk").checked,
+              attend: document.getElementById("featTchAttendChk").checked,
+              trackAtt: document.getElementById("featTchTrackAttChk").checked,
+              perform: document.getElementById("featTchPerformChk").checked,
+              tests: document.getElementById("featTchTestsChk").checked,
+              homework: document.getElementById("featTchHomeworkChk").checked,
+              studyMat: document.getElementById("featTchStudyMatChk").checked,
+              timetable: document.getElementById("featTchTimetableChk").checked,
+              leaves: document.getElementById("featTchLeavesChk").checked
+            },
+            updatedAt: Date.now()
+          };
+
+          const updates = {};
+          updates[`teacher_permissions/${targetKey}`] = payload;
+
+          if (targetKey === "ALL") {
+            const teachers = await window.MasterUserEngine.getUsersByRole("teacher");
+            teachers.forEach(t => {
+              updates[`teacher_permissions/${t.username}`] = payload;
+            });
+          }
+
+          await update(ref(db), updates);
+          window.showCustomAlert(`✔ Teacher Controls saved for ${targetKey === "ALL" ? "All Teachers" : targetKey}!`);
+          window.closeModal("studentAllowedModal");
+        });
+      };
+
+
 
 
 
