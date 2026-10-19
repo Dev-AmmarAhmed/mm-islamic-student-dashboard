@@ -4954,11 +4954,10 @@ Exact Output JSON Format Required:
 
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js";
-    import { getDatabase, ref, onValue, set, update, remove, child, get, query, orderByChild, equalTo } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+    import { getDatabase, ref, onValue, set, update, remove, child, get, query, orderByChild, equalTo, startAfter, onChildAdded, onChildChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
     import { getAuth, signInAnonymously, onAuthStateChanged, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
     import { getFirestore, doc, setDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-    import { syncWithIgrisCache } from '/Igris/igris.js';
-
+    
       
     // M.M ISLAMIC ENGLISH SCHOOL FIREBASE CREDENTIALS
     const firebaseConfig = {
@@ -4984,6 +4983,43 @@ Exact Output JSON Format Required:
        const db = getDatabase(app);
     const auth = getAuth(app);
     const fsDb = getFirestore(app);
+
+          // --- IGRIS BANDWIDTH SAVER CACHE ENGINE ---
+    function syncWithIgrisCache(db, nodePath, cacheKey, timestampField, callback) {
+        let cachedData = {};
+        try {
+            const raw = localStorage.getItem(cacheKey);
+            if (raw) cachedData = JSON.parse(raw);
+        } catch (e) { console.error("Cache Error:", e); }
+
+        callback(cachedData); // Turant UI load karega (0 lag)
+
+        let lastTimestamp = 0;
+        const items = Object.values(cachedData);
+        if (items.length > 0) { lastTimestamp = Math.max(...items.map(i => i[timestampField] || 0)); }
+
+        const dbRef = ref(db, nodePath);
+        let liveQuery = lastTimestamp > 0 ? query(dbRef, orderByChild(timestampField), startAfter(lastTimestamp)) : query(dbRef, orderByChild(timestampField));
+
+        onChildAdded(liveQuery, (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                cachedData[snapshot.key] = data;
+                localStorage.setItem(cacheKey, JSON.stringify(cachedData));
+                callback(cachedData);
+            }
+        });
+
+        onChildChanged(dbRef, (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                cachedData[snapshot.key] = data;
+                localStorage.setItem(cacheKey, JSON.stringify(cachedData));
+                callback(cachedData);
+            }
+        });
+    }
+    // ------------------------------------------
 
     // Ensure background Firebase Auth token is always active for Security Rules
     window.ensureFirebaseAuth = async function() {
@@ -5076,6 +5112,7 @@ Exact Output JSON Format Required:
             let dbSaveTimeout = null;
 
             let studentsListenerAttached = false;
+    
             window.attachSmartStudentsListener = function(role, sAdmn) {
         if (studentsListenerAttached) return;
         studentsListenerAttached = true;
@@ -5089,7 +5126,7 @@ Exact Output JSON Format Required:
           return;
         }
 
-        // --- IGRIS CACHE SYSTEM ---
+        // --- IGRIS CACHE SYSTEM ACTIVATED ---
         syncWithIgrisCache(db, 'students', 'offlineDbCache_students', 'timestamp', (cachedData) => {
           inMemoryStudentsData = cachedData;
           if (currentRole === "admin") renderAdminStudentsDirectory(true);
@@ -5099,6 +5136,7 @@ Exact Output JSON Format Required:
           }
         });
       };
+
 
 
       window.cleanExpiredTestCaches = function() {
