@@ -8,12 +8,17 @@
     @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&display=swap');
     body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; }
     .container { background: #1e293b; padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); max-width: 600px; width: 100%; border: 1px solid #334155; }
-    h1 { color: #38bdf8; font-family: 'Montserrat', sans-serif; text-align: center; margin-top: 0; }
-    .step-box { background: rgba(0,0,0,0.2); padding: 16px; border-radius: 12px; margin-bottom: 20px; border: 1px dashed #475569; }
+    h1 { color: #38bdf8; font-family: 'Montserrat', sans-serif; text-align: center; margin-top: 0; margin-bottom: 10px; }
+    .step-box { background: rgba(0,0,0,0.2); padding: 16px; border-radius: 12px; margin-bottom: 16px; border: 1px dashed #475569; }
     input[type="file"] { width: 100%; padding: 10px; background: #0f172a; border-radius: 8px; color: #38bdf8; border: 1px solid #38bdf8; cursor: pointer; }
+    
     button { width: 100%; padding: 14px; font-size: 16px; font-weight: bold; color: white; background: linear-gradient(135deg, #10b981 0%, #047857 100%); border: none; border-radius: 12px; cursor: pointer; transition: 0.3s; margin-top: 10px; }
     button:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(16, 185, 129, 0.4); }
     button:disabled { background: #475569; cursor: not-allowed; box-shadow: none; transform: none; }
+    
+    .wipe-box { background: rgba(239, 68, 68, 0.1); border: 1px dashed #ef4444; padding: 16px; border-radius: 12px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px; }
+    .wipe-box input[type="checkbox"] { width: 24px; height: 24px; accent-color: #ef4444; cursor: pointer; }
+    
     .log-box { background: #000; color: #10b981; font-family: monospace; font-size: 12px; padding: 15px; border-radius: 10px; height: 250px; overflow-y: auto; margin-top: 20px; border: 1px solid #334155; }
     .progress-bar-container { width: 100%; background: #334155; border-radius: 8px; margin-top: 10px; overflow: hidden; display: none; }
     .progress-bar { height: 12px; background: #38bdf8; width: 0%; transition: width 0.3s; }
@@ -23,29 +28,37 @@
 
   <div class="container">
     <h1>🚀 Database Migrator</h1>
-    <p style="text-align: center; color: #94a3b8; font-size: 14px;">Realtime Database JSON ➡️ Cloud Firestore</p>
+    <p style="text-align: center; color: #94a3b8; font-size: 14px; margin-bottom: 20px;">Realtime Database ➡️ Clean Cloud Firestore</p>
 
     <div class="step-box">
       <label style="font-weight: bold; margin-bottom: 8px; display: block; color: #fbbf24;">1. Select Exported JSON File:</label>
       <input type="file" id="jsonFileInput" accept=".json">
     </div>
 
-    <button id="startBtn" disabled>Start Migration to Firestore</button>
+    <div class="wipe-box">
+      <input type="checkbox" id="wipeDataCheck" checked>
+      <div>
+        <div style="font-weight: 900; color: #ef4444;">🔥 Wipe Old Firestore Data</div>
+        <div style="font-size: 11px; color: #f87171;">Deletes existing collections before creating new ones.</div>
+      </div>
+    </div>
+
+    <button id="startBtn" disabled>Wipe & Start Migration</button>
 
     <div class="progress-bar-container" id="progressContainer">
       <div class="progress-bar" id="progressBar"></div>
     </div>
     
     <div class="log-box" id="logBox">
-      [System] Ready. Please select a JSON file.
+      [System] Ready. Please select your RTDB JSON file.
     </div>
   </div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getFirestore, writeBatch, doc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getFirestore, writeBatch, doc, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-    // 🔴 AAPKA EXACT FIREBASE CONFIG ADD KAR DIYA GAYA HAI
+    // 🔴 FIREBASE CONFIG
     const firebaseConfig = {
       apiKey: "AIzaSyBHpbgoGs7HFQ3-1tBn9BpGT4YYDaKkZB8",
       authDomain: "mm-islamic-erp.firebaseapp.com",
@@ -60,6 +73,7 @@
     const fsDb = getFirestore(app);
 
     const fileInput = document.getElementById("jsonFileInput");
+    const wipeDataCheck = document.getElementById("wipeDataCheck");
     const startBtn = document.getElementById("startBtn");
     const logBox = document.getElementById("logBox");
     const progressBar = document.getElementById("progressBar");
@@ -93,7 +107,62 @@
       reader.readAsText(file);
     });
 
-    // CRASH-PROOF Mapper Engine (Skips Null Data & Converts Arrays properly)
+    // 🔥 SMART WIPE ENGINE: Purane saare collections ko delete karega
+    async function wipeOldFirestoreData() {
+      const knownCollections = [
+        'students', 'teachers', 'users', 'email_lookup', 'teacher_points_logs', 'student_permissions', 'teacher_permissions', 'enabled_syllabus',
+        'study_material', 'homework', 'online_tests', 'subjects', 'timetable',
+        'leave_applications', 'teacher_leave_applications', 'tests', 'daily_claims', 'teacher_daily_claims', 'notifications',
+        'fees_matrix', 'fees_entries', 'student_test_attempts',
+        'syllabus_chapters', 'syllabus_progress', 'expenses', 'attendance', 'muster'
+      ];
+
+      log("🔥 Wiping old Firestore data...", "#ef4444");
+      
+      for (const colName of knownCollections) {
+        try {
+          const snapshot = await getDocs(collection(fsDb, colName));
+          if (!snapshot.empty) {
+            const batch = writeBatch(fsDb);
+            let count = 0;
+            snapshot.forEach(docSnap => {
+              batch.delete(docSnap.ref);
+              count++;
+            });
+            await batch.commit();
+            log(`🗑️ Deleted ${count} old documents from [${colName}]`, "#f87171");
+          }
+        } catch (e) {
+          // Ignore if collection doesn't exist yet
+        }
+      }
+      log("✔ Firestore Database Wipe Complete! Ready for fresh data.", "#fbbf24");
+    }
+
+
+    // DATA SANITIZER (Prevents 1MB Crash)
+    function sanitizeData(data) {
+      if (!data) return data;
+      const MAX_LEN = 800000; // Safe Limit (~800 KB)
+      
+      if (typeof data === 'string') {
+         if (data.length > MAX_LEN) {
+            log(`⚠️ Large image detected and resized to prevent crash.`, "#f59e0b");
+            return "https://via.placeholder.com/150?text=Image+Too+Large";
+         }
+         return data;
+      }
+      
+      if (typeof data === 'object') {
+         if (Array.isArray(data)) return data.map(item => sanitizeData(item));
+         const cleanObj = {};
+         for (let key in data) cleanObj[key] = sanitizeData(data[key]);
+         return cleanObj;
+      }
+      return data;
+    }
+
+    // Mapper Engine
     function generateFirestoreOperations(data) {
       const operations = [];
 
@@ -108,39 +177,35 @@
         return { data: val };
       }
 
-      // Category 1: Flat Collections
       const flatNodes = ['students', 'teachers', 'users', 'email_lookup', 'teacher_points_logs', 'student_permissions', 'teacher_permissions', 'enabled_syllabus'];
       flatNodes.forEach(node => {
         safeObjectEntries(data[node]).forEach(([docId, docData]) => {
-          if (docData) operations.push({ path: `${node}/${String(docId)}`, data: ensureObject(docData) });
+          if (docData) operations.push({ path: `${node}/${String(docId)}`, data: sanitizeData(ensureObject(docData)) });
         });
       });
 
-      // Category 2: Class Nested
       const classNestedNodes = ['study_material', 'homework', 'online_tests', 'subjects', 'timetable'];
       classNestedNodes.forEach(node => {
         safeObjectEntries(data[node]).forEach(([classId, items]) => {
           safeObjectEntries(items).forEach(([itemId, itemData]) => {
-            if (itemData) operations.push({ path: `${node}/${classId}/items/${itemId}`, data: ensureObject(itemData) });
+            if (itemData) operations.push({ path: `${node}/${classId}/items/${itemId}`, data: sanitizeData(ensureObject(itemData)) });
           });
         });
       });
 
-      // Category 3: User Nested
       const userNestedNodes = ['leave_applications', 'teacher_leave_applications', 'tests', 'daily_claims', 'teacher_daily_claims', 'notifications', 'fees_matrix', 'fees_entries', 'student_test_attempts'];
       userNestedNodes.forEach(node => {
         safeObjectEntries(data[node]).forEach(([userId, records]) => {
           safeObjectEntries(records).forEach(([recordId, recordData]) => {
-            if (recordData) operations.push({ path: `${node}/${userId}/records/${recordId}`, data: ensureObject(recordData) });
+            if (recordData) operations.push({ path: `${node}/${userId}/records/${recordId}`, data: sanitizeData(ensureObject(recordData)) });
           });
         });
       });
 
-      // Category 4: Syllabus Data (New Feature)
       if (data.syllabus_chapters) {
         safeObjectEntries(data.syllabus_chapters).forEach(([classId, subjects]) => {
           safeObjectEntries(subjects).forEach(([subject, chapters]) => {
-            if (chapters) operations.push({ path: `syllabus_chapters/${classId}_${subject}`, data: ensureObject(chapters) });
+            if (chapters) operations.push({ path: `syllabus_chapters/${classId}_${subject}`, data: sanitizeData(ensureObject(chapters)) });
           });
         });
       }
@@ -148,34 +213,31 @@
       if (data.syllabus_progress) {
         safeObjectEntries(data.syllabus_progress).forEach(([admn, subjects]) => {
           safeObjectEntries(subjects).forEach(([subject, progressData]) => {
-            if (progressData) operations.push({ path: `syllabus_progress/${admn}/subjects/${subject}`, data: ensureObject(progressData) });
+            if (progressData) operations.push({ path: `syllabus_progress/${admn}/subjects/${subject}`, data: sanitizeData(ensureObject(progressData)) });
           });
         });
       }
 
-      // Category 5: Expenses
       if (data.expenses) {
         safeObjectEntries(data.expenses).forEach(([month, records]) => {
           safeObjectEntries(records).forEach(([expId, expData]) => {
-            if(expData) operations.push({ path: `expenses/${month}/records/${expId}`, data: ensureObject(expData) });
+            if(expData) operations.push({ path: `expenses/${month}/records/${expId}`, data: sanitizeData(ensureObject(expData)) });
           });
         });
       }
 
-      // Category 6: Attendance
       if (data.attendance) {
         safeObjectEntries(data.attendance).forEach(([admn, months]) => {
           safeObjectEntries(months).forEach(([month, days]) => {
-            if(days) operations.push({ path: `attendance/${admn}/months/${month}`, data: ensureObject(days) });
+            if(days) operations.push({ path: `attendance/${admn}/months/${month}`, data: sanitizeData(ensureObject(days)) });
           });
         });
       }
 
-      // Category 7: Muster
       if (data.muster) {
         safeObjectEntries(data.muster).forEach(([month, days]) => {
           safeObjectEntries(days).forEach(([day, teachers]) => {
-            if(teachers) operations.push({ path: `muster/${month}/days/${day}`, data: ensureObject(teachers) });
+            if(teachers) operations.push({ path: `muster/${month}/days/${day}`, data: sanitizeData(ensureObject(teachers)) });
           });
         });
       }
@@ -186,11 +248,18 @@
     startBtn.addEventListener("click", async () => {
       if (!parsedData) return;
       startBtn.disabled = true;
-      startBtn.innerText = "⏳ Migrating Please Wait...";
+      startBtn.innerText = "⏳ Processing Please Wait...";
       progressContainer.style.display = "block";
 
+      // 1. WIPE OLD DATA (If checkbox is ticked)
+      if (wipeDataCheck.checked) {
+        await wipeOldFirestoreData();
+      } else {
+        log("⏭️ Skipping Wipe. Merging data with existing Firestore collections...", "#38bdf8");
+      }
+
+      // 2. MIGRATE NEW DATA
       log("Analyzing JSON structure and preparing Firestore batches...");
-      
       let operations = [];
       try {
           operations = generateFirestoreOperations(parsedData);
@@ -200,7 +269,7 @@
       }
 
       const totalOps = operations.length;
-      log(`Total documents to write: ${totalOps}`, "#fbbf24");
+      log(`Total new documents to write: ${totalOps}`, "#fbbf24");
 
       if (totalOps === 0) {
         log("No structured data found to migrate.", "#ef4444");
@@ -209,13 +278,13 @@
 
       const CHUNK_SIZE = 400; // Batch limit safe size
       let completedOps = 0;
+      let failedBatches = 0;
 
       for (let i = 0; i < totalOps; i += CHUNK_SIZE) {
         const chunk = operations.slice(i, i + CHUNK_SIZE);
         const batch = writeBatch(fsDb);
 
         chunk.forEach(op => {
-          // Document ID mein spaces ya invalid chars ko replace kar dena safe hota hai
           const safePath = op.path.replace(/\s+/g, '_'); 
           const docRef = doc(fsDb, safePath);
           batch.set(docRef, op.data);
@@ -228,13 +297,19 @@
           progressBar.style.width = `${percentage}%`;
           log(`Migrated ${completedOps} / ${totalOps} documents...`);
         } catch (error) {
+          failedBatches++;
           log(`❌ Error writing batch to Firestore: ${error.message}`, "#ef4444");
         }
       }
 
-      log("🎉 MIGRATION COMPLETED SUCCESSFULLY!", "#10b981");
-      startBtn.innerText = "✔ Migration Done";
-      startBtn.style.background = "#10b981";
+      if (failedBatches === 0) {
+          log("🎉 ALL NEW COLLECTIONS CREATED SUCCESSFULLY!", "#10b981");
+          startBtn.innerText = "✔ Wipe & Migration Done";
+          startBtn.style.background = "#10b981";
+      } else {
+          log(`⚠️ Migration finished, but ${failedBatches} batches had errors.`, "#f59e0b");
+          startBtn.innerText = "⚠️ Done with Warnings";
+      }
     });
 
   </script>
