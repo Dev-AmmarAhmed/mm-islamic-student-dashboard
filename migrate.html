@@ -2,329 +2,389 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>M.M ISLAMIC ERP - Data Migration Engine</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>M.M Islamic School - Database Migration Engine</title>
   <style>
-    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0b132b; color: #f8fafc; padding: 24px; display: flex; justify-content: center; }
-    .card { background: #1c2541; padding: 30px; border-radius: 18px; max-width: 650px; width: 100%; box-shadow: 0 10px 30px rgba(0,0,0,0.4); border: 1px solid #3a506b; }
-    h2 { color: #38bdf8; margin-top: 0; font-size: 20px; }
-    p { font-size: 13px; color: #94a3b8; line-height: 1.5; }
-    input[type="file"] { width: 100%; padding: 12px; margin: 15px 0; background: #0b132b; border: 1.5px dashed #38bdf8; border-radius: 12px; color: #f8fafc; cursor: pointer; }
-    button { width: 100%; padding: 14px; background: linear-gradient(135deg, #10b981 0%, #047857 100%); color: white; border: none; border-radius: 12px; font-weight: 800; font-size: 14px; cursor: pointer; margin-top: 10px; }
-    button:disabled { opacity: 0.5; cursor: not-allowed; }
-    .log-box { background: #0b132b; border: 1px solid #3a506b; border-radius: 10px; padding: 14px; height: 260px; overflow-y: auto; font-family: monospace; font-size: 11.5px; color: #38bdf8; margin-top: 20px; }
-    .progress-bar { width: 100%; height: 8px; background: #0b132b; border-radius: 4px; overflow: hidden; margin-top: 15px; }
-    .progress-fill { width: 0%; height: 100%; background: #10b981; transition: width 0.2s ease; }
+    * {
+      box-sizing: border-box;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    body {
+      background: #0f172a;
+      color: #f8fafc;
+      padding: 24px;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .container {
+      width: 100%;
+      max-width: 820px;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+    }
+    h1 {
+      font-size: 20px;
+      font-weight: 900;
+      color: #38bdf8;
+      margin-top: 0;
+    }
+    p {
+      font-size: 13px;
+      color: #94a3b8;
+      line-height: 1.5;
+    }
+    .schema-box {
+      background: #090d16;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 12px;
+      font-family: monospace;
+      font-size: 11px;
+      color: #a5f3fc;
+      margin-bottom: 20px;
+      white-space: pre-wrap;
+    }
+    .btn-action {
+      background: #0288d1;
+      color: white;
+      border: none;
+      padding: 14px 24px;
+      font-size: 14px;
+      font-weight: 800;
+      border-radius: 10px;
+      cursor: pointer;
+      width: 100%;
+      transition: background 0.2s, transform 0.1s;
+    }
+    .btn-action:hover {
+      background: #039be5;
+    }
+    .btn-action:active {
+      transform: scale(0.99);
+    }
+    .btn-action:disabled {
+      background: #475569;
+      cursor: not-allowed;
+    }
+    .progress-bar-container {
+      background: #090d16;
+      border-radius: 8px;
+      height: 12px;
+      width: 100%;
+      overflow: hidden;
+      margin-top: 18px;
+      border: 1px solid #334155;
+    }
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: #10b981;
+      transition: width 0.2s;
+    }
+    .log-box {
+      background: #020617;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      height: 320px;
+      overflow-y: auto;
+      padding: 12px;
+      font-family: monospace;
+      font-size: 11px;
+      color: #cbd5e1;
+      margin-top: 16px;
+    }
+    .log-entry {
+      margin-bottom: 4px;
+    }
+    .log-success { color: #4ade80; }
+    .log-warn { color: #facc15; }
+    .log-err { color: #f87171; }
+    .log-info { color: #38bdf8; }
   </style>
 </head>
 <body>
 
-<div class="card">
-  <h2>⚡ MM Islamic ERP - Database Migration Tool</h2>
-  <p>Apna backup JSON file (<code>mm-islamic-erp-default-rtdb-export (1).json</code>) choose karein aur niche diye gaye button par click karein. Yeh tool sabhi nodes ko standard collections aur documents me parse karke Firestore me push karega.</p>
+  <div class="container">
+    <h1>⚡ 1-Click Unified Database Migration</h1>
+    <p>
+      Yeh tool aapke purane Firestore database ko read karega aur use naye unified structure mein migrate karega:
+    </p>
 
-  <input type="file" id="jsonFileInput" accept=".json">
-  <button id="startBtn" disabled>🚀 Start Auto Migration</button>
+    <div class="schema-box">
+Target Architecture:
+users/{userId}
+  ├── username, role, photo, class
+  ├── Details: { phone, DOB, email, ... }
+  └── muster/{YYYY-MM}
+        └── Days: {
+              Day_01: { status: "P" / "A" / "H", checkIn?: "..", checkOut?: ".." },
+              ...
+            }</div>
 
-  <div class="progress-bar">
-    <div id="progressFill" class="progress-fill"></div>
+    <button id="startMigrationBtn" class="btn-action" onclick="runMigrationProcess()">
+      🚀 Start 1-Click Database Migration
+    </button>
+
+    <div class="progress-bar-container">
+      <div id="migrationProgressBar" class="progress-bar"></div>
+    </div>
+
+    <div id="migrationLogs" class="log-box">
+      <div class="log-entry log-info">> Ready. Click the button above to begin migration...</div>
+    </div>
   </div>
 
-  <div id="logBox" class="log-box">Logs will appear here...</div>
-</div>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { 
+      getFirestore, 
+      collection, 
+      getDocs, 
+      doc, 
+      setDoc, 
+      writeBatch 
+    } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-  import { getFirestore, doc, writeBatch, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-  import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+    // School Firebase Config
+    const firebaseConfig = {
+      apiKey: "AIzaSyBHpbgoGs7HFQ3-1tBn9BpGT4YYDaKkZB8",
+      authDomain: "mm-islamic-erp.firebaseapp.com",
+      databaseURL: "https://mm-islamic-erp-default-rtdb.firebaseio.com",
+      projectId: "mm-islamic-erp",
+      storageBucket: "mm-islamic-erp.firebasestorage.app",
+      messagingSenderId: "547338314533",
+      appId: "1:547338314533:web:3973c2b36ef8b3b01170cc"
+    };
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyBHpbgoGs7HFQ3-1tBn9BpGT4YYDaKkZB8",
-    authDomain: "mm-islamic-erp.firebaseapp.com",
-    databaseURL: "https://mm-islamic-erp-default-rtdb.firebaseio.com",
-    projectId: "mm-islamic-erp",
-    storageBucket: "mm-islamic-erp.firebasestorage.app",
-    messagingSenderId: "547338314533",
-    appId: "1:547338314533:web:3973c2b36ef8b3b01170cc"
-  };
+    const app = initializeApp(firebaseConfig);
+    const fsDb = getFirestore(app);
 
-  const app = initializeApp(firebaseConfig);
-  const fsDb = getFirestore(app);
-  const rtdb = getDatabase(app);
+    const logBox = document.getElementById("migrationLogs");
+    const pBar = document.getElementById("migrationProgressBar");
+    const btn = document.getElementById("startMigrationBtn");
 
-  const fileInput = document.getElementById("jsonFileInput");
-  const startBtn = document.getElementById("startBtn");
-  const logBox = document.getElementById("logBox");
-  const progressFill = document.getElementById("progressFill");
+    function addLog(text, type = "info") {
+      const div = document.createElement("div");
+      div.className = `log-entry log-${type}`;
+      div.innerText = `[${new Date().toLocaleTimeString()}] ${text}`;
+      logBox.appendChild(div);
+      logBox.scrollTop = logBox.scrollHeight;
+    }
 
-  let parsedData = null;
+    function setProgress(pct) {
+      pBar.style.width = `${Math.min(100, Math.max(0, pct))}%`;
+    }
 
-  function log(msg) {
-    const time = new Date().toLocaleTimeString();
-    logBox.innerHTML += `<div>[${time}] ${msg}</div>`;
-    logBox.scrollTop = logBox.scrollHeight;
-  }
+    // Helper: Map month name to YYYY-MM
+    function resolveMonthToYYYYMM(monthNameOrKey) {
+      const raw = String(monthNameOrKey).trim();
+      if (/^\d{4}-\d{2}$/.test(raw)) return raw;
 
-  fileInput.addEventListener("change", (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
+      const currentYear = new Date().getFullYear();
+      const monthMap = {
+        "january": "01", "february": "02", "march": "03", "april": "04",
+        "may": "05", "june": "06", "july": "07", "august": "08",
+        "september": "09", "october": "10", "november": "11", "december": "12"
+      };
+      const mNum = monthMap[raw.toLowerCase()];
+      return mNum ? `${currentYear}-${mNum}` : `${currentYear}-10`;
+    }
+
+    window.runMigrationProcess = async function() {
+      btn.disabled = true;
+      btn.innerText = "⏳ Migrating Database... Please do not close this window";
+      logBox.innerHTML = "";
+      setProgress(5);
+
       try {
-        parsedData = JSON.parse(ev.target.result);
-        log(`✔ File parsed successfully! Ready to migrate.`);
-        startBtn.disabled = false;
+        addLog("Starting database sweep...", "info");
+
+        // 1. Fetch credentials from old users collection if exists
+        const existingUsersSnap = await getDocs(collection(fsDb, "users"));
+        const existingUsersMap = {};
+        existingUsersSnap.forEach(d => {
+          existingUsersMap[d.id] = d.data();
+        });
+        addLog(`Found ${Object.keys(existingUsersMap).length} entries in root 'users'.`, "info");
+        setProgress(15);
+
+        // 2. Migrate Students -> users/{admn}
+        addLog("Migrating 'students' collection...", "info");
+        const studentsSnap = await getDocs(collection(fsDb, "students"));
+        let stCount = 0;
+
+        for (const sDoc of studentsSnap.docs) {
+          const s = sDoc.data();
+          const uid = String(s.admn || sDoc.id);
+          const oldCreds = existingUsersMap[uid] || {};
+
+          const userPayload = {
+            userId: uid,
+            username: s.name || uid,
+            role: "student",
+            photo: s.photo || "",
+            class: String(s.class || "").replace(/class\s*/i, "").trim(),
+            password: oldCreds.password || "MM",
+            points: Number(s.points) || 0,
+            Details: {
+              phone: s.phone || "",
+              DOB: s.dob || "-",
+              regDate: s.regDate || "",
+              email: s.email || oldCreds.email || "",
+              customFee: s.customFee !== undefined ? s.customFee : null,
+              migratedAt: new Date().toISOString()
+            }
+          };
+
+          await setDoc(doc(fsDb, "users", uid), userPayload, { merge: true });
+          stCount++;
+        }
+        addLog(`✔ Migrated ${stCount} students to users collection.`, "success");
+        setProgress(40);
+
+        // 3. Migrate Teachers -> users/{username}
+        addLog("Migrating 'teachers' collection...", "info");
+        const teachersSnap = await getDocs(collection(fsDb, "teachers"));
+        let tCount = 0;
+
+        for (const tDoc of teachersSnap.docs) {
+          const t = tDoc.data();
+          const uid = String(t.username || tDoc.id);
+          const oldCreds = existingUsersMap[uid] || {};
+
+          const userPayload = {
+            userId: uid,
+            username: t.name || uid,
+            role: "teacher",
+            photo: t.photo || "",
+            assignedClass: t.assignedClass || "1",
+            password: oldCreds.password || "123456",
+            points: Number(t.points) || 0,
+            Details: {
+              phone: t.phone || "",
+              email: t.email || oldCreds.email || "",
+              regDate: t.regDate || "",
+              migratedAt: new Date().toISOString()
+            }
+          };
+
+          await setDoc(doc(fsDb, "users", uid), userPayload, { merge: true });
+          tCount++;
+        }
+        addLog(`✔ Migrated ${tCount} teachers to users collection.`, "success");
+        setProgress(60);
+
+        // 4. Migrate Student Attendance -> users/{admn}/muster/{YYYY-MM}
+        addLog("Migrating student attendance records into 'muster' sub-collections...", "info");
+        const attSnap = await getDocs(collection(fsDb, "attendance"));
+        let attDocCount = 0;
+
+        for (const aDoc of attSnap.docs) {
+          const aData = aDoc.data();
+          const docId = aDoc.id;
+
+          let admn = aData.admn;
+          let monthRaw = aData.month;
+
+          if (!admn || !monthRaw) {
+            const parts = docId.split("_");
+            if (parts.length >= 2) {
+              admn = parts[0];
+              monthRaw = parts.slice(1).join("_");
+            }
+          }
+
+          if (!admn || !monthRaw) continue;
+
+          const uid = String(admn);
+          const yyyyMm = resolveMonthToYYYYMM(monthRaw);
+          const daysSource = aData.days || aData;
+
+          const formattedDays = {};
+          for (let d = 1; d <= 31; d++) {
+            const dayKey = `day_${d}`;
+            const val = daysSource[dayKey];
+            if (val !== undefined) {
+              const dayStr = d < 10 ? `0${d}` : `${d}`;
+              let status = "A";
+              if (val === true || val === "Present" || val === "P") status = "P";
+              else if (val === "H" || val === "Holiday") status = "H";
+              formattedDays[`Day_${dayStr}`] = { status: status };
+            }
+          }
+
+          if (Object.keys(formattedDays).length > 0) {
+            await setDoc(doc(fsDb, "users", uid, "muster", yyyyMm), {
+              userId: uid,
+              month: yyyyMm,
+              Days: formattedDays,
+              updatedAt: new Date().toISOString()
+            }, { merge: true });
+            attDocCount++;
+          }
+        }
+        addLog(`✔ Migrated ${attDocCount} student monthly attendance documents.`, "success");
+        setProgress(85);
+
+        // 5. Migrate Root Teacher Muster -> users/{teacherId}/muster/{YYYY-MM}
+        addLog("Migrating root 'muster' collection (Teacher Check-In/Out)...", "info");
+        const musterSnap = await getDocs(collection(fsDb, "muster"));
+        let teacherMusterCount = 0;
+
+        for (const mDoc of musterSnap.docs) {
+          const monthKey = mDoc.id;
+          const monthData = mDoc.data() || {};
+          const yyyyMm = resolveMonthToYYYYMM(monthKey);
+
+          // Group by teacher: teacherMap[username][Day_01] = { status, checkIn, checkOut }
+          const teacherDaysMap = {};
+
+          for (let d = 1; d <= 31; d++) {
+            const dObj = monthData[`day_${d}`] || {};
+            const dayStr = d < 10 ? `0${d}` : `${d}`;
+            const dayKey = `Day_${dayStr}`;
+
+            for (const [tUser, timeRecord] of Object.entries(dObj)) {
+              if (!timeRecord || typeof timeRecord !== "object") continue;
+              if (!teacherDaysMap[tUser]) teacherDaysMap[tUser] = {};
+
+              teacherDaysMap[tUser][dayKey] = {
+                status: "P",
+                checkIn: timeRecord.in || timeRecord.checkIn || "-",
+                checkOut: timeRecord.out || timeRecord.checkOut || "-"
+              };
+            }
+          }
+
+          for (const [tUser, daysMap] of Object.entries(teacherDaysMap)) {
+            const uid = String(tUser);
+            await setDoc(doc(fsDb, "users", uid, "muster", yyyyMm), {
+              userId: uid,
+              month: yyyyMm,
+              Days: daysMap,
+              updatedAt: new Date().toISOString()
+            }, { merge: true });
+            teacherMusterCount++;
+          }
+        }
+        addLog(`✔ Migrated ${teacherMusterCount} teacher monthly muster sheets.`, "success");
+        setProgress(100);
+
+        addLog("🎉 SUCCESS: Entire database migrated to the new schema!", "success");
+        btn.innerText = "✔ Migration Complete!";
+        btn.style.background = "#10b981";
       } catch (err) {
-        log(`❌ Invalid JSON file: ${err.message}`);
+        console.error(err);
+        addLog(`❌ Fatal Error during migration: ${err.message}`, "log-err");
+        btn.disabled = false;
+        btn.innerText = "Retry Migration";
       }
     };
-    reader.readAsText(file);
-  });
-
-  async function commitBatchOperations(operationsList) {
-    const CHUNK_SIZE = 450;
-    const total = operationsList.length;
-    for (let i = 0; i < total; i += CHUNK_SIZE) {
-      const batch = writeBatch(fsDb);
-      const chunk = operationsList.slice(i, i + CHUNK_SIZE);
-      chunk.forEach(op => {
-        const docRef = doc(fsDb, op.collection, String(op.id));
-        batch.set(docRef, op.data, { merge: true });
-      });
-      await batch.commit();
-      const pct = Math.round(((i + chunk.length) / total) * 100);
-      progressFill.style.width = pct + "%";
-      log(`Pushed batch ${i + chunk.length} / ${total} documents...`);
-    }
-  }
-
-  startBtn.addEventListener("click", async () => {
-    if (!parsedData) return;
-    startBtn.disabled = true;
-    log("🚀 Starting database structuring and migration...");
-
-    const operations = [];
-
-    // 1. Students Collection
-    if (parsedData.students) {
-      log("Analyzing Students data...");
-      Object.entries(parsedData.students).forEach(([admn, st]) => {
-        if (st && typeof st === 'object') {
-          operations.push({
-            collection: "students",
-            id: admn,
-            data: {
-              admn: String(st.admn || admn),
-              name: st.name || "Student",
-              class: String(st.class || "1").replace(/class\s*/i, "").trim(),
-              phone: st.phone || "",
-              dob: st.dob || "-",
-              photo: st.photo || "",
-              points: Number(st.points) || 0,
-              regDate: st.regDate || "",
-              customFee: st.customFee !== undefined ? Number(st.customFee) : null
-            }
-          });
-        }
-      });
-    }
-
-    // 2. Teachers Collection
-    if (parsedData.teachers) {
-      log("Analyzing Teachers data...");
-      Object.entries(parsedData.teachers).forEach(([user, t]) => {
-        if (t && typeof t === 'object') {
-          operations.push({
-            collection: "teachers",
-            id: user,
-            data: {
-              username: String(t.username || user),
-              name: t.name || user,
-              assignedClass: t.assignedClass || "1",
-              phone: t.phone || "",
-              email: t.email || "",
-              photo: t.photo || "",
-              points: Number(t.points) || 0,
-              regDate: t.regDate || ""
-            }
-          });
-        }
-      });
-    }
-
-    // 3. Users Credentials Vault
-    if (parsedData.users) {
-      log("Analyzing Users credentials...");
-      Object.entries(parsedData.users).forEach(([uid, u]) => {
-        if (u && typeof u === 'object') {
-          operations.push({
-            collection: "users",
-            id: uid,
-            data: {
-              password: String(u.password || "MM"),
-              role: u.role || "student",
-              admn: u.admn ? String(u.admn) : String(uid),
-              assignedClass: u.assignedClass || "",
-              email: u.email || ""
-            }
-          });
-        }
-      });
-    }
-
-    // 4. Fees Matrix (Per Student)
-    if (parsedData.fees_matrix) {
-      log("Analyzing Fees Matrix records...");
-      Object.entries(parsedData.fees_matrix).forEach(([admn, matrix]) => {
-        if (matrix && typeof matrix === 'object') {
-          operations.push({
-            collection: "fees_matrix",
-            id: admn,
-            data: {
-              admn: String(admn),
-              matrix: matrix,
-              updatedAt: new Date().toISOString()
-            }
-          });
-        }
-      });
-    }
-
-    // 5. Fees Entries (Receipts)
-    if (parsedData.fees_entries) {
-      log("Analyzing Fees Entries logs...");
-      Object.entries(parsedData.fees_entries).forEach(([admn, logs]) => {
-        if (logs && typeof logs === 'object') {
-          Object.entries(logs).forEach(([entryId, entry]) => {
-            if (entry && typeof entry === 'object') {
-              operations.push({
-                collection: "fees_entries",
-                id: `${admn}_${entryId}`,
-                data: {
-                  ...entry,
-                  admn: String(admn),
-                  id: String(entryId)
-                }
-              });
-            }
-          });
-        }
-      });
-    }
-
-    // 6. Attendance Collection (Composite Doc: {admn}_{month})
-    if (parsedData.attendance) {
-      log("Analyzing Attendance data...");
-      Object.entries(parsedData.attendance).forEach(([admn, months]) => {
-        if (months && typeof months === 'object') {
-          Object.entries(months).forEach(([monthName, days]) => {
-            if (days && typeof days === 'object') {
-              operations.push({
-                collection: "attendance",
-                id: `${admn}_${monthName}`,
-                data: {
-                  admn: String(admn),
-                  month: monthName,
-                  days: days
-                }
-              });
-            }
-          });
-        }
-      });
-    }
-
-    // 7. Daily Claims
-    if (parsedData.daily_claims) {
-      log("Analyzing Daily Claims data...");
-      Object.entries(parsedData.daily_claims).forEach(([uid, claims]) => {
-        if (claims && typeof claims === 'object') {
-          operations.push({
-            collection: "daily_claims",
-            id: uid,
-            data: {
-              userId: String(uid),
-              claims: claims
-            }
-          });
-        }
-      });
-    }
-
-    // 8. Expenses
-    if (parsedData.expenses) {
-      log("Analyzing Expenses records...");
-      Object.entries(parsedData.expenses).forEach(([key, exp]) => {
-        if (exp && typeof exp === 'object') {
-          // If nested under Month folder
-          if (["September", "October", "August", "June", "July"].includes(key)) {
-            Object.entries(exp).forEach(([expId, item]) => {
-              operations.push({
-                collection: "expenses",
-                id: `${key}_${expId}`,
-                data: { ...item, id: expId, month: key }
-              });
-            });
-          } else {
-            operations.push({
-              collection: "expenses",
-              id: key,
-              data: exp
-            });
-          }
-        }
-      });
-    }
-
-    // 9. Timetable
-    if (parsedData.timetable) {
-      log("Analyzing Timetable schedules...");
-      Object.entries(parsedData.timetable).forEach(([cls, schedule]) => {
-        operations.push({
-          collection: "timetable",
-          id: String(cls).replace(/class\s*/i, "").trim(),
-          data: {
-            class: String(cls).replace(/class\s*/i, "").trim(),
-            schedule: schedule
-          }
-        });
-      });
-    }
-
-    // 10. Online Tests
-    if (parsedData.online_tests) {
-      log("Analyzing Online Tests...");
-      Object.entries(parsedData.online_tests).forEach(([cls, tests]) => {
-        if (tests && typeof tests === 'object') {
-          Object.entries(tests).forEach(([tId, tObj]) => {
-            operations.push({
-              collection: "online_tests",
-              id: tId,
-              data: { ...tObj, id: tId, class: String(cls) }
-            });
-          });
-        }
-      });
-    }
-
-    log(`Total structured documents ready for Firestore: <b>${operations.length}</b>`);
-    log("Pushing batches to Firestore...");
-
-    try {
-      await commitBatchOperations(operations);
-
-      // Trigger RTDB Version Bump so clients know new data exists
-      await set(ref(rtdb, "sync_triggers/version"), Date.now().toString());
-
-      log("🎉 <b>ALL DATA MIGRATED & STANDARDIZED SUCCESSFULLY!</b>");
-      log("Ab aap apni app refresh karke test kar sakte hain.");
-    } catch (err) {
-      log(`❌ Migration error: ${err.message}`);
-    } finally {
-      startBtn.disabled = false;
-    }
-  });
-</script>
-
+  </script>
 </body>
 </html>
