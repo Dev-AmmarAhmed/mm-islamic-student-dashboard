@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>M.M Islamic ERP - Data Migration Engine</title>
+  <title>M.M Islamic ERP - Batch Migration Engine</title>
   <style>
     :root {
       --bg: #0f172a;
@@ -31,7 +31,7 @@
     .progress-bar-container { width: 100%; height: 10px; background: rgba(0,0,0,0.3); border-radius: 5px; overflow: hidden; margin: 16px 0 8px 0; }
     .progress-bar { width: 0%; height: 100%; background: linear-gradient(90deg, #0288d1, #10b981); transition: width 0.2s; }
     .status-text { font-size: 12px; font-weight: 700; color: var(--text-muted); margin-bottom: 10px; display: flex; justify-content: space-between; }
-    .log-box { background: #090d16; border: 1px solid var(--border); border-radius: 10px; padding: 14px; font-family: monospace; font-size: 11px; height: 260px; overflow-y: auto; color: #a5f3fc; }
+    .log-box { background: #090d16; border: 1px solid var(--border); border-radius: 10px; padding: 14px; font-family: monospace; font-size: 11px; height: 320px; overflow-y: auto; color: #a5f3fc; }
     .log-item { margin-bottom: 4px; }
     .log-success { color: #4ade80; }
     .log-warn { color: #facc15; }
@@ -42,18 +42,18 @@
 
 <div class="container">
   <div class="card">
-    <h1>🚀 M.M Islamic ERP - Data Migration & Architecture Engine</h1>
-    <p>Yeh tool Firestore ka purana data clear karke aapke export JSON file ko naye unified structure (<strong>users/{userId}/...</strong>) par save karega.</p>
+    <h1>🚀 M.M Islamic ERP - Batch Migration Engine</h1>
+    <p>Yeh engine chunked batches mein purana data saaf karega aur aapki JSON file se naye unified structure par data store karega.</p>
 
     <label class="file-dropzone" id="dropzone" for="jsonFileInput">
       <div style="font-size: 32px; margin-bottom: 8px;">📁</div>
       <div id="dropzoneText" style="font-weight: 700; font-size: 14px;">Click here to select your JSON Export File</div>
-      <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Supports mm-islamic-erp-default-rtdb-export.json</div>
+      <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Select mm-islamic-erp-default-rtdb-export.json</div>
       <input type="file" id="jsonFileInput" accept=".json">
     </label>
 
     <div style="margin-top: 16px;">
-      <button class="btn btn-danger" id="startMigrationBtn" disabled>⚠️ Wipe & Migrate to New Architecture</button>
+      <button class="btn btn-danger" id="startMigrationBtn" disabled>⚠️ Start Batch Migration (Anti-Hang)</button>
     </div>
   </div>
 
@@ -71,8 +71,9 @@
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
   import { 
-    getFirestore, doc, setDoc, getDocs, deleteDoc, collection, writeBatch 
+    getFirestore, doc, getDocs, collection, writeBatch 
   } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -86,6 +87,7 @@
   };
 
   const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
   const db = getFirestore(app);
 
   let rawJsonData = null;
@@ -123,79 +125,111 @@
       try {
         rawJsonData = JSON.parse(ev.target.result);
         startBtn.disabled = false;
-        log(`File loaded successfully. Root keys found: ${Object.keys(rawJsonData).join(", ")}`, "success");
+        log(`File parse successful! Root keys: ${Object.keys(rawJsonData).join(", ")}`, "success");
       } catch (err) {
-        alert("Invalid JSON format! Please check the file.");
+        alert("Invalid JSON format!");
         startBtn.disabled = true;
       }
     };
     reader.readAsText(file);
   });
 
-  // Month Name to YYYY-MM helper
   function convertMonthToYearMonth(monthName, year = 2026) {
     const months = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
     const idx = months.indexOf(String(monthName).toLowerCase().trim());
-    if (idx !== -1) {
-      return `${year}-${String(idx + 1).padStart(2, "0")}`;
-    }
-    return `${year}-10`;
+    return idx !== -1 ? `${year}-${String(idx + 1).padStart(2, "0")}` : `${year}-10`;
   }
 
-  // Deep Delete Collection & Sub-collections
-  async function wipeCollections() {
-    setProgress(5, "Clearing old Firestore collections...");
-    log("Beginning Firestore database wipe...", "warn");
+  // Batch Writer Helper: Automatically commits when batch reaches 450 operations
+  class BatchManager {
+    constructor(firestoreInstance) {
+      this.db = firestoreInstance;
+      this.batch = writeBatch(this.db);
+      this.count = 0;
+      this.totalCommitted = 0;
+    }
 
-    const rootCols = [
-      "users", "students", "teachers", "fees", "fees_matrix", "fees_entries",
-      "attendance", "daily_claims", "expenses", "study_material", "homework",
-      "timetable", "subjects", "syllabus_config", "syllabus_chapters",
-      "teacher_points_logs", "teacher_permissions", "student_permissions"
-    ];
-
-    for (let c of rootCols) {
-      try {
-        const snap = await getDocs(collection(db, c));
-        let count = 0;
-        for (let d of snap.docs) {
-          // Check for known sub-collections under users
-          if (c === "users") {
-            const subCols = ["muster", "fees_entries", "fees_matrix", "daily_claims", "leaves", "tests", "syllabus_progress"];
-            for (let sub of subCols) {
-              try {
-                const subSnap = await getDocs(collection(db, "users", d.id, sub));
-                for (let subD of subSnap.docs) {
-                  await deleteDoc(subD.ref);
-                }
-              } catch (e) {}
-            }
-          }
-          await deleteDoc(d.ref);
-          count++;
-        }
-        if (count > 0) log(`Deleted ${count} documents from '${c}'`, "warn");
-      } catch (e) {
-        log(`Notice on clearing '${c}': ${e.message}`);
+    async set(docRef, data, options = { merge: true }) {
+      this.batch.set(docRef, data, options);
+      this.count++;
+      if (this.count >= 400) {
+        await this.commit();
       }
     }
-    log("Old Firestore collections successfully wiped.", "success");
+
+    async delete(docRef) {
+      this.batch.delete(docRef);
+      this.count++;
+      if (this.count >= 400) {
+        await this.commit();
+      }
+    }
+
+    async commit() {
+      if (this.count > 0) {
+        await this.batch.commit();
+        this.totalCommitted += this.count;
+        this.batch = writeBatch(this.db);
+        this.count = 0;
+        await new Promise(r => setTimeout(r, 60)); // Prevents browser networking freeze
+      }
+    }
   }
 
   startBtn.addEventListener("click", async () => {
     if (!rawJsonData) return;
-    if (!confirm("ALERT: Yeh action Firestore ka sara purana data delete karke JSON ka naya data import karega. Continue karein?")) return;
+    if (!confirm("WARNING: Purana Firestore data saaf karke naya data batch architecture mein upload hoga. Continue?")) return;
 
     startBtn.disabled = true;
     statusCard.style.display = "block";
     logBox.innerHTML = "";
 
     try {
-      // PHASE 1: WIPE FIRESTORE
-      await wipeCollections();
+      // Step 0: Ensure Anonymous Auth for Firestore Rules
+      setProgress(2, "Authenticating with Firebase...");
+      log("Authorizing session with Firebase Auth...");
+      await signInAnonymously(auth);
+      log("Authentication passed successfully.", "success");
 
-      // PHASE 2: MIGRATE USERS (STUDENTS & TEACHERS)
-      setProgress(20, "Migrating Users (Students & Teachers)...");
+      const batchMgr = new BatchManager(db);
+
+      // PHASE 1: FAST CLEANUP OF EXISTING COLLECTIONS
+      setProgress(5, "Wiping old collections via Batches...");
+      log("Scanning collections to wipe...", "warn");
+
+      const rootCols = [
+        "users", "students", "teachers", "fees", "fees_matrix", "fees_entries",
+        "attendance", "daily_claims", "expenses", "study_material", "homework",
+        "timetable", "subjects", "syllabus_config", "syllabus_chapters",
+        "teacher_points_logs", "teacher_permissions", "student_permissions"
+      ];
+
+      for (let c of rootCols) {
+        try {
+          const snap = await getDocs(collection(db, c));
+          for (let d of snap.docs) {
+            if (c === "users") {
+              const subCols = ["muster", "fees_entries", "fees_matrix", "daily_claims", "leaves", "tests", "syllabus_progress"];
+              for (let sub of subCols) {
+                try {
+                  const subSnap = await getDocs(collection(db, "users", d.id, sub));
+                  for (let subD of subSnap.docs) {
+                    await batchMgr.delete(subD.ref);
+                  }
+                } catch (e) {}
+              }
+            }
+            await batchMgr.delete(d.ref);
+          }
+        } catch (e) {
+          log(`Notice skipping '${c}': ${e.message}`);
+        }
+      }
+      await batchMgr.commit();
+      log(`Old collections cleaned up (${batchMgr.totalCommitted} items removed).`, "success");
+
+      // PHASE 2: MIGRATE USERS DIRECT TO `users/{userId}`
+      setProgress(20, "Migrating users to users/{userId}...");
       const studentsMap = rawJsonData.students || {};
       const teachersMap = rawJsonData.teachers || {};
       const usersDataMap = rawJsonData.users || {};
@@ -208,7 +242,7 @@
         ...Object.keys(feesBasicMap)
       ]);
 
-      log(`Found ${allUserIds.size} total user records to process.`);
+      log(`Total users found: ${allUserIds.size}`);
 
       for (let uid of allUserIds) {
         const st = studentsMap[uid] || {};
@@ -243,12 +277,13 @@
           }
         };
 
-        await setDoc(doc(db, "users", String(uid)), userDoc, { merge: true });
+        await batchMgr.set(doc(db, "users", String(uid)), userDoc);
       }
-      log(`✔ Migrated ${allUserIds.size} users into unified 'users' root collection.`, "success");
+      await batchMgr.commit();
+      log(`✔ Users imported successfully into 'users' collection.`, "success");
 
-      // PHASE 3: MIGRATE ATTENDANCE TO SUB-COLLECTION `users/{userId}/muster/{YYYY-MM}`
-      setProgress(45, "Migrating Attendance into user muster sub-collections...");
+      // PHASE 3: MIGRATE ATTENDANCE INTO `users/{userId}/muster/{YYYY-MM}`
+      setProgress(40, "Importing Attendance into users/{userId}/muster/...");
       const attendance = rawJsonData.attendance || {};
       let totalMusterMonths = 0;
 
@@ -270,20 +305,21 @@
             formattedDays[paddedDay] = { status: status };
           }
 
-          await setDoc(doc(db, "users", String(uid), "muster", yearMonthDocId), {
+          await batchMgr.set(doc(db, "users", String(uid), "muster", yearMonthDocId), {
             userId: String(uid),
             month: yearMonthDocId,
             Days: formattedDays,
             updatedAt: new Date().toISOString()
-          }, { merge: true });
+          });
 
           totalMusterMonths++;
         }
       }
-      log(`✔ Migrated ${totalMusterMonths} attendance months into 'users/{userId}/muster/{YYYY-MM}'.`, "success");
+      await batchMgr.commit();
+      log(`✔ Migrated ${totalMusterMonths} attendance records into sub-collections.`, "success");
 
       // PHASE 4: MIGRATE FEES ENTRIES & FEES MATRIX
-      setProgress(65, "Migrating Fees Entries & Fees Matrices...");
+      setProgress(60, "Importing Fees Entries & Fees Matrices...");
       const feesEntries = rawJsonData.fees_entries || {};
       let totalFeesEntries = 0;
 
@@ -291,7 +327,7 @@
         if (!entriesObj || typeof entriesObj !== "object") continue;
 
         for (const [entryId, entryData] of Object.entries(entriesObj)) {
-          await setDoc(doc(db, "users", String(uid), "fees_entries", String(entryId)), {
+          await batchMgr.set(doc(db, "users", String(uid), "fees_entries", String(entryId)), {
             id: String(entryId),
             admn: String(uid),
             studentName: entryData.studentName || "Student",
@@ -304,7 +340,6 @@
           totalFeesEntries++;
         }
       }
-      log(`✔ Migrated ${totalFeesEntries} fee transaction entries into 'users/{userId}/fees_entries'.`, "success");
 
       const feesMatrix = rawJsonData.fees_matrix || {};
       let totalMatrices = 0;
@@ -312,18 +347,18 @@
       for (const [uid, matrixObj] of Object.entries(feesMatrix)) {
         if (!matrixObj || typeof matrixObj !== "object") continue;
 
-        await setDoc(doc(db, "users", String(uid), "fees_matrix", "current"), {
+        await batchMgr.set(doc(db, "users", String(uid), "fees_matrix", "current"), {
           admn: String(uid),
           matrix: matrixObj,
           updatedAt: new Date().toISOString()
-        }, { merge: true });
-
+        });
         totalMatrices++;
       }
-      log(`✔ Migrated ${totalMatrices} students' fee matrix into 'users/{userId}/fees_matrix/current'.`, "success");
+      await batchMgr.commit();
+      log(`✔ Fees imported (${totalFeesEntries} entries, ${totalMatrices} matrices).`, "success");
 
       // PHASE 5: MIGRATE DAILY CLAIMS
-      setProgress(80, "Migrating Daily Points Claims...");
+      setProgress(75, "Importing Daily Points Claims...");
       const claims = rawJsonData.daily_claims || {};
       let totalClaims = 0;
 
@@ -332,7 +367,7 @@
 
         for (const [claimKey, val] of Object.entries(userClaims)) {
           if (val === true) {
-            await setDoc(doc(db, "users", String(uid), "daily_claims", claimKey), {
+            await batchMgr.set(doc(db, "users", String(uid), "daily_claims", claimKey), {
               claimed: true,
               date: claimKey,
               timestamp: Date.now()
@@ -341,37 +376,34 @@
           }
         }
       }
-      log(`✔ Migrated ${totalClaims} daily claim records into 'users/{userId}/daily_claims'.`, "success");
+      await batchMgr.commit();
+      log(`✔ Daily claims imported (${totalClaims} total claims).`, "success");
 
-      // PHASE 6: MIGRATE ROOT SHARED DATA (EXPENSES, TIMETABLE, SUBJECTS, SYLLABUS)
-      setProgress(90, "Migrating Expenses, Timetable & Subjects...");
-      
+      // PHASE 6: MIGRATE ROOT EXPENSES, TIMETABLE, SUBJECTS, SYLLABUS
+      setProgress(90, "Importing Expenses, Timetable & Syllabus Configs...");
+
       // Expenses
       const expenses = rawJsonData.expenses || {};
-      let expCount = 0;
       for (const [monthOrKey, expData] of Object.entries(expenses)) {
         if (typeof expData === "object") {
           for (const [id, item] of Object.entries(expData)) {
             if (typeof item === "object") {
-              await setDoc(doc(db, "expenses", String(id)), { ...item, id: String(id) }, { merge: true });
-              expCount++;
+              await batchMgr.set(doc(db, "expenses", String(id)), { ...item, id: String(id) });
             }
           }
         }
       }
-      log(`✔ Migrated ${expCount} expense records into 'expenses'.`, "success");
 
       // Timetable
       const timetable = rawJsonData.timetable || {};
       for (const [cls, schedule] of Object.entries(timetable)) {
         const cleanCls = String(cls).replace(/class\s*/i, "").trim();
-        await setDoc(doc(db, "timetable", cleanCls), {
+        await batchMgr.set(doc(db, "timetable", cleanCls), {
           class: cleanCls,
           schedule: Array.isArray(schedule) ? schedule : Object.values(schedule),
           updatedAt: new Date().toISOString()
-        }, { merge: true });
+        });
       }
-      log("✔ Migrated Timetable records.", "success");
 
       // Subjects
       const subjects = rawJsonData.subjects || {};
@@ -379,37 +411,35 @@
         const cleanCls = String(cls).replace(/class\s*/i, "").trim();
         if (typeof subMap === "object") {
           for (const [sId, sObj] of Object.entries(subMap)) {
-            await setDoc(doc(db, "subjects", `${cleanCls}_${sId}`), {
+            await batchMgr.set(doc(db, "subjects", `${cleanCls}_${sId}`), {
               ...sObj,
               class: cleanCls,
               id: String(sId)
-            }, { merge: true });
+            });
           }
         }
       }
-      log("✔ Migrated Class Subjects.", "success");
 
-      // Enabled Syllabus
+      // Syllabus Config
       const enabledSyllabus = rawJsonData.enabled_syllabus || {};
       for (const [cls, subList] of Object.entries(enabledSyllabus)) {
         const cleanCls = String(cls).replace(/class\s*/i, "").trim();
-        await setDoc(doc(db, "syllabus_config", cleanCls), {
+        await batchMgr.set(doc(db, "syllabus_config", cleanCls), {
           class: cleanCls,
           subjects: subList,
           updatedAt: new Date().toISOString()
-        }, { merge: true });
+        });
       }
-      log("✔ Migrated Syllabus configurations.", "success");
 
-      setProgress(100, "Migration Completed Successfully! 🎉");
+      await batchMgr.commit();
+      setProgress(100, "Done! Migration 100% Complete.");
       log("=====================================================", "success");
-      log("🎉 ALL DATA SUCCESSFULLY MIGRATED TO NEW ARCHITECTURE!", "success");
-      log("Ab aap apni main app open karke check kar sakte hain.", "success");
+      log("🎉 SAARA DATA 100% SAFALTAPURVAK NAYE PATHS PAR MIGRATE HO GAYA HAI!", "success");
 
     } catch (err) {
-      log(`Migration Error: ${err.message}`, "err");
+      log(`FATAL ERROR: ${err.message}`, "err");
       console.error(err);
-      alert("Error occurred during migration. Check console logs.");
+      alert("Error: " + err.message);
     } finally {
       startBtn.disabled = false;
     }
