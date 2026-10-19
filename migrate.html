@@ -3,482 +3,212 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>M.M Islamic ERP - Complete Migration Engine</title>
+  <title>Igris -Migration Tool</title>
   <style>
-    :root {
-      --bg: #0f172a;
-      --card: #1e293b;
-      --border: #334155;
-      --text: #f8fafc;
-      --text-muted: #94a3b8;
-      --primary: #0288d1;
-      --success: #16a34a;
-      --danger: #dc2626;
-      --warning: #d97706;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background: var(--bg); color: var(--text); padding: 24px; display: flex; justify-content: center; }
-    .container { width: 100%; max-width: 760px; }
-    .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 24px; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
-    h1 { font-size: 20px; font-weight: 800; color: var(--primary); margin-bottom: 6px; }
-    p { font-size: 13px; color: var(--text-muted); line-height: 1.5; margin-bottom: 16px; }
-    .file-dropzone { border: 2px dashed var(--border); border-radius: 12px; padding: 30px; text-align: center; cursor: pointer; transition: all 0.2s; background: rgba(0,0,0,0.1); display: block; }
-    .file-dropzone:hover { border-color: var(--primary); background: rgba(2, 136, 209, 0.05); }
-    input[type="file"] { display: none; }
-    .btn { background: var(--primary); color: white; border: none; padding: 12px 20px; border-radius: 10px; font-weight: 700; font-size: 14px; cursor: pointer; width: 100%; margin-top: 14px; transition: opacity 0.2s; }
-    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    .btn-danger { background: var(--danger); }
-    .progress-bar-container { width: 100%; height: 10px; background: rgba(0,0,0,0.3); border-radius: 5px; overflow: hidden; margin: 16px 0 8px 0; }
-    .progress-bar { width: 0%; height: 100%; background: linear-gradient(90deg, #0288d1, #10b981); transition: width 0.2s; }
-    .status-text { font-size: 12px; font-weight: 700; color: var(--text-muted); margin-bottom: 10px; display: flex; justify-content: space-between; }
-    .log-box { background: #090d16; border: 1px solid var(--border); border-radius: 10px; padding: 14px; font-family: monospace; font-size: 11px; height: 320px; overflow-y: auto; color: #a5f3fc; }
-    .log-item { margin-bottom: 4px; }
-    .log-success { color: #4ade80; }
-    .log-warn { color: #facc15; }
-    .log-err { color: #f87171; }
+    @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&display=swap');
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; }
+    .container { background: #1e293b; padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); max-width: 600px; width: 100%; border: 1px solid #334155; }
+    h1 { color: #38bdf8; font-family: 'Montserrat', sans-serif; text-align: center; margin-top: 0; }
+    .step-box { background: rgba(0,0,0,0.2); padding: 16px; border-radius: 12px; margin-bottom: 20px; border: 1px dashed #475569; }
+    input[type="file"] { width: 100%; padding: 10px; background: #0f172a; border-radius: 8px; color: #38bdf8; border: 1px solid #38bdf8; cursor: pointer; }
+    button { width: 100%; padding: 14px; font-size: 16px; font-weight: bold; color: white; background: linear-gradient(135deg, #10b981 0%, #047857 100%); border: none; border-radius: 12px; cursor: pointer; transition: 0.3s; margin-top: 10px; }
+    button:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(16, 185, 129, 0.4); }
+    button:disabled { background: #475569; cursor: not-allowed; box-shadow: none; transform: none; }
+    .log-box { background: #000; color: #10b981; font-family: monospace; font-size: 12px; padding: 15px; border-radius: 10px; height: 250px; overflow-y: auto; margin-top: 20px; border: 1px solid #334155; }
+    .progress-bar-container { width: 100%; background: #334155; border-radius: 8px; margin-top: 10px; overflow: hidden; display: none; }
+    .progress-bar { height: 12px; background: #38bdf8; width: 0%; transition: width 0.3s; }
   </style>
 </head>
 <body>
 
-<div class="container">
-  <div class="card">
-    <h1>🚀 M.M Islamic ERP - Migration Engine</h1>
-    <p>Yeh script purana data wipe karegi aur aapki JSON file ka poora data naye sub-collection architecture par safe batches me upload karegi.</p>
+  <div class="container">
+    <h1>🚀 Database Migrator</h1>
+    <p style="text-align: center; color: #94a3b8; font-size: 14px;">Realtime Database JSON ➡️ Cloud Firestore</p>
 
-    <label class="file-dropzone" id="dropzone" for="jsonFileInput">
-      <div style="font-size: 32px; margin-bottom: 8px;">📁</div>
-      <div id="dropzoneText" style="font-weight: 700; font-size: 14px;">Click here to select your JSON Export File</div>
-      <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Supports mm-islamic-erp-default-rtdb-export.json</div>
+    <div class="step-box">
+      <label style="font-weight: bold; margin-bottom: 8px; display: block; color: #fbbf24;">1. Select Exported JSON File:</label>
       <input type="file" id="jsonFileInput" accept=".json">
-    </label>
-
-    <div style="margin-top: 16px;">
-      <button class="btn btn-danger" id="startMigrationBtn" disabled>⚠️ Start Migration (Full Wipe & Fresh Upload)</button>
     </div>
-  </div>
 
-  <div class="card" id="statusCard" style="display: none;">
-    <div class="status-text">
-      <span id="currentPhaseText">Ready</span>
-      <span id="percentageText">0%</span>
-    </div>
-    <div class="progress-bar-container">
+    <button id="startBtn" disabled>Start Migration to Firestore</button>
+
+    <div class="progress-bar-container" id="progressContainer">
       <div class="progress-bar" id="progressBar"></div>
     </div>
-    <div class="log-box" id="logBox"></div>
+    
+    <div class="log-box" id="logBox">
+      [System] Ready. Please select a JSON file.
+    </div>
   </div>
-</div>
 
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-  import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-  import { 
-    getFirestore, doc, getDocs, collection, writeBatch 
-  } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, writeBatch, doc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyBHpbgoGs7HFQ3-1tBn9BpGT4YYDaKkZB8",
-    authDomain: "mm-islamic-erp.firebaseapp.com",
-    databaseURL: "https://mm-islamic-erp-default-rtdb.firebaseio.com",
-    projectId: "mm-islamic-erp",
-    storageBucket: "mm-islamic-erp.firebasestorage.app",
-    messagingSenderId: "547338314533",
-    appId: "1:547338314533:web:3973c2b36ef8b3b01170cc"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  const db = getFirestore(app);
-
-  let rawJsonData = null;
-
-  const fileInput = document.getElementById("jsonFileInput");
-  const dropzoneText = document.getElementById("dropzoneText");
-  const startBtn = document.getElementById("startMigrationBtn");
-  const statusCard = document.getElementById("statusCard");
-  const progressBar = document.getElementById("progressBar");
-  const percentageText = document.getElementById("percentageText");
-  const currentPhaseText = document.getElementById("currentPhaseText");
-  const logBox = document.getElementById("logBox");
-
-  function log(msg, type = "info") {
-    const el = document.createElement("div");
-    el.className = "log-item " + (type === "success" ? "log-success" : type === "warn" ? "log-warn" : type === "err" ? "log-err" : "");
-    el.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
-    logBox.appendChild(el);
-    logBox.scrollTop = logBox.scrollHeight;
-  }
-
-  function setProgress(percent, phase) {
-    progressBar.style.width = percent + "%";
-    percentageText.innerText = Math.round(percent) + "%";
-    if (phase) currentPhaseText.innerText = phase;
-  }
-
-  fileInput.addEventListener("change", (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    dropzoneText.innerText = `Selected: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        rawJsonData = JSON.parse(ev.target.result);
-        startBtn.disabled = false;
-        log(`JSON parsed successfully! Keys found: ${Object.keys(rawJsonData).join(", ")}`, "success");
-      } catch (err) {
-        alert("Invalid JSON format! Please check the selected file.");
-        startBtn.disabled = true;
-      }
+    // 🔴 APNA FIREBASE CONFIG YAHAN PASTE KAREIN
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT_ID.appspot.com",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId: "YOUR_APP_ID"
     };
-    reader.readAsText(file);
-  });
 
-  function convertMonthToYearMonth(monthName, year = 2026) {
-    const months = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
-    const idx = months.indexOf(String(monthName || "").toLowerCase().trim());
-    return idx !== -1 ? `${year}-${String(idx + 1).padStart(2, "0")}` : `${year}-10`;
-  }
+    const app = initializeApp(firebaseConfig);
+    const fsDb = getFirestore(app);
 
-  // Auto-batch manager to handle Firestore 500-limit cleanly
-  class BatchManager {
-    constructor(firestoreInstance) {
-      this.db = firestoreInstance;
-      this.batch = writeBatch(this.db);
-      this.count = 0;
-      this.totalCommitted = 0;
+    const fileInput = document.getElementById("jsonFileInput");
+    const startBtn = document.getElementById("startBtn");
+    const logBox = document.getElementById("logBox");
+    const progressBar = document.getElementById("progressBar");
+    const progressContainer = document.getElementById("progressContainer");
+
+    let parsedData = null;
+
+    function log(msg, color = "#10b981") {
+      const p = document.createElement("div");
+      p.style.color = color;
+      p.innerText = `> ${msg}`;
+      logBox.appendChild(p);
+      logBox.scrollTop = logBox.scrollHeight;
     }
 
-    async set(docRef, data, options = { merge: true }) {
-      this.batch.set(docRef, data, options);
-      this.count++;
-      if (this.count >= 400) {
-        await this.commit();
-      }
-    }
-
-    async delete(docRef) {
-      this.batch.delete(docRef);
-      this.count++;
-      if (this.count >= 400) {
-        await this.commit();
-      }
-    }
-
-    async commit() {
-      if (this.count > 0) {
-        await this.batch.commit();
-        this.totalCommitted += this.count;
-        this.batch = writeBatch(this.db);
-        this.count = 0;
-        await new Promise(r => setTimeout(r, 60));
-      }
-    }
-  }
-
-  startBtn.addEventListener("click", async () => {
-    if (!rawJsonData) return;
-    if (!confirm("WARNING: Purana Firestore data saaf karke naye sub-collections par upload hoga. Shuru karein?")) return;
-
-    startBtn.disabled = true;
-    statusCard.style.display = "block";
-    logBox.innerHTML = "";
-
-    try {
-      // Step 0: Ensure Firebase Auth
-      setProgress(2, "Authenticating session...");
-      log("Initializing background authentication...");
-      await signInAnonymously(auth);
-      log("Authenticated successfully.", "success");
-
-      const batchMgr = new BatchManager(db);
-
-      // PHASE 1: WIPE FIRESTORE
-      setProgress(5, "Clearing existing collections...");
-      log("Scanning collections to wipe...", "warn");
-
-      const rootCols = [
-        "users", "students", "teachers", "fees", "fees_matrix", "fees_entries",
-        "attendance", "daily_claims", "expenses", "study_material", "homework",
-        "timetable", "subjects", "syllabus_config", "syllabus_chapters",
-        "teacher_points_logs", "teacher_permissions", "student_permissions"
-      ];
-
-      for (let c of rootCols) {
+    fileInput.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      log(`Loading file: ${file.name}...`, "#38bdf8");
+      
+      const reader = new FileReader();
+      reader.onload = (event) => {
         try {
-          const snap = await getDocs(collection(db, c));
-          for (let d of snap.docs) {
-            if (c === "users") {
-              const subCols = ["muster", "fees_entries", "fees_matrix", "daily_claims", "leaves", "tests", "syllabus_progress"];
-              for (let sub of subCols) {
-                try {
-                  const subSnap = await getDocs(collection(db, "users", d.id, sub));
-                  for (let subD of subSnap.docs) {
-                    await batchMgr.delete(subD.ref);
-                  }
-                } catch (e) {}
-              }
-            }
-            await batchMgr.delete(d.ref);
-          }
-        } catch (e) {
-          log(`Notice on clearing '${c}': ${e.message}`);
+          parsedData = JSON.parse(event.target.result);
+          log(`✔ JSON File Loaded Successfully! Found ${Object.keys(parsedData).length} main nodes.`, "#fbbf24");
+          startBtn.disabled = false;
+        } catch (err) {
+          log("❌ Invalid JSON File!", "#ef4444");
         }
-      }
-      await batchMgr.commit();
-      log(`Wipe completed (${batchMgr.totalCommitted} documents removed).`, "success");
+      };
+      reader.readAsText(file);
+    });
 
-      // PHASE 2: MIGRATE USERS -> users/{userId}
-      setProgress(20, "Migrating users to users/{userId}...");
-      const studentsMap = rawJsonData.students || {};
-      const teachersMap = rawJsonData.teachers || {};
-      const usersDataMap = rawJsonData.users || {};
-      const feesBasicMap = rawJsonData.fees || {};
+    // Smart Mapper Engine: JSON to Firestore Paths
+    function generateFirestoreOperations(data) {
+      const operations = [];
 
-      const allUserIds = Array.from(new Set([
-        ...Object.keys(studentsMap),
-        ...Object.keys(teachersMap),
-        ...Object.keys(usersDataMap),
-        ...Object.keys(feesBasicMap)
-      ])).filter(id => id && id !== "undefined" && id !== "null");
-
-      log(`Total users found: ${allUserIds.length}`);
-
-      for (let uid of allUserIds) {
-        const st = studentsMap[uid] || {};
-        const tch = teachersMap[uid] || {};
-        const uAuth = usersDataMap[uid] || {};
-        const feeInfo = feesBasicMap[uid] || {};
-
-        const isTeacher = !!(tch.name || tch.username || uAuth.role === "teacher");
-        const role = isTeacher ? "teacher" : (uAuth.role || "student");
-        const username = isTeacher ? (tch.username || uid) : uid;
-        const name = tch.name || st.name || feeInfo.name || uAuth.name || username;
-        const cls = String(tch.assignedClass || st.class || feeInfo.class || uAuth.assignedClass || "1").replace(/class\s*/i, "").trim();
-
-        const userDoc = {
-          userId: String(uid),
-          admn: String(uid),
-          username: String(username),
-          name: String(name),
-          role: role,
-          class: cls,
-          assignedClass: cls,
-          photo: tch.photo || st.photo || "",
-          points: Number(tch.points || st.points || 0),
-          password: String(uAuth.password || tch.password || "MM"),
-          customFee: st.customFee !== undefined ? st.customFee : null,
-          Details: {
-            phone: tch.phone || st.phone || "",
-            DOB: tch.dob || st.dob || "-",
-            email: tch.email || st.email || "",
-            regDate: st.regDate || tch.regDate || new Date().toLocaleDateString("en-GB"),
-            updatedAt: new Date().toISOString()
-          }
-        };
-
-        await batchMgr.set(doc(db, "users", String(uid)), userDoc);
-      }
-      await batchMgr.commit();
-      log(`✔ Migrated ${allUserIds.length} users into unified 'users' collection.`, "success");
-
-      // PHASE 3: MIGRATE ATTENDANCE -> users/{userId}/muster/{YYYY-MM}
-      setProgress(40, "Importing Attendance into users/{userId}/muster/...");
-      const attendance = rawJsonData.attendance || {};
-      let totalMusterMonths = 0;
-
-      for (const [uid, monthsObj] of Object.entries(attendance)) {
-        if (!uid || uid === "undefined" || !monthsObj || typeof monthsObj !== "object") continue;
-
-        for (const [monthName, daysMap] of Object.entries(monthsObj)) {
-          if (!daysMap || typeof daysMap !== "object") continue;
-
-          const yearMonthDocId = convertMonthToYearMonth(monthName, 2026);
-          const formattedDays = {};
-
-          for (const [dayKey, val] of Object.entries(daysMap)) {
-            const dayNum = String(dayKey).replace(/[^0-9]/g, "");
-            const paddedDay = "Day_" + (dayNum.length < 2 ? "0" + dayNum : dayNum);
-
-            let status = "A";
-            if (val === true || val === "Present" || val === "P") status = "P";
-            else if (val === "H") status = "H";
-
-            formattedDays[paddedDay] = { status: status };
-          }
-
-          await batchMgr.set(doc(db, "users", String(uid), "muster", yearMonthDocId), {
-            userId: String(uid),
-            month: yearMonthDocId,
-            Days: formattedDays,
-            updatedAt: new Date().toISOString()
+      // Category 1: Flat Collections (e.g. students/{admn})
+      const flatNodes = ['students', 'teachers', 'users', 'email_lookup', 'teacher_points_logs', 'student_permissions', 'teacher_permissions', 'enabled_syllabus'];
+      flatNodes.forEach(node => {
+        if (data[node]) {
+          Object.entries(data[node]).forEach(([docId, docData]) => {
+            // Firestore mein keys string honi chahiye
+            operations.push({ path: `${node}/${String(docId)}`, data: typeof docData === 'object' ? docData : { value: docData } });
           });
-
-          totalMusterMonths++;
         }
-      }
-      await batchMgr.commit();
-      log(`✔ Migrated ${totalMusterMonths} attendance months into sub-collections.`, "success");
+      });
 
-      // PHASE 4: MIGRATE FEES ENTRIES & MATRIX
-      setProgress(60, "Importing Fees Entries & Matrix...");
-      const feesEntries = rawJsonData.fees_entries || {};
-      let totalFeesEntries = 0;
-
-      for (const [uid, entriesObj] of Object.entries(feesEntries)) {
-        if (!uid || uid === "undefined" || !entriesObj || typeof entriesObj !== "object") continue;
-
-        for (const [entryId, entryData] of Object.entries(entriesObj)) {
-          if (!entryData || typeof entryData !== "object") continue;
-
-          await batchMgr.set(doc(db, "users", String(uid), "fees_entries", String(entryId)), {
-            id: String(entryId),
-            admn: String(uid),
-            studentName: entryData.studentName || "Student",
-            types: Array.isArray(entryData.types) ? entryData.types : [],
-            amount: String(entryData.amount || 0),
-            mode: entryData.mode || "Cash",
-            date: entryData.date || new Date().toLocaleDateString("en-GB"),
-            createdAt: new Date().toISOString()
+      // Category 2: Class Nested (e.g. study_material/{classId}/items/{matId})
+      const classNestedNodes = ['study_material', 'homework', 'online_tests', 'subjects'];
+      classNestedNodes.forEach(node => {
+        if (data[node]) {
+          Object.entries(data[node]).forEach(([classId, items]) => {
+            Object.entries(items).forEach(([itemId, itemData]) => {
+              operations.push({ path: `${node}/${classId}/items/${itemId}`, data: itemData });
+            });
           });
-          totalFeesEntries++;
         }
-      }
+      });
 
-      const feesMatrix = rawJsonData.fees_matrix || {};
-      let totalMatrices = 0;
+      // Category 3: User Nested (e.g. fees_entries/{admn}/records/{entryId})
+      const userNestedNodes = ['leave_applications', 'teacher_leave_applications', 'tests', 'daily_claims', 'teacher_daily_claims', 'notifications', 'fees_matrix', 'fees_entries', 'student_test_attempts'];
+      userNestedNodes.forEach(node => {
+        if (data[node]) {
+          Object.entries(data[node]).forEach(([userId, records]) => {
+            Object.entries(records).forEach(([recordId, recordData]) => {
+              operations.push({ path: `${node}/${userId}/records/${recordId}`, data: typeof recordData === 'object' ? recordData : { value: recordData } });
+            });
+          });
+        }
+      });
 
-      for (const [uid, matrixObj] of Object.entries(feesMatrix)) {
-        if (!uid || uid === "undefined" || !matrixObj || typeof matrixObj !== "object") continue;
-
-        await batchMgr.set(doc(db, "users", String(uid), "fees_matrix", "current"), {
-          admn: String(uid),
-          matrix: matrixObj,
-          updatedAt: new Date().toISOString()
+      // Special Case 1: Expenses
+      if (data.expenses) {
+        Object.entries(data.expenses).forEach(([month, records]) => {
+          Object.entries(records).forEach(([expId, expData]) => {
+            operations.push({ path: `expenses/${month}/records/${expId}`, data: expData });
+          });
         });
-        totalMatrices++;
       }
-      await batchMgr.commit();
-      log(`✔ Fees imported (${totalFeesEntries} entries, ${totalMatrices} matrices).`, "success");
 
-      // PHASE 5: MIGRATE DAILY CLAIMS
-      setProgress(75, "Importing Daily Points Claims...");
-      const claims = rawJsonData.daily_claims || {};
-      let totalClaims = 0;
-
-      for (const [uid, userClaims] of Object.entries(claims)) {
-        if (!uid || uid === "undefined" || !userClaims || typeof userClaims !== "object") continue;
-
-        for (const [claimKey, val] of Object.entries(userClaims)) {
-          if (val === true) {
-            await batchMgr.set(doc(db, "users", String(uid), "daily_claims", String(claimKey)), {
-              claimed: true,
-              date: String(claimKey),
-              timestamp: Date.now()
-            });
-            totalClaims++;
-          }
-        }
-      }
-      await batchMgr.commit();
-      log(`✔ Daily claims imported (${totalClaims} records).`, "success");
-
-      // PHASE 6: MIGRATE ROOT EXPENSES, TIMETABLE, SUBJECTS, SYLLABUS (FULL NULL-SAFE)
-      setProgress(90, "Importing Expenses, Timetable & Syllabus Configs...");
-
-      // 1. Expenses
-      const expenses = rawJsonData.expenses || {};
-      let expCount = 0;
-      for (const [monthOrKey, expData] of Object.entries(expenses)) {
-        if (expData && typeof expData === "object") {
-          if (expData.amount !== undefined || expData.expense !== undefined || expData.detail !== undefined) {
-            await batchMgr.set(doc(db, "expenses", String(monthOrKey)), {
-              ...expData,
-              id: String(monthOrKey)
-            });
-            expCount++;
-          } else {
-            for (const [id, item] of Object.entries(expData)) {
-              if (item && typeof item === "object") {
-                await batchMgr.set(doc(db, "expenses", String(id)), {
-                  ...item,
-                  id: String(id)
-                });
-                expCount++;
-              }
-            }
-          }
-        }
-      }
-      log(`✔ Migrated ${expCount} expense records.`, "success");
-
-      // 2. Timetable
-      const timetable = rawJsonData.timetable || {};
-      let ttCount = 0;
-      for (const [cls, schedule] of Object.entries(timetable)) {
-        if (schedule) {
-          const cleanCls = String(cls).replace(/class\s*/i, "").trim();
-          const scheduleList = Array.isArray(schedule)
-            ? schedule.filter(Boolean)
-            : (typeof schedule === "object" ? Object.values(schedule).filter(Boolean) : []);
-          await batchMgr.set(doc(db, "timetable", cleanCls), {
-            class: cleanCls,
-            schedule: scheduleList,
-            updatedAt: new Date().toISOString()
+      // Special Case 2: Attendance
+      if (data.attendance) {
+        Object.entries(data.attendance).forEach(([admn, months]) => {
+          Object.entries(months).forEach(([month, days]) => {
+            operations.push({ path: `attendance/${admn}/months/${month}`, data: days });
           });
-          ttCount++;
-        }
+        });
       }
-      log(`✔ Migrated ${ttCount} Timetable records.`, "success");
 
-      // 3. Subjects
-      const subjects = rawJsonData.subjects || {};
-      let subCount = 0;
-      for (const [cls, subMap] of Object.entries(subjects)) {
-        if (subMap && typeof subMap === "object") {
-          const cleanCls = String(cls).replace(/class\s*/i, "").trim();
-          for (const [sId, sObj] of Object.entries(subMap)) {
-            if (sObj && typeof sObj === "object") {
-              await batchMgr.set(doc(db, "subjects", `${cleanCls}_${sId}`), {
-                ...sObj,
-                class: cleanCls,
-                id: String(sId)
-              });
-              subCount++;
-            }
-          }
-        }
-      }
-      log(`✔ Migrated ${subCount} Class Subjects.`, "success");
-
-      // 4. Enabled Syllabus
-      const enabledSyllabus = rawJsonData.enabled_syllabus || {};
-      for (const [cls, subList] of Object.entries(enabledSyllabus)) {
-        if (subList) {
-          const cleanCls = String(cls).replace(/class\s*/i, "").trim();
-          await batchMgr.set(doc(db, "syllabus_config", cleanCls), {
-            class: cleanCls,
-            subjects: subList,
-            updatedAt: new Date().toISOString()
+      // Special Case 3: Muster
+      if (data.muster) {
+        Object.entries(data.muster).forEach(([month, days]) => {
+          Object.entries(days).forEach(([day, teachers]) => {
+            operations.push({ path: `muster/${month}/days/${day}`, data: teachers });
           });
-        }
+        });
       }
-      log("✔ Migrated Syllabus configurations.", "success");
 
-      await batchMgr.commit();
-      setProgress(100, "Done! Migration 100% Complete.");
-      log("=====================================================", "success");
-      log("🎉 SAARA DATA 100% SAFALTAPURVAK NAYE PATHS PAR MIGRATE HO GAYA HAI!", "success");
-
-    } catch (err) {
-      log(`FATAL ERROR: ${err.message}`, "err");
-      console.error(err);
-      alert("Error: " + err.message);
-    } finally {
-      startBtn.disabled = false;
+      return operations;
     }
-  });
-</script>
 
+    startBtn.addEventListener("click", async () => {
+      if (!parsedData) return;
+      startBtn.disabled = true;
+      startBtn.innerText = "⏳ Migrating Please Wait...";
+      progressContainer.style.display = "block";
+
+      log("Analyzing JSON structure and preparing Firestore batches...");
+      const operations = generateFirestoreOperations(parsedData);
+      const totalOps = operations.length;
+      log(`Total documents to write: ${totalOps}`, "#fbbf24");
+
+      if (totalOps === 0) {
+        log("No data found to migrate.", "#ef4444");
+        return;
+      }
+
+      // Firestore Batch limit is 500. We use chunks of 400 for safety.
+      const CHUNK_SIZE = 400;
+      let completedOps = 0;
+
+      for (let i = 0; i < totalOps; i += CHUNK_SIZE) {
+        const chunk = operations.slice(i, i + CHUNK_SIZE);
+        const batch = writeBatch(fsDb);
+
+        chunk.forEach(op => {
+          const docRef = doc(fsDb, op.path);
+          batch.set(docRef, op.data);
+        });
+
+        try {
+          await batch.commit();
+          completedOps += chunk.length;
+          
+          // Update UI Progress
+          const percentage = Math.round((completedOps / totalOps) * 100);
+          progressBar.style.width = `${percentage}%`;
+          log(`Migrated ${completedOps} / ${totalOps} documents...`);
+          
+        } catch (error) {
+          log(`❌ Error in batch ${i/CHUNK_SIZE + 1}: ${error.message}`, "#ef4444");
+        }
+      }
+
+      log("🎉 MIGRATION COMPLETED SUCCESSFULLY!", "#10b981");
+      startBtn.innerText = "✔ Migration Done";
+      startBtn.style.background = "#10b981";
+    });
+
+  </script>
 </body>
 </html>
