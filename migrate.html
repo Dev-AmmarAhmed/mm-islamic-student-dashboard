@@ -3,236 +3,418 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>M.M ERP - Database Cleaner & Purge Engine</title>
+  <title>M.M Islamic ERP - Data Migration Engine</title>
   <style>
-    * {
-      box-sizing: border-box;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #0288d1;
+      --success: #16a34a;
+      --danger: #dc2626;
+      --warning: #d97706;
     }
-    body {
-      background: #090d16;
-      color: #f8fafc;
-      padding: 24px;
-      margin: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-    .container {
-      width: 100%;
-      max-width: 760px;
-      background: #111827;
-      border: 1px solid #1f2937;
-      border-radius: 16px;
-      padding: 24px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
-    }
-    h1 {
-      font-size: 20px;
-      font-weight: 900;
-      color: #f87171;
-      margin-top: 0;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    p {
-      font-size: 13px;
-      color: #9ca3af;
-      line-height: 1.5;
-    }
-    .badge-box {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin: 14px 0;
-    }
-    .badge-del {
-      background: rgba(239, 68, 68, 0.15);
-      border: 1px solid #ef4444;
-      color: #f87171;
-      padding: 4px 10px;
-      border-radius: 8px;
-      font-size: 11px;
-      font-weight: 800;
-    }
-    .badge-keep {
-      background: rgba(34, 197, 94, 0.15);
-      border: 1px solid #22c55e;
-      color: #4ade80;
-      padding: 4px 10px;
-      border-radius: 8px;
-      font-size: 11px;
-      font-weight: 800;
-    }
-    .btn-danger {
-      background: #dc2626;
-      color: white;
-      border: none;
-      padding: 14px 20px;
-      font-size: 14px;
-      font-weight: 800;
-      border-radius: 10px;
-      cursor: pointer;
-      width: 100%;
-      transition: background 0.2s, transform 0.1s;
-      margin-top: 10px;
-    }
-    .btn-danger:hover {
-      background: #b91c1c;
-    }
-    .btn-danger:active {
-      transform: scale(0.99);
-    }
-    .btn-danger:disabled {
-      background: #4b5563;
-      cursor: not-allowed;
-    }
-    .log-box {
-      background: #030712;
-      border: 1px solid #1f2937;
-      border-radius: 10px;
-      height: 320px;
-      overflow-y: auto;
-      padding: 12px;
-      font-family: monospace;
-      font-size: 12px;
-      color: #cbd5e1;
-      margin-top: 18px;
-    }
-    .log-entry { margin-bottom: 5px; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 24px; display: flex; justify-content: center; }
+    .container { width: 100%; max-width: 760px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 24px; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+    h1 { font-size: 20px; font-weight: 800; color: var(--primary); margin-bottom: 6px; }
+    p { font-size: 13px; color: var(--text-muted); line-height: 1.5; margin-bottom: 16px; }
+    .file-dropzone { border: 2px dashed var(--border); border-radius: 12px; padding: 30px; text-align: center; cursor: pointer; transition: all 0.2s; background: rgba(0,0,0,0.1); }
+    .file-dropzone:hover { border-color: var(--primary); background: rgba(2, 136, 209, 0.05); }
+    input[type="file"] { display: none; }
+    .btn { background: var(--primary); color: white; border: none; padding: 12px 20px; border-radius: 10px; font-weight: 700; font-size: 14px; cursor: pointer; width: 100%; margin-top: 14px; transition: opacity 0.2s; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-danger { background: var(--danger); }
+    .progress-bar-container { width: 100%; height: 10px; background: rgba(0,0,0,0.3); border-radius: 5px; overflow: hidden; margin: 16px 0 8px 0; }
+    .progress-bar { width: 0%; height: 100%; background: linear-gradient(90deg, #0288d1, #10b981); transition: width 0.2s; }
+    .status-text { font-size: 12px; font-weight: 700; color: var(--text-muted); margin-bottom: 10px; display: flex; justify-content: space-between; }
+    .log-box { background: #090d16; border: 1px solid var(--border); border-radius: 10px; padding: 14px; font-family: monospace; font-size: 11px; height: 260px; overflow-y: auto; color: #a5f3fc; }
+    .log-item { margin-bottom: 4px; }
     .log-success { color: #4ade80; }
-    .log-err { color: #f87171; }
     .log-warn { color: #facc15; }
-    .log-info { color: #38bdf8; }
+    .log-err { color: #f87171; }
   </style>
 </head>
 <body>
 
-  <div class="container">
-    <h1>🗑️ Purge Old Unorganised Database Collections</h1>
-    <p>
-      Yeh process purani root collections ko batch mein wipe out kar dega. Naya <b>[users]</b> collection aur uske sub-collections 100% safe rahenge.
-    </p>
+<div class="container">
+  <div class="card">
+    <h1>🚀 M.M Islamic ERP - Data Migration & Architecture Engine</h1>
+    <p>Yeh tool Firestore ka purana data clear karke aapke export JSON file ko naye unified structure (<strong>users/{userId}/...</strong>) par save karega.</p>
 
-    <div class="badge-box">
-      <span class="badge-del">❌ DELETE: students</span>
-      <span class="badge-del">❌ DELETE: teachers</span>
-      <span class="badge-del">❌ DELETE: attendance</span>
-      <span class="badge-del">❌ DELETE: muster (root)</span>
-      <span class="badge-keep">🛡️ KEEP: users (with muster sub-collection)</span>
-      <span class="badge-keep">🛡️ KEEP: fees_matrix & fees_entries</span>
-      <span class="badge-keep">🛡️ KEEP: subjects & tests</span>
-    </div>
+    <label class="file-dropzone" id="dropzone" for="jsonFileInput">
+      <div style="font-size: 32px; margin-bottom: 8px;">📁</div>
+      <div id="dropzoneText" style="font-weight: 700; font-size: 14px;">Click here to select your JSON Export File</div>
+      <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Supports mm-islamic-erp-default-rtdb-export.json</div>
+      <input type="file" id="jsonFileInput" accept=".json">
+    </label>
 
-    <button id="purgeBtn" class="btn-danger" onclick="startPurgeProcess()">
-      🔥 Permanently Delete Old Collections
-    </button>
-
-    <div id="purgeLogs" class="log-box">
-      <div class="log-entry log-info">> Ready. Click the red button to clean up old collections...</div>
+    <div style="margin-top: 16px;">
+      <button class="btn btn-danger" id="startMigrationBtn" disabled>⚠️ Wipe & Migrate to New Architecture</button>
     </div>
   </div>
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { 
-      getFirestore, 
-      collection, 
-      getDocs, 
-      writeBatch 
-    } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+  <div class="card" id="statusCard" style="display: none;">
+    <div class="status-text">
+      <span id="currentPhaseText">Ready</span>
+      <span id="percentageText">0%</span>
+    </div>
+    <div class="progress-bar-container">
+      <div class="progress-bar" id="progressBar"></div>
+    </div>
+    <div class="log-box" id="logBox"></div>
+  </div>
+</div>
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyBHpbgoGs7HFQ3-1tBn9BpGT4YYDaKkZB8",
-      authDomain: "mm-islamic-erp.firebaseapp.com",
-      databaseURL: "https://mm-islamic-erp-default-rtdb.firebaseio.com",
-      projectId: "mm-islamic-erp",
-      storageBucket: "mm-islamic-erp.firebasestorage.app",
-      messagingSenderId: "547338314533",
-      appId: "1:547338314533:web:3973c2b36ef8b3b01170cc"
-    };
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { 
+    getFirestore, doc, setDoc, getDocs, deleteDoc, collection, writeBatch 
+  } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-    const app = initializeApp(firebaseConfig);
-    const fsDb = getFirestore(app);
+  const firebaseConfig = {
+    apiKey: "AIzaSyBHpbgoGs7HFQ3-1tBn9BpGT4YYDaKkZB8",
+    authDomain: "mm-islamic-erp.firebaseapp.com",
+    databaseURL: "https://mm-islamic-erp-default-rtdb.firebaseio.com",
+    projectId: "mm-islamic-erp",
+    storageBucket: "mm-islamic-erp.firebasestorage.app",
+    messagingSenderId: "547338314533",
+    appId: "1:547338314533:web:3973c2b36ef8b3b01170cc"
+  };
 
-    const logBox = document.getElementById("purgeLogs");
-    const purgeBtn = document.getElementById("purgeBtn");
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
 
-    function log(msg, type = "info") {
-      const div = document.createElement("div");
-      div.className = `log-entry log-${type}`;
-      div.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
-      logBox.appendChild(div);
-      logBox.scrollTop = logBox.scrollHeight;
-    }
+  let rawJsonData = null;
 
-    // Function to safely batch delete an entire collection (400 docs per commit)
-    async function purgeCollection(colName) {
-      log(`Scanning '${colName}'...`, "info");
-      const snap = await getDocs(collection(fsDb, colName));
+  const fileInput = document.getElementById("jsonFileInput");
+  const dropzoneText = document.getElementById("dropzoneText");
+  const startBtn = document.getElementById("startMigrationBtn");
+  const statusCard = document.getElementById("statusCard");
+  const progressBar = document.getElementById("progressBar");
+  const percentageText = document.getElementById("percentageText");
+  const currentPhaseText = document.getElementById("currentPhaseText");
+  const logBox = document.getElementById("logBox");
 
-      if (snap.empty) {
-        log(`Collection '${colName}' is already completely empty.`, "warn");
-        return 0;
-      }
+  function log(msg, type = "info") {
+    const el = document.createElement("div");
+    el.className = "log-item " + (type === "success" ? "log-success" : type === "warn" ? "log-warn" : type === "err" ? "log-err" : "");
+    el.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+    logBox.appendChild(el);
+    logBox.scrollTop = logBox.scrollHeight;
+  }
 
-      log(`Found ${snap.size} documents in '${colName}'. Deleting in batches...`, "info");
-      let batch = writeBatch(fsDb);
-      let count = 0;
-      let totalDeleted = 0;
+  function setProgress(percent, phase) {
+    progressBar.style.width = percent + "%";
+    percentageText.innerText = Math.round(percent) + "%";
+    if (phase) currentPhaseText.innerText = phase;
+  }
 
-      for (const docSnap of snap.docs) {
-        batch.delete(docSnap.ref);
-        count++;
-        totalDeleted++;
+  fileInput.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
 
-        if (count === 400) {
-          await batch.commit();
-          log(`Deleted ${totalDeleted}/${snap.size} from '${colName}'...`, "info");
-          batch = writeBatch(fsDb);
-          count = 0;
-        }
-      }
-
-      if (count > 0) {
-        await batch.commit();
-      }
-
-      log(`✔ Finished: Collection '${colName}' deleted (${totalDeleted} docs removed).`, "success");
-      return totalDeleted;
-    }
-
-    window.startPurgeProcess = async function() {
-      if (!confirm("Are you 100% sure you want to PERMANENTLY delete 'students', 'teachers', 'attendance', and root 'muster' collections?")) {
-        return;
-      }
-
-      purgeBtn.disabled = true;
-      purgeBtn.innerText = "⏳ Deleting old collections... Please wait";
-      logBox.innerHTML = "";
-
-      const targets = ["students", "teachers", "attendance", "muster"];
-      let grandTotal = 0;
-
+    dropzoneText.innerText = `Selected: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
       try {
-        for (const col of targets) {
-          grandTotal += await purgeCollection(col);
-        }
-
-        log("--------------------------------------------------", "info");
-        log(`🎉 CLEANUP COMPLETE! Total ${grandTotal} old documents permanently removed.`, "success");
-        log("🛡️ Root 'users' collection and 'muster' sub-collections remain 100% intact.", "success");
-        
-        purgeBtn.innerText = "✔ Old Data Cleaned Up Successfully!";
-        purgeBtn.style.background = "#10b981";
+        rawJsonData = JSON.parse(ev.target.result);
+        startBtn.disabled = false;
+        log(`File loaded successfully. Root keys found: ${Object.keys(rawJsonData).join(", ")}`, "success");
       } catch (err) {
-        console.error(err);
-        log(`❌ Error deleting collections: ${err.message}`, "log-err");
-        purgeBtn.disabled = false;
-        purgeBtn.innerText = "Retry Deletion";
+        alert("Invalid JSON format! Please check the file.");
+        startBtn.disabled = true;
       }
     };
-  </script>
+    reader.readAsText(file);
+  });
+
+  // Month Name to YYYY-MM helper
+  function convertMonthToYearMonth(monthName, year = 2026) {
+    const months = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+    const idx = months.indexOf(String(monthName).toLowerCase().trim());
+    if (idx !== -1) {
+      return `${year}-${String(idx + 1).padStart(2, "0")}`;
+    }
+    return `${year}-10`;
+  }
+
+  // Deep Delete Collection & Sub-collections
+  async function wipeCollections() {
+    setProgress(5, "Clearing old Firestore collections...");
+    log("Beginning Firestore database wipe...", "warn");
+
+    const rootCols = [
+      "users", "students", "teachers", "fees", "fees_matrix", "fees_entries",
+      "attendance", "daily_claims", "expenses", "study_material", "homework",
+      "timetable", "subjects", "syllabus_config", "syllabus_chapters",
+      "teacher_points_logs", "teacher_permissions", "student_permissions"
+    ];
+
+    for (let c of rootCols) {
+      try {
+        const snap = await getDocs(collection(db, c));
+        let count = 0;
+        for (let d of snap.docs) {
+          // Check for known sub-collections under users
+          if (c === "users") {
+            const subCols = ["muster", "fees_entries", "fees_matrix", "daily_claims", "leaves", "tests", "syllabus_progress"];
+            for (let sub of subCols) {
+              try {
+                const subSnap = await getDocs(collection(db, "users", d.id, sub));
+                for (let subD of subSnap.docs) {
+                  await deleteDoc(subD.ref);
+                }
+              } catch (e) {}
+            }
+          }
+          await deleteDoc(d.ref);
+          count++;
+        }
+        if (count > 0) log(`Deleted ${count} documents from '${c}'`, "warn");
+      } catch (e) {
+        log(`Notice on clearing '${c}': ${e.message}`);
+      }
+    }
+    log("Old Firestore collections successfully wiped.", "success");
+  }
+
+  startBtn.addEventListener("click", async () => {
+    if (!rawJsonData) return;
+    if (!confirm("ALERT: Yeh action Firestore ka sara purana data delete karke JSON ka naya data import karega. Continue karein?")) return;
+
+    startBtn.disabled = true;
+    statusCard.style.display = "block";
+    logBox.innerHTML = "";
+
+    try {
+      // PHASE 1: WIPE FIRESTORE
+      await wipeCollections();
+
+      // PHASE 2: MIGRATE USERS (STUDENTS & TEACHERS)
+      setProgress(20, "Migrating Users (Students & Teachers)...");
+      const studentsMap = rawJsonData.students || {};
+      const teachersMap = rawJsonData.teachers || {};
+      const usersDataMap = rawJsonData.users || {};
+      const feesBasicMap = rawJsonData.fees || {};
+
+      const allUserIds = new Set([
+        ...Object.keys(studentsMap),
+        ...Object.keys(teachersMap),
+        ...Object.keys(usersDataMap),
+        ...Object.keys(feesBasicMap)
+      ]);
+
+      log(`Found ${allUserIds.size} total user records to process.`);
+
+      for (let uid of allUserIds) {
+        const st = studentsMap[uid] || {};
+        const tch = teachersMap[uid] || {};
+        const uAuth = usersDataMap[uid] || {};
+        const feeInfo = feesBasicMap[uid] || {};
+
+        const isTeacher = !!(tch.name || tch.username || uAuth.role === "teacher");
+        const role = isTeacher ? "teacher" : (uAuth.role || "student");
+        const username = isTeacher ? (tch.username || uid) : uid;
+        const name = tch.name || st.name || feeInfo.name || uAuth.name || username;
+        const cls = String(tch.assignedClass || st.class || feeInfo.class || uAuth.assignedClass || "1").replace(/class\s*/i, "").trim();
+
+        const userDoc = {
+          userId: String(uid),
+          admn: String(uid),
+          username: String(username),
+          name: String(name),
+          role: role,
+          class: cls,
+          assignedClass: cls,
+          photo: tch.photo || st.photo || "",
+          points: Number(tch.points || st.points || 0),
+          password: String(uAuth.password || tch.password || "MM"),
+          customFee: st.customFee !== undefined ? st.customFee : null,
+          Details: {
+            phone: tch.phone || st.phone || "",
+            DOB: tch.dob || st.dob || "-",
+            email: tch.email || st.email || "",
+            regDate: st.regDate || tch.regDate || new Date().toLocaleDateString("en-GB"),
+            updatedAt: new Date().toISOString()
+          }
+        };
+
+        await setDoc(doc(db, "users", String(uid)), userDoc, { merge: true });
+      }
+      log(`✔ Migrated ${allUserIds.size} users into unified 'users' root collection.`, "success");
+
+      // PHASE 3: MIGRATE ATTENDANCE TO SUB-COLLECTION `users/{userId}/muster/{YYYY-MM}`
+      setProgress(45, "Migrating Attendance into user muster sub-collections...");
+      const attendance = rawJsonData.attendance || {};
+      let totalMusterMonths = 0;
+
+      for (const [uid, monthsObj] of Object.entries(attendance)) {
+        if (!monthsObj || typeof monthsObj !== "object") continue;
+
+        for (const [monthName, daysMap] of Object.entries(monthsObj)) {
+          const yearMonthDocId = convertMonthToYearMonth(monthName, 2026);
+          const formattedDays = {};
+
+          for (const [dayKey, val] of Object.entries(daysMap)) {
+            const dayNum = dayKey.replace(/[^0-9]/g, "");
+            const paddedDay = "Day_" + (dayNum.length < 2 ? "0" + dayNum : dayNum);
+
+            let status = "A";
+            if (val === true || val === "Present" || val === "P") status = "P";
+            else if (val === "H") status = "H";
+
+            formattedDays[paddedDay] = { status: status };
+          }
+
+          await setDoc(doc(db, "users", String(uid), "muster", yearMonthDocId), {
+            userId: String(uid),
+            month: yearMonthDocId,
+            Days: formattedDays,
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+
+          totalMusterMonths++;
+        }
+      }
+      log(`✔ Migrated ${totalMusterMonths} attendance months into 'users/{userId}/muster/{YYYY-MM}'.`, "success");
+
+      // PHASE 4: MIGRATE FEES ENTRIES & FEES MATRIX
+      setProgress(65, "Migrating Fees Entries & Fees Matrices...");
+      const feesEntries = rawJsonData.fees_entries || {};
+      let totalFeesEntries = 0;
+
+      for (const [uid, entriesObj] of Object.entries(feesEntries)) {
+        if (!entriesObj || typeof entriesObj !== "object") continue;
+
+        for (const [entryId, entryData] of Object.entries(entriesObj)) {
+          await setDoc(doc(db, "users", String(uid), "fees_entries", String(entryId)), {
+            id: String(entryId),
+            admn: String(uid),
+            studentName: entryData.studentName || "Student",
+            types: Array.isArray(entryData.types) ? entryData.types : [],
+            amount: String(entryData.amount || 0),
+            mode: entryData.mode || "Cash",
+            date: entryData.date || new Date().toLocaleDateString("en-GB"),
+            createdAt: new Date().toISOString()
+          });
+          totalFeesEntries++;
+        }
+      }
+      log(`✔ Migrated ${totalFeesEntries} fee transaction entries into 'users/{userId}/fees_entries'.`, "success");
+
+      const feesMatrix = rawJsonData.fees_matrix || {};
+      let totalMatrices = 0;
+
+      for (const [uid, matrixObj] of Object.entries(feesMatrix)) {
+        if (!matrixObj || typeof matrixObj !== "object") continue;
+
+        await setDoc(doc(db, "users", String(uid), "fees_matrix", "current"), {
+          admn: String(uid),
+          matrix: matrixObj,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+
+        totalMatrices++;
+      }
+      log(`✔ Migrated ${totalMatrices} students' fee matrix into 'users/{userId}/fees_matrix/current'.`, "success");
+
+      // PHASE 5: MIGRATE DAILY CLAIMS
+      setProgress(80, "Migrating Daily Points Claims...");
+      const claims = rawJsonData.daily_claims || {};
+      let totalClaims = 0;
+
+      for (const [uid, userClaims] of Object.entries(claims)) {
+        if (!userClaims || typeof userClaims !== "object") continue;
+
+        for (const [claimKey, val] of Object.entries(userClaims)) {
+          if (val === true) {
+            await setDoc(doc(db, "users", String(uid), "daily_claims", claimKey), {
+              claimed: true,
+              date: claimKey,
+              timestamp: Date.now()
+            });
+            totalClaims++;
+          }
+        }
+      }
+      log(`✔ Migrated ${totalClaims} daily claim records into 'users/{userId}/daily_claims'.`, "success");
+
+      // PHASE 6: MIGRATE ROOT SHARED DATA (EXPENSES, TIMETABLE, SUBJECTS, SYLLABUS)
+      setProgress(90, "Migrating Expenses, Timetable & Subjects...");
+      
+      // Expenses
+      const expenses = rawJsonData.expenses || {};
+      let expCount = 0;
+      for (const [monthOrKey, expData] of Object.entries(expenses)) {
+        if (typeof expData === "object") {
+          for (const [id, item] of Object.entries(expData)) {
+            if (typeof item === "object") {
+              await setDoc(doc(db, "expenses", String(id)), { ...item, id: String(id) }, { merge: true });
+              expCount++;
+            }
+          }
+        }
+      }
+      log(`✔ Migrated ${expCount} expense records into 'expenses'.`, "success");
+
+      // Timetable
+      const timetable = rawJsonData.timetable || {};
+      for (const [cls, schedule] of Object.entries(timetable)) {
+        const cleanCls = String(cls).replace(/class\s*/i, "").trim();
+        await setDoc(doc(db, "timetable", cleanCls), {
+          class: cleanCls,
+          schedule: Array.isArray(schedule) ? schedule : Object.values(schedule),
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      }
+      log("✔ Migrated Timetable records.", "success");
+
+      // Subjects
+      const subjects = rawJsonData.subjects || {};
+      for (const [cls, subMap] of Object.entries(subjects)) {
+        const cleanCls = String(cls).replace(/class\s*/i, "").trim();
+        if (typeof subMap === "object") {
+          for (const [sId, sObj] of Object.entries(subMap)) {
+            await setDoc(doc(db, "subjects", `${cleanCls}_${sId}`), {
+              ...sObj,
+              class: cleanCls,
+              id: String(sId)
+            }, { merge: true });
+          }
+        }
+      }
+      log("✔ Migrated Class Subjects.", "success");
+
+      // Enabled Syllabus
+      const enabledSyllabus = rawJsonData.enabled_syllabus || {};
+      for (const [cls, subList] of Object.entries(enabledSyllabus)) {
+        const cleanCls = String(cls).replace(/class\s*/i, "").trim();
+        await setDoc(doc(db, "syllabus_config", cleanCls), {
+          class: cleanCls,
+          subjects: subList,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      }
+      log("✔ Migrated Syllabus configurations.", "success");
+
+      setProgress(100, "Migration Completed Successfully! 🎉");
+      log("=====================================================", "success");
+      log("🎉 ALL DATA SUCCESSFULLY MIGRATED TO NEW ARCHITECTURE!", "success");
+      log("Ab aap apni main app open karke check kar sakte hain.", "success");
+
+    } catch (err) {
+      log(`Migration Error: ${err.message}`, "err");
+      console.error(err);
+      alert("Error occurred during migration. Check console logs.");
+    } finally {
+      startBtn.disabled = false;
+    }
+  });
+</script>
+
 </body>
 </html>
