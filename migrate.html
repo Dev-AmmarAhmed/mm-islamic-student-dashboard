@@ -253,14 +253,80 @@
         let opCount = 0;
         let totalDocsCommitted = 0;
 
+                // Helper function to deeply sanitize objects and remove undefined / invalid entities
+        function sanitizeForFirestore(obj) {
+          if (obj === undefined) return null;
+          if (obj === null || typeof obj !== "object") return obj;
+
+          if (Array.isArray(obj)) {
+            return obj
+              .filter(item => item !== undefined)
+              .map(item => sanitizeForFirestore(item));
+          }
+
+          const cleanObj = {};
+          for (const [key, val] of Object.entries(obj)) {
+            if (val !== undefined) {
+              // Sanitize key name to prevent invalid Firestore characters
+              const cleanKey = String(key).replace(/\//g, "_");
+              cleanObj[cleanKey] = sanitizeForFirestore(val);
+            }
+          }
+          return cleanObj;
+        }
+
         for (const rootKey of keys) {
           const rootData = rawJsonData[rootKey];
           if (!rootData || typeof rootData !== "object") continue;
 
-          // Process document key-value pairs
+          // Handle special nested collections: expenses
+          if (rootKey === "expenses") {
+            for (const [monthOrId, itemPayload] of Object.entries(rootData)) {
+              if (itemPayload && typeof itemPayload === "object") {
+                // If it is a month container containing timestamp IDs like 1789612551653
+                const hasTimestampSubDocs = Object.keys(itemPayload).some(k => !isNaN(Number(k)) && k.length > 8);
+                if (hasTimestampSubDocs) {
+                  for (const [tId, expRecord] of Object.entries(itemPayload)) {
+                    const docRef = doc(db, "expenses", `${monthOrId}_${tId}`);
+                    const cleanPayload = sanitizeForFirestore(expRecord) || {};
+                    cleanPayload.month = monthOrId;
+                    cleanPayload.expenseId = String(tId);
+
+                    batch.set(docRef, cleanPayload, { merge: true });
+                    opCount++;
+                    totalDocsCommitted++;
+
+                    if (opCount >= 450) {
+                      await batch.commit();
+                      batch = writeBatch(db);
+                      opCount = 0;
+                      log(`Committed chunk of 450 documents (expenses)...`);
+                    }
+                  }
+                } else {
+                  const docRef = doc(db, "expenses", String(monthOrId));
+                  const cleanPayload = sanitizeForFirestore(itemPayload) || {};
+                  batch.set(docRef, cleanPayload, { merge: true });
+                  opCount++;
+                  totalDocsCommitted++;
+                  if (opCount >= 450) {
+                    await batch.commit();
+                    batch = writeBatch(db);
+                    opCount = 0;
+                    log(`Committed chunk of 450 documents...`);
+                  }
+                }
+              }
+            }
+            continue;
+          }
+
+          // Default processing for all other collections
           for (const [docId, payload] of Object.entries(rootData)) {
-            const docRef = doc(db, rootKey, String(docId));
-            const formattedPayload = (typeof payload === "object" && payload !== null) ? payload : { value: payload };
+            const cleanDocId = String(docId).replace(/\//g, "_");
+            const docRef = doc(db, rootKey, cleanDocId);
+            const cleanPayload = sanitizeForFirestore(payload);
+            const formattedPayload = (typeof cleanPayload === "object" && cleanPayload !== null) ? cleanPayload : { value: cleanPayload };
 
             batch.set(docRef, formattedPayload, { merge: true });
             opCount++;
@@ -270,10 +336,11 @@
               await batch.commit();
               batch = writeBatch(db);
               opCount = 0;
-              log(`Committed chunk of 450 documents...`);
+              log(`Committed chunk of 450 documents (${rootKey})...`);
             }
           }
         }
+
 
         // Commit remainder
         if (opCount > 0) {
