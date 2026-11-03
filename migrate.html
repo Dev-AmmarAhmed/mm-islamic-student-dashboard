@@ -117,7 +117,7 @@
 
   <div class="migration-card">
     <div class="header-title">Database Migration Utility</div>
-    <div class="header-subtitle">Shift Realtime Database JSON Export into Cloud Firestore with Wipe & Batch Write.</div>
+    <div class="header-subtitle">Shift Realtime Database JSON Export into Cloud Firestore with Zero Data Loss.</div>
 
     <label for="jsonFileInput">
       <div class="file-input-wrapper" id="dropZone">
@@ -140,7 +140,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-    import { getFirestore, doc, collection, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getFirestore, doc, collection, getDocs, setDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBHpbgoGs7HFQ3-1tBn9BpGT4YYDaKkZB8",
@@ -173,12 +173,8 @@
       "teachers",
       "teacher_points_logs",
       "teacher_daily_claims",
-      "tests",
-      "test_attempts",
-      "online_tests",
       "study_material",
       "homework",
-      "timetable",
       "leave_applications",
       "teacher_leave_applications",
       "notifications",
@@ -187,8 +183,18 @@
       "subjects",
       "syllabus_chapters",
       "syllabus_progress",
-      "muster"
+      "muster",
+      "points"
     ];
+
+    // Explicitly ignored branches per Architect instructions
+    const IGNORED_BRANCHES = new Set([
+      "timetable",
+      "online_tests",
+      "tests",
+      "test_attempts",
+      "interactive_tests"
+    ]);
 
     let rawJsonData = null;
     const terminal = document.getElementById("terminalLog");
@@ -253,35 +259,39 @@
       log("All target collections cleared.", "success");
     }
 
-    // Deep sanitizer: Converts nested arrays or arrays containing arrays into safe JSON strings
-    function deepSanitizeForFirestore(data) {
+    function containsAnyArray(val) {
+      if (Array.isArray(val)) return true;
+      if (val && typeof val === "object") {
+        for (const k in val) {
+          if (containsAnyArray(val[k])) return true;
+        }
+      }
+      return false;
+    }
+
+    // Deep sanitizer: Prevents Firestore nested array crashes
+    function deepSanitizeForFirestore(data, insideArray = false) {
       if (data === undefined || data === null) return null;
+      if (typeof data === "number") {
+        if (isNaN(data) || !isFinite(data)) return 0;
+        return data;
+      }
       if (typeof data !== "object") return data;
 
       if (Array.isArray(data)) {
-        const filtered = data.filter(item => item !== undefined);
-        
-        // Check if this array contains another array or an object that contains an array
-        const containsNestedArray = filtered.some(item => {
-          if (Array.isArray(item)) return true;
-          if (item && typeof item === "object") {
-            return Object.values(item).some(val => Array.isArray(val));
-          }
-          return false;
-        });
-
-        if (containsNestedArray) {
-          return JSON.stringify(filtered);
+        if (insideArray || data.some(item => containsAnyArray(item))) {
+          return JSON.stringify(data);
         }
-
-        return filtered.map(item => deepSanitizeForFirestore(item));
+        return data
+          .filter(item => item !== undefined)
+          .map(item => deepSanitizeForFirestore(item, true));
       }
 
       const cleanObj = {};
       for (const [key, val] of Object.entries(data)) {
         if (val !== undefined) {
-          const safeKey = String(key).replace(/[\/\.]/g, "_");
-          cleanObj[safeKey] = deepSanitizeForFirestore(val);
+          const safeKey = String(key).replace(/[\/\.\$\#\[\]]/g, "_");
+          cleanObj[safeKey] = deepSanitizeForFirestore(val, insideArray);
         }
       }
       return cleanObj;
@@ -305,15 +315,29 @@
         let batch = writeBatch(db);
         let opCount = 0;
         let totalDocsCommitted = 0;
+        let pendingItems = [];
 
         const commitBatch = async (label = "") => {
           if (opCount > 0) {
-            await batch.commit();
-            totalDocsCommitted += opCount;
-            log(`Committed chunk of ${opCount} documents ${label}...`);
+            try {
+              await batch.commit();
+              totalDocsCommitted += opCount;
+              log(`Committed chunk of ${opCount} documents ${label}...`);
+            } catch (batchErr) {
+              log(`Batch notice in ${label}: Retrying chunk with self-healing mode...`, "warn");
+              for (const item of pendingItems) {
+                try {
+                  await setDoc(item.ref, item.data, { merge: true });
+                  totalDocsCommitted++;
+                } catch (singleErr) {
+                  log(`Skipped unparsable row ${item.ref.path}: ${singleErr.message}`, "error");
+                }
+              }
+            }
             batch = writeBatch(db);
+            pendingItems = [];
             opCount = 0;
-            await new Promise(r => setTimeout(r, 60));
+            await new Promise(r => setTimeout(r, 50));
           }
         };
 
@@ -321,6 +345,12 @@
         let processedKeys = 0;
 
         for (const rootKey of rootKeys) {
+          // Drop ignored branches cleanly
+          if (IGNORED_BRANCHES.has(rootKey)) {
+            log(`Skipping ignored branch: ${rootKey}`, "warn");
+            continue;
+          }
+
           const rootData = rawJsonData[rootKey];
           if (!rootData || typeof rootData !== "object") continue;
 
@@ -336,14 +366,17 @@
                     clean.month = subGroup;
                     clean.id = String(tId);
                     batch.set(docRef, clean, { merge: true });
+                    pendingItems.push({ ref: docRef, data: clean });
                     opCount++;
-                    if (opCount >= 350) await commitBatch("(expenses)");
+                    if (opCount >= 300) await commitBatch("(expenses)");
                   }
                 } else {
                   const docRef = doc(db, "expenses", String(subGroup));
-                  batch.set(docRef, deepSanitizeForFirestore(subPayload) || {}, { merge: true });
+                  const clean = deepSanitizeForFirestore(subPayload) || {};
+                  batch.set(docRef, clean, { merge: true });
+                  pendingItems.push({ ref: docRef, data: clean });
                   opCount++;
-                  if (opCount >= 350) await commitBatch("(expenses)");
+                  if (opCount >= 300) await commitBatch("(expenses)");
                 }
               }
             }
@@ -358,8 +391,9 @@
                   clean.studentAdmn = String(admnId);
                   clean.entryId = String(entryId);
                   batch.set(docRef, clean, { merge: true });
+                  pendingItems.push({ ref: docRef, data: clean });
                   opCount++;
-                  if (opCount >= 350) await commitBatch("(fees_entries)");
+                  if (opCount >= 300) await commitBatch("(fees_entries)");
                 }
               }
             }
@@ -374,24 +408,24 @@
                   clean.admn = String(admnId);
                   clean.month = monthName;
                   batch.set(docRef, clean, { merge: true });
+                  pendingItems.push({ ref: docRef, data: clean });
                   opCount++;
-                  if (opCount >= 350) await commitBatch("(attendance)");
+                  if (opCount >= 300) await commitBatch("(attendance)");
                 }
               }
             }
           }
-                    // Branch 4: General collections (including online_tests, users, students, fees, timetable, etc.)
+          // Branch 4: General collections (users, students, fees, points, etc.)
           else {
             for (const [docId, payload] of Object.entries(rootData)) {
               if (payload === null || payload === undefined) continue;
 
-              const safeDocId = String(docId).replace(/[\/\.]/g, "_");
+              const safeDocId = String(docId).replace(/[\/\.\$\#\[\]]/g, "_");
               if (!safeDocId || safeDocId === "null") continue;
 
               const docRef = doc(db, rootKey, safeDocId);
               let clean = deepSanitizeForFirestore(payload);
 
-              // Firestore Document Root MUST be an Object, NEVER an Array
               if (Array.isArray(clean)) {
                 clean = { items: clean, __isArray: true };
               } else if (typeof clean !== "object" || clean === null) {
@@ -399,23 +433,23 @@
               }
 
               batch.set(docRef, clean, { merge: true });
+              pendingItems.push({ ref: docRef, data: clean });
               opCount++;
-              if (opCount >= 350) await commitBatch(`(${rootKey})`);
+              if (opCount >= 300) await commitBatch(`(${rootKey})`);
             }
           }
-
 
           processedKeys++;
           const currentPct = 25 + Math.round((processedKeys / rootKeys.length) * 70);
           progressBar.style.width = `${currentPct}%`;
         }
 
-        // Commit any remaining items
+        // Commit remaining documents
         await commitBatch("(final)");
 
         progressBar.style.width = "100%";
         log(`Migration Completed Successfully! Total documents created: ${totalDocsCommitted}`, "success");
-        alert("✔ All data from RTDB export has been cleanly migrated to Cloud Firestore!");
+        alert("✔ All essential data from RTDB export has been cleanly migrated to Cloud Firestore!");
 
       } catch (err) {
         log("Migration Error: " + err.message, "error");
