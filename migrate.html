@@ -3,62 +3,145 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Firebase RTDB to Firestore Migration Tool</title>
+  <title>M.M ISLAMIC ERP - Database Migration Engine</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&display=swap');
-    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; }
-    .container { background: #1e293b; padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); max-width: 600px; width: 100%; border: 1px solid #334155; }
-    h1 { color: #38bdf8; font-family: 'Montserrat', sans-serif; text-align: center; margin-top: 0; margin-bottom: 10px; }
-    .step-box { background: rgba(0,0,0,0.2); padding: 16px; border-radius: 12px; margin-bottom: 16px; border: 1px dashed #475569; }
-    input[type="file"] { width: 100%; padding: 10px; background: #0f172a; border-radius: 8px; color: #38bdf8; border: 1px solid #38bdf8; cursor: pointer; }
-    
-    button { width: 100%; padding: 14px; font-size: 16px; font-weight: bold; color: white; background: linear-gradient(135deg, #10b981 0%, #047857 100%); border: none; border-radius: 12px; cursor: pointer; transition: 0.3s; margin-top: 10px; }
-    button:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(16, 185, 129, 0.4); }
-    button:disabled { background: #475569; cursor: not-allowed; box-shadow: none; transform: none; }
-    
-    .wipe-box { background: rgba(239, 68, 68, 0.1); border: 1px dashed #ef4444; padding: 16px; border-radius: 12px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px; }
-    .wipe-box input[type="checkbox"] { width: 24px; height: 24px; accent-color: #ef4444; cursor: pointer; }
-    
-    .log-box { background: #000; color: #10b981; font-family: monospace; font-size: 12px; padding: 15px; border-radius: 10px; height: 250px; overflow-y: auto; margin-top: 20px; border: 1px solid #334155; }
-    .progress-bar-container { width: 100%; background: #334155; border-radius: 8px; margin-top: 10px; overflow: hidden; display: none; }
-    .progress-bar { height: 12px; background: #38bdf8; width: 0%; transition: width 0.3s; }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+    }
+    body {
+      background: #0f172a;
+      color: #f8fafc;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .migration-card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 20px;
+      padding: 30px;
+      width: 100%;
+      max-width: 680px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+    }
+    .header-title {
+      font-size: 20px;
+      font-weight: 900;
+      color: #38bdf8;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+    }
+    .header-subtitle {
+      font-size: 13px;
+      color: #94a3b8;
+      margin-bottom: 24px;
+    }
+    .file-input-wrapper {
+      border: 2px dashed #38bdf8;
+      border-radius: 14px;
+      padding: 26px;
+      text-align: center;
+      background: rgba(56, 189, 248, 0.03);
+      cursor: pointer;
+      margin-bottom: 20px;
+      transition: all 0.2s ease;
+    }
+    .file-input-wrapper:hover {
+      background: rgba(56, 189, 248, 0.08);
+    }
+    input[type="file"] {
+      display: none;
+    }
+    .btn-action {
+      width: 100%;
+      padding: 14px;
+      border-radius: 12px;
+      border: none;
+      font-size: 14px;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: transform 0.15s ease;
+      background: linear-gradient(135deg, #0288d1 0%, #01579b 100%);
+      color: white;
+      box-shadow: 0 4px 14px rgba(2, 136, 209, 0.4);
+      margin-bottom: 16px;
+    }
+    .btn-action:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+    .progress-bar-container {
+      width: 100%;
+      height: 10px;
+      background: #334155;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 16px;
+      display: none;
+    }
+    .progress-bar-fill {
+      width: 0%;
+      height: 100%;
+      background: #10b981;
+      transition: width 0.25s ease;
+    }
+    .console-terminal {
+      background: #020617;
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      padding: 16px;
+      font-family: monospace;
+      font-size: 12px;
+      color: #38bdf8;
+      max-height: 280px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+    .log-success { color: #4ade80; }
+    .log-warn { color: #f59e0b; }
+    .log-error { color: #ef4444; }
   </style>
 </head>
 <body>
 
-  <div class="container">
-    <h1>🚀 Database Migrator</h1>
-    <p style="text-align: center; color: #94a3b8; font-size: 14px; margin-bottom: 20px;">Realtime Database ➡️ Clean Cloud Firestore</p>
+  <div class="migration-card">
+    <div class="header-title">Database Migration Utility</div>
+    <div class="header-subtitle">Shift Realtime Database JSON Export into Cloud Firestore with Wipe & Batch Write.</div>
 
-    <div class="step-box">
-      <label style="font-weight: bold; margin-bottom: 8px; display: block; color: #fbbf24;">1. Select Exported JSON File:</label>
-      <input type="file" id="jsonFileInput" accept=".json">
-    </div>
-
-    <div class="wipe-box">
-      <input type="checkbox" id="wipeDataCheck" checked>
-      <div>
-        <div style="font-weight: 900; color: #ef4444;">🔥 Wipe Old Firestore Data</div>
-        <div style="font-size: 11px; color: #f87171;">Deletes existing collections before creating new ones.</div>
+    <label for="jsonFileInput">
+      <div class="file-input-wrapper" id="dropZone">
+        <div style="font-size: 32px; margin-bottom: 8px;">📁</div>
+        <div id="fileSelectLabel" style="font-size: 14px; font-weight: 700; color: #f8fafc;">Click to Select RTDB Export JSON File</div>
+        <div style="font-size: 11px; color: #64748b; margin-top: 4px;">mm-islamic-erp-default-rtdb-export.json</div>
       </div>
+    </label>
+    <input type="file" id="jsonFileInput" accept=".json">
+
+    <div class="progress-bar-container" id="progressBarBox">
+      <div class="progress-bar-fill" id="progressBar"></div>
     </div>
 
-    <button id="startBtn" disabled>Wipe & Start Migration</button>
+    <button id="startMigrateBtn" class="btn-action" disabled>🚀 Wipe Old Data & Start Migration</button>
 
-    <div class="progress-bar-container" id="progressContainer">
-      <div class="progress-bar" id="progressBar"></div>
-    </div>
-    
-    <div class="log-box" id="logBox">
-      [System] Ready. Please select your RTDB JSON file.
-    </div>
+    <div class="console-terminal" id="terminalLog">System Ready. Please select the JSON backup file to begin.</div>
   </div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getFirestore, writeBatch, doc, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+    import { getFirestore, doc, collection, getDocs, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-    // 🔴 FIREBASE CONFIG
     const firebaseConfig = {
       apiKey: "AIzaSyBHpbgoGs7HFQ3-1tBn9BpGT4YYDaKkZB8",
       authDomain: "mm-islamic-erp.firebaseapp.com",
@@ -70,248 +153,144 @@
     };
 
     const app = initializeApp(firebaseConfig);
-    const fsDb = getFirestore(app);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
 
-    const fileInput = document.getElementById("jsonFileInput");
-    const wipeDataCheck = document.getElementById("wipeDataCheck");
-    const startBtn = document.getElementById("startBtn");
-    const logBox = document.getElementById("logBox");
+    const TARGET_COLLECTIONS = [
+      "app_settings",
+      "auth_sessions",
+      "daily_claims",
+      "email_lookup",
+      "enabled_syllabus",
+      "expenses",
+      "fees",
+      "fees_entries",
+      "fees_matrix",
+      "attendance",
+      "students",
+      "users",
+      "teachers"
+    ];
+
+    let rawJsonData = null;
+    const terminal = document.getElementById("terminalLog");
+    const progressBox = document.getElementById("progressBarBox");
     const progressBar = document.getElementById("progressBar");
-    const progressContainer = document.getElementById("progressContainer");
+    const startBtn = document.getElementById("startMigrateBtn");
+    const fileLabel = document.getElementById("fileSelectLabel");
 
-    let parsedData = null;
-
-    function log(msg, color = "#10b981") {
-      const p = document.createElement("div");
-      p.style.color = color;
-      p.innerText = `> ${msg}`;
-      logBox.appendChild(p);
-      logBox.scrollTop = logBox.scrollHeight;
+    function log(msg, type = "normal") {
+      const line = document.createElement("div");
+      if (type === "success") line.className = "log-success";
+      if (type === "warn") line.className = "log-warn";
+      if (type === "error") line.className = "log-error";
+      line.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      terminal.appendChild(line);
+      terminal.scrollTop = terminal.scrollHeight;
     }
 
-    fileInput.addEventListener("change", (e) => {
+    document.getElementById("jsonFileInput").addEventListener("change", (e) => {
       const file = e.target.files[0];
       if (!file) return;
-      log(`Loading file: ${file.name}...`, "#38bdf8");
-      
+
+      fileLabel.innerText = `Selected: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
       const reader = new FileReader();
       reader.onload = (event) => {
         try {
-          parsedData = JSON.parse(event.target.result);
-          log(`✔ JSON File Loaded Successfully! Found ${Object.keys(parsedData).length} main nodes.`, "#fbbf24");
+          rawJsonData = JSON.parse(event.target.result);
+          log("JSON file parsed successfully.", "success");
           startBtn.disabled = false;
         } catch (err) {
-          log("❌ Invalid JSON File!", "#ef4444");
+          log("JSON parsing error: " + err.message, "error");
+          startBtn.disabled = true;
         }
       };
       reader.readAsText(file);
     });
 
-    // 🔥 SMART WIPE ENGINE: Purane saare collections ko delete karega
-    async function wipeOldFirestoreData() {
-      const knownCollections = [
-        'students', 'teachers', 'users', 'email_lookup', 'teacher_points_logs', 'student_permissions', 'teacher_permissions', 'enabled_syllabus',
-        'study_material', 'homework', 'online_tests', 'subjects', 'timetable',
-        'leave_applications', 'teacher_leave_applications', 'tests', 'daily_claims', 'teacher_daily_claims', 'notifications',
-        'fees_matrix', 'fees_entries', 'student_test_attempts',
-        'syllabus_chapters', 'syllabus_progress', 'expenses', 'attendance', 'muster'
-      ];
-
-      log("🔥 Wiping old Firestore data...", "#ef4444");
-      
-      for (const colName of knownCollections) {
-        try {
-          const snapshot = await getDocs(collection(fsDb, colName));
-          if (!snapshot.empty) {
-            const batch = writeBatch(fsDb);
-            let count = 0;
-            snapshot.forEach(docSnap => {
-              batch.delete(docSnap.ref);
-              count++;
-            });
-            await batch.commit();
-            log(`🗑️ Deleted ${count} old documents from [${colName}]`, "#f87171");
+    async function purgeCollections() {
+      log("Purging old collections from Firestore...", "warn");
+      for (const colName of TARGET_COLLECTIONS) {
+        const colRef = collection(db, colName);
+        const snapshot = await getDocs(colRef);
+        if (!snapshot.empty) {
+          let batch = writeBatch(db);
+          let count = 0;
+          for (const docSnap of snapshot.docs) {
+            batch.delete(docSnap.ref);
+            count++;
+            if (count % 450 === 0) {
+              await batch.commit();
+              batch = writeBatch(db);
+            }
           }
-        } catch (e) {
-          // Ignore if collection doesn't exist yet
+          await batch.commit();
+          log(`Purged collection: ${colName} (${count} documents removed).`);
         }
       }
-      log("✔ Firestore Database Wipe Complete! Ready for fresh data.", "#fbbf24");
-    }
-
-
-    // DATA SANITIZER (Prevents 1MB Crash)
-    function sanitizeData(data) {
-      if (!data) return data;
-      const MAX_LEN = 800000; // Safe Limit (~800 KB)
-      
-      if (typeof data === 'string') {
-         if (data.length > MAX_LEN) {
-            log(`⚠️ Large image detected and resized to prevent crash.`, "#f59e0b");
-            return "https://via.placeholder.com/150?text=Image+Too+Large";
-         }
-         return data;
-      }
-      
-      if (typeof data === 'object') {
-         if (Array.isArray(data)) return data.map(item => sanitizeData(item));
-         const cleanObj = {};
-         for (let key in data) cleanObj[key] = sanitizeData(data[key]);
-         return cleanObj;
-      }
-      return data;
-    }
-
-    // Mapper Engine
-    function generateFirestoreOperations(data) {
-      const operations = [];
-
-      function safeObjectEntries(obj) {
-        if (!obj || typeof obj !== 'object') return [];
-        return Object.entries(obj);
-      }
-
-      function ensureObject(val) {
-        if (!val) return { value: "empty" };
-        if (typeof val === 'object' && !Array.isArray(val)) return val;
-        return { data: val };
-      }
-
-      const flatNodes = ['students', 'teachers', 'users', 'email_lookup', 'teacher_points_logs', 'student_permissions', 'teacher_permissions', 'enabled_syllabus'];
-      flatNodes.forEach(node => {
-        safeObjectEntries(data[node]).forEach(([docId, docData]) => {
-          if (docData) operations.push({ path: `${node}/${String(docId)}`, data: sanitizeData(ensureObject(docData)) });
-        });
-      });
-
-      const classNestedNodes = ['study_material', 'homework', 'online_tests', 'subjects', 'timetable'];
-      classNestedNodes.forEach(node => {
-        safeObjectEntries(data[node]).forEach(([classId, items]) => {
-          safeObjectEntries(items).forEach(([itemId, itemData]) => {
-            if (itemData) operations.push({ path: `${node}/${classId}/items/${itemId}`, data: sanitizeData(ensureObject(itemData)) });
-          });
-        });
-      });
-
-      const userNestedNodes = ['leave_applications', 'teacher_leave_applications', 'tests', 'daily_claims', 'teacher_daily_claims', 'notifications', 'fees_matrix', 'fees_entries', 'student_test_attempts'];
-      userNestedNodes.forEach(node => {
-        safeObjectEntries(data[node]).forEach(([userId, records]) => {
-          safeObjectEntries(records).forEach(([recordId, recordData]) => {
-            if (recordData) operations.push({ path: `${node}/${userId}/records/${recordId}`, data: sanitizeData(ensureObject(recordData)) });
-          });
-        });
-      });
-
-      if (data.syllabus_chapters) {
-        safeObjectEntries(data.syllabus_chapters).forEach(([classId, subjects]) => {
-          safeObjectEntries(subjects).forEach(([subject, chapters]) => {
-            if (chapters) operations.push({ path: `syllabus_chapters/${classId}_${subject}`, data: sanitizeData(ensureObject(chapters)) });
-          });
-        });
-      }
-
-      if (data.syllabus_progress) {
-        safeObjectEntries(data.syllabus_progress).forEach(([admn, subjects]) => {
-          safeObjectEntries(subjects).forEach(([subject, progressData]) => {
-            if (progressData) operations.push({ path: `syllabus_progress/${admn}/subjects/${subject}`, data: sanitizeData(ensureObject(progressData)) });
-          });
-        });
-      }
-
-      if (data.expenses) {
-        safeObjectEntries(data.expenses).forEach(([month, records]) => {
-          safeObjectEntries(records).forEach(([expId, expData]) => {
-            if(expData) operations.push({ path: `expenses/${month}/records/${expId}`, data: sanitizeData(ensureObject(expData)) });
-          });
-        });
-      }
-
-      if (data.attendance) {
-        safeObjectEntries(data.attendance).forEach(([admn, months]) => {
-          safeObjectEntries(months).forEach(([month, days]) => {
-            if(days) operations.push({ path: `attendance/${admn}/months/${month}`, data: sanitizeData(ensureObject(days)) });
-          });
-        });
-      }
-
-      if (data.muster) {
-        safeObjectEntries(data.muster).forEach(([month, days]) => {
-          safeObjectEntries(days).forEach(([day, teachers]) => {
-            if(teachers) operations.push({ path: `muster/${month}/days/${day}`, data: sanitizeData(ensureObject(teachers)) });
-          });
-        });
-      }
-
-      return operations;
+      log("All target collections cleared.", "success");
     }
 
     startBtn.addEventListener("click", async () => {
-      if (!parsedData) return;
+      if (!rawJsonData) return;
       startBtn.disabled = true;
-      startBtn.innerText = "⏳ Processing Please Wait...";
-      progressContainer.style.display = "block";
+      progressBox.style.display = "block";
+      progressBar.style.width = "5%";
 
-      // 1. WIPE OLD DATA (If checkbox is ticked)
-      if (wipeDataCheck.checked) {
-        await wipeOldFirestoreData();
-      } else {
-        log("⏭️ Skipping Wipe. Merging data with existing Firestore collections...", "#38bdf8");
-      }
-
-      // 2. MIGRATE NEW DATA
-      log("Analyzing JSON structure and preparing Firestore batches...");
-      let operations = [];
       try {
-          operations = generateFirestoreOperations(parsedData);
-      } catch (err) {
-          log(`❌ Fatal Parsing Error: ${err.message}`, "#ef4444");
-          return;
-      }
+        log("Authenticating with Firebase...", "warn");
+        await signInAnonymously(auth);
+        log("Authenticated successfully.", "success");
 
-      const totalOps = operations.length;
-      log(`Total new documents to write: ${totalOps}`, "#fbbf24");
+        // 1. Purge
+        await purgeCollections();
+        progressBar.style.width = "30%";
 
-      if (totalOps === 0) {
-        log("No structured data found to migrate.", "#ef4444");
-        return;
-      }
+        // 2. Transform and Batch Write
+        log("Starting Firestore migration batch write...", "warn");
+        const keys = Object.keys(rawJsonData);
+        let batch = writeBatch(db);
+        let opCount = 0;
+        let totalDocsCommitted = 0;
 
-      const CHUNK_SIZE = 400; // Batch limit safe size
-      let completedOps = 0;
-      let failedBatches = 0;
+        for (const rootKey of keys) {
+          const rootData = rawJsonData[rootKey];
+          if (!rootData || typeof rootData !== "object") continue;
 
-      for (let i = 0; i < totalOps; i += CHUNK_SIZE) {
-        const chunk = operations.slice(i, i + CHUNK_SIZE);
-        const batch = writeBatch(fsDb);
+          // Process document key-value pairs
+          for (const [docId, payload] of Object.entries(rootData)) {
+            const docRef = doc(db, rootKey, String(docId));
+            const formattedPayload = (typeof payload === "object" && payload !== null) ? payload : { value: payload };
 
-        chunk.forEach(op => {
-          const safePath = op.path.replace(/\s+/g, '_'); 
-          const docRef = doc(fsDb, safePath);
-          batch.set(docRef, op.data);
-        });
+            batch.set(docRef, formattedPayload, { merge: true });
+            opCount++;
+            totalDocsCommitted++;
 
-        try {
-          await batch.commit();
-          completedOps += chunk.length;
-          const percentage = Math.round((completedOps / totalOps) * 100);
-          progressBar.style.width = `${percentage}%`;
-          log(`Migrated ${completedOps} / ${totalOps} documents...`);
-        } catch (error) {
-          failedBatches++;
-          log(`❌ Error writing batch to Firestore: ${error.message}`, "#ef4444");
+            if (opCount >= 450) {
+              await batch.commit();
+              batch = writeBatch(db);
+              opCount = 0;
+              log(`Committed chunk of 450 documents...`);
+            }
+          }
         }
-      }
 
-      if (failedBatches === 0) {
-          log("🎉 ALL NEW COLLECTIONS CREATED SUCCESSFULLY!", "#10b981");
-          startBtn.innerText = "✔ Wipe & Migration Done";
-          startBtn.style.background = "#10b981";
-      } else {
-          log(`⚠️ Migration finished, but ${failedBatches} batches had errors.`, "#f59e0b");
-          startBtn.innerText = "⚠️ Done with Warnings";
+        // Commit remainder
+        if (opCount > 0) {
+          await batch.commit();
+        }
+
+        progressBar.style.width = "100%";
+        log(`Migration Complete! Total documents written: ${totalDocsCommitted}`, "success");
+        alert("✔ Realtime Database to Firestore Migration has completed successfully!");
+
+      } catch (err) {
+        log("Migration failed: " + err.message, "error");
+        alert("Migration Error: " + err.message);
+      } finally {
+        startBtn.disabled = false;
       }
     });
-
   </script>
 </body>
 </html>
