@@ -360,7 +360,9 @@
               }
             }
           }
-          // Special branch 3: Attendance nested by admn and month
+
+
+                        // Special branch 3: Attendance nested by admn and month
           else if (rootKey === "attendance") {
             for (const [admnId, monthsMap] of Object.entries(rootData)) {
               if (monthsMap && typeof monthsMap === "object") {
@@ -376,7 +378,25 @@
               }
             }
           }
-          // Default branch for all other collections (users, students, fees, fees_matrix, etc.)
+          // Special branch 4: Points & Points Logs (Fixes Property 1789612551653 error)
+          else if (rootKey === "points" || rootKey === "teacher_points_logs") {
+            for (const [pId, pPayload] of Object.entries(rootData)) {
+              const safeDocId = String(pId).replace(/[\/\.]/g, "_");
+              const docRef = doc(db, rootKey, `log_${safeDocId}`);
+              let clean = sanitizeForFirestore(pPayload);
+
+              if (typeof clean !== "object" || clean === null) {
+                clean = { value: clean, id: safeDocId };
+              } else {
+                clean.id = safeDocId;
+              }
+
+              batch.set(docRef, clean, { merge: true });
+              opCount++;
+              if (opCount >= 400) await commitBatch(`(${rootKey})`);
+            }
+          }
+          // Default branch for all other collections
           else {
             for (const [docId, payload] of Object.entries(rootData)) {
               const safeDocId = String(docId).replace(/[\/\.]/g, "_");
@@ -387,11 +407,23 @@
                 clean = { value: clean };
               }
 
+              // Guard against numeric key maps inside root document fields
+              if (typeof clean === "object" && clean !== null && !Array.isArray(clean)) {
+                const sanitizedMap = {};
+                for (const [fieldKey, fieldVal] of Object.entries(clean)) {
+                  // Agar field key timestamp ya long number ho to prefix do taaki Firestore array na samjhe
+                  const safeFieldKey = (!isNaN(Number(fieldKey)) && fieldKey.length >= 10) ? `rec_${fieldKey}` : fieldKey;
+                  sanitizedMap[safeFieldKey] = fieldVal;
+                }
+                clean = sanitizedMap;
+              }
+
               batch.set(docRef, clean, { merge: true });
               opCount++;
               if (opCount >= 400) await commitBatch(`(${rootKey})`);
             }
           }
+
 
           processedKeys++;
           const currentPct = 25 + Math.round((processedKeys / rootKeys.length) * 70);
