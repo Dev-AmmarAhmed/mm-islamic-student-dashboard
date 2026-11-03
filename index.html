@@ -1,14 +1,12 @@
-<!DOCTYPE html>
-<html lang="en">
-
-  
-    <!-- Igris Security Layer & mmstore Reactive Local Engine -->
-  <script src="/Igris/mmstore.js"></script>
-  <script src="/Igris/igris.js"></script>
-</head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>M.M ISLAMIC ENGLISH SCHOOL</title>
+<!DOCTYPE html>  
+<html lang="en">  
+<head>  
+ <!-- Igris Security Layer & mmstore Reactive Local Engine -->  
+ <script src="./Igris/mmstore.js"></script>  
+ <script src="./Igris/igris.js"></script>  
+ <meta charset="UTF-8">  
+ <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">  
+ <title>M.M ISLAMIC ENGLISH SCHOOL</title>  
 
   <!-- PWA MANIFEST & APP ICON INITIALIZATION -->
   <meta name="theme-color" content="#0f172a">
@@ -40,7 +38,9 @@
   <!-- ====================================================================
       SECTION 1: STYLESHEETS & REFINED PREMIUM DESIGN SYSTEM
        ==================================================================== -->
-     <style>
+</head>
+
+<style>
     @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@800&family=Noto+Nastaliq+Urdu:wght@400;700&display=swap');
 
     /* ====================================================================
@@ -1290,40 +1290,52 @@ body.dark-mode .btn-status-claimed {
   margin-top: 6px;
 }
 
-/* MASTER SCROLL & HEIGHT FIX (UPDATED) */
-canvas { touch-action: pan-y !important; }
-/* Humne !important overrides hata diye hain taake JS perfectly slide animation aur scroll handle kar sake */
-</style>
+  /* MASTER SCROLL & HEIGHT FIX (UPDATED) */  
+canvas { touch-action: pan-y !important; }  
+</style>  
+</head>  
+<body>  
+  
+ <!-- ==========================================  
+ PREMIUM SPLASH SCREEN ANIMATION (REKHTA STYLE)  
+ ========================================== -->  
+ <div id="premiumSplashScreen" class="splash-overlay">  
+ <div class="splash-text-container" style="font-size: 22px; justify-content: center; padding: 0 16px; text-align: center;">  
+ <span class="splash-letter" style="animation-delay: 0.1s;">M</span>  
+ <span class="splash-letter" style="animation-delay: 0.14s;">.</span>  
+ <span class="splash-letter" style="animation-delay: 0.18s;">M</span>  
+ <span class="splash-letter" style="animation-delay: 0.22s;">&nbsp;</span>  
+ <span class="splash-letter" style="animation-delay: 0.26s;">I</span>  
+ <span class="splash-letter" style="animation-delay: 0.30s;">S</span>  
+ <span class="splash-letter" style="animation-delay: 0.34s;">L</span>  
+ <span class="splash-letter" style="animation-delay: 0.38s;">A</span>  
+ <span class="splash-letter" style="animation-delay: 0.42s;">M</span>  
+ <span class="splash-letter" style="animation-delay: 0.46s;">I</span>  
+ <span class="splash-letter" style="animation-delay: 0.50s;">C</span>  
+ <span class="splash-letter" style="animation-delay: 0.54s;">&nbsp;</span>  
+ <span class="splash-letter" style="animation-delay: 0.58s;">S</span>  
+ <span class="splash-letter" style="animation-delay: 0.62s;">C</span>  
+ <span class="splash-letter" style="animation-delay: 0.66s;">H</span>  
+ <span class="splash-letter" style="animation-delay: 0.70s;">O</span>  
+ <span class="splash-letter" style="animation-delay: 0.74s;">O</span>  
+ <span class="splash-letter" style="animation-delay: 0.78s;">L</span>  
+ </div>  
+ </div>  
+  
+ <script>  
+ (function() {  
+ function dismissSplash() {  
+ var s = document.getElementById("premiumSplashScreen");  
+ if (s && !s.classList.contains("slide-left-hide")) {  
+ s.classList.add("slide-left-hide");  
+ setTimeout(function() { s.style.display = "none"; }, 850);  
+ }  
+ }  
+ setTimeout(dismissSplash, 2000);  
+ window.addEventListener("load", function() { setTimeout(dismissSplash, 1200); });  
+ })();  
+ </script>  
 
-
-</head>
-<body>
-
-    <!-- ==========================================
-       PREMIUM SPLASH SCREEN ANIMATION (REKHTA STYLE)
-       ========================================== -->
-    <div id="premiumSplashScreen" class="splash-overlay">
-    <div class="splash-text-container" style="font-size: 22px; justify-content: center; padding: 0 16px; text-align: center;">
-      <span class="splash-letter" style="animation-delay: 0.1s;">M</span>
-      <span class="splash-letter" style="animation-delay: 0.14s;">.</span>
-      <span class="splash-letter" style="animation-delay: 0.18s;">M</span>
-      <span class="splash-letter" style="animation-delay: 0.22s;">&nbsp;</span>
-      <span class="splash-letter" style="animation-delay: 0.26s;">I</span>
-      <span class="splash-letter" style="animation-delay: 0.30s;">S</span>
-      <span class="splash-letter" style="animation-delay: 0.34s;">L</span>
-      <span class="splash-letter" style="animation-delay: 0.38s;">A</span>
-      <span class="splash-letter" style="animation-delay: 0.42s;">M</span>
-      <span class="splash-letter" style="animation-delay: 0.46s;">I</span>
-      <span class="splash-letter" style="animation-delay: 0.50s;">C</span>
-      <span class="splash-letter" style="animation-delay: 0.54s;">&nbsp;</span>
-      <span class="splash-letter" style="animation-delay: 0.58s;">S</span>
-      <span class="splash-letter" style="animation-delay: 0.62s;">C</span>
-      <span class="splash-letter" style="animation-delay: 0.66s;">H</span>
-      <span class="splash-letter" style="animation-delay: 0.70s;">O</span>
-      <span class="splash-letter" style="animation-delay: 0.74s;">O</span>
-      <span class="splash-letter" style="animation-delay: 0.78s;">L</span>
-    </div>
-  </div>
 
 
 
@@ -4956,102 +4968,170 @@ Exact Output JSON Format Required:
       window.closeModal("customConfirmModal");
     };
 
+       import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";  
+ import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js";  
+ import { getAuth, signInAnonymously, onAuthStateChanged, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";  
+ import { getFirestore, doc, collection, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, where, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";  
+   
+ // M.M ISLAMIC ENGLISH SCHOOL FIREBASE CREDENTIALS  
+ const firebaseConfig = {  
+ apiKey: "AIzaSyBHpbgoGs7HFQ3-1tBn9BpGT4YYDaKkZB8",  
+ authDomain: "mm-islamic-erp.firebaseapp.com",  
+ databaseURL: "https://mm-islamic-erp-default-rtdb.firebaseio.com",  
+ projectId: "mm-islamic-erp",  
+ storageBucket: "mm-islamic-erp.firebasestorage.app",  
+ messagingSenderId: "547338314533",  
+ appId: "1:547338314533:web:3973c2b36ef8b3b01170cc"  
+ };  
 
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js";
-    import { getDatabase, ref, onValue, set, update, remove, child, get, query, orderByChild, equalTo, startAfter, onChildAdded, onChildChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
-    import { getAuth, signInAnonymously, onAuthStateChanged, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-    import { getFirestore, doc, setDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-    
-      
-    // M.M ISLAMIC ENGLISH SCHOOL FIREBASE CREDENTIALS
-    const firebaseConfig = {
-      apiKey: "AIzaSyBHpbgoGs7HFQ3-1tBn9BpGT4YYDaKkZB8",
-      authDomain: "mm-islamic-erp.firebaseapp.com",
-      databaseURL: "https://mm-islamic-erp-default-rtdb.firebaseio.com",
-      projectId: "mm-islamic-erp",
-      storageBucket: "mm-islamic-erp.firebasestorage.app",
-      messagingSenderId: "547338314533",
-      appId: "1:547338314533:web:3973c2b36ef8b3b01170cc"
-    };
+      const app = initializeApp(firebaseConfig);   
+try {   
+if (typeof initializeAppCheck === 'function') {   
+initializeAppCheck(app, {   
+provider: new ReCaptchaEnterpriseProvider('6LefZbUtAAAAADOa8KBfn1qywMly7Ky2-UlX6zxW'),   
+isTokenAutoRefreshEnabled: true   
+});   
+}   
+} catch (err) { console.warn("App Check bypass:", err); }   
+  
+const auth = getAuth(app);   
+const fsDb = getFirestore(app);   
+const db = fsDb;  
+window.db = fsDb;  
+  
+// Compatibility Bridge: ref, onValue, set, update, remove, get, child  
+function ref(dbInstance, path = "") {  
+ return { path: String(path).replace(/^\/+|\/+$/g, '') };  
+}  
+function child(parentRef, path) {  
+ const basePath = parentRef && parentRef.path ? parentRef.path : "";  
+ return { path: basePath ? `${basePath}/${path}` : path };  
+}  
+function orderByChild() { return {}; }  
+function equalTo() { return {}; }  
+function startAfter() { return {}; }  
+  
+async function set(refObj, data) {  
+ if (!refObj) return;  
+ await safeDataWrite(refObj.path, data);  
+}  
+  
+async function update(refObj, updates) {  
+ if (!updates) return;  
+ if (refObj && refObj.path && refObj.path.length > 0) {  
+ await safeDataWrite(refObj.path, updates);  
+ return;  
+ }  
+ for (const [keyPath, val] of Object.entries(updates)) {  
+ if (val === null) {  
+ await safeDataDelete(keyPath);  
+ } else {  
+ await safeDataWrite(keyPath, val);  
+ }  
+ }  
+}  
+  
+async function remove(refObj) {  
+ if (!refObj || !refObj.path) return;  
+ await safeDataDelete(refObj.path);  
+}  
+  
+async function get(refObj) {  
+ if (!refObj) return { exists: () => false, val: () => null };  
+ const path = refObj.path || "";  
+ const data = await safeDataFetch(path);  
+ return {  
+ exists: () => data !== null && data !== undefined,  
+ val: () => data  
+ };  
+}  
+  
+function onValue(refObj, callback) {  
+ if (!refObj || !callback) return () => {};  
+ const path = refObj.path || "";  
+ if (path === ".info/serverTimeOffset") {  
+ callback({ val: () => 0, exists: () => true });  
+ return () => {};  
+ }  
+ const parts = path.split('/').filter(Boolean);  
+ if (parts.length === 1) {  
+ return onSnapshot(collection(fsDb, parts[0]), (snapshot) => {  
+ const result = {};  
+ snapshot.forEach(docSnap => { result[docSnap.id] = unpackFirestorePayload(docSnap.data()); });  
+ callback({ exists: () => Object.keys(result).length > 0, val: () => result });  
+ }, (err) => console.warn(`[onValue listener error for ${path}]:`, err));  
+ } else if (parts.length === 2) {  
+ return onSnapshot(doc(fsDb, parts[0], parts[1]), (docSnap) => {  
+ if (docSnap.exists()) {  
+ callback({ exists: () => true, val: () => unpackFirestorePayload(docSnap.data()) });  
+ } else {  
+ callback({ exists: () => false, val: () => null });  
+ }  
+ }, (err) => console.warn(`[onValue listener error for ${path}]:`, err));  
+ } else {  
+ return onSnapshot(doc(fsDb, parts[0], parts[1]), (docSnap) => {  
+ if (docSnap.exists()) {  
+ let curr = unpackFirestorePayload(docSnap.data());  
+ for (let i = 2; i < parts.length; i++) {  
+ if (curr && curr[parts[i]] !== undefined) curr = curr[parts[i]];  
+ else { curr = null; break; }  
+ }  
+ callback({ exists: () => curr !== null && curr !== undefined, val: () => curr });  
+ } else {  
+ callback({ exists: () => false, val: () => null });  
+ }  
+ }, (err) => console.warn(`[onValue listener error for ${path}]:`, err));  
+ }  
+}  
+  
+// Bind mmstore to Firestore Data Flow: User -> mmstore -> Firestore -> mmstore -> UI  
+ if (window.mmstore && typeof window.mmstore.setFirestoreSyncHandler === "function") {  
+ window.mmstore.setFirestoreSyncHandler(async (action, key, value) => {  
+ const pathParts = key.split('/');  
+ if (pathParts.length === 1) {  
+ const docRef = doc(fsDb, pathParts[0], "root");  
+ if (action === 'WRITE') await setDoc(docRef, { data: value }, { merge: true });  
+ else if (action === 'DELETE') await deleteDoc(docRef);  
+ } else if (pathParts.length === 2) {  
+ const docRef = doc(fsDb, pathParts[0], pathParts[1]);  
+ if (action === 'WRITE') await setDoc(docRef, value, { merge: true });  
+ else if (action === 'DELETE') await deleteDoc(docRef);  
+ } else {  
+ const docRef = doc(fsDb, pathParts[0], pathParts[1]);  
+ const fieldPath = pathParts.slice(2).join('.');  
+ if (action === 'WRITE') await updateDoc(docRef, { [fieldPath]: value });  
+ }  
+ return value;  
+ });  
+ }  
+   
+// Ensure background Firebase Auth token is always active for Security Rules   
+window.ensureFirebaseAuth = async function() {   
+if (auth.currentUser) return auth.currentUser;   
+try {   
+const cred = await signInAnonymously(auth);   
+return cred.user;   
+} catch (e) {   
+console.warn("Auth init warning:", e);   
+return null;   
+}   
+};   
+window.ensureFirebaseAuth();   
+  
+window.syncAuthSessionRole = async function(role, userId, cls) {   
+const user = await window.ensureFirebaseAuth();   
+if (user && role && userId) {   
+try {   
+await setDoc(doc(fsDb, "auth_sessions", user.uid), {   
+role: role,   
+userId: String(userId),   
+assignedClass: String(cls || "1"),   
+updatedAt: Date.now()   
+}, { merge: true });   
+} catch (e) { console.warn("Session sync warning:", e); }   
+}   
+};  
 
-    const app = initializeApp(firebaseConfig);
-    try {
-      if (typeof initializeAppCheck === 'function') {
-        initializeAppCheck(app, {
-          provider: new ReCaptchaEnterpriseProvider('6LefZbUtAAAAADOa8KBfn1qywMly7Ky2-UlX6zxW'),
-          isTokenAutoRefreshEnabled: true
-        });
-      }
-    } catch (err) { console.warn("App Check bypass:", err); }
-
-       const db = getDatabase(app);
-    const auth = getAuth(app);
-    const fsDb = getFirestore(app);
-
-          // --- IGRIS BANDWIDTH SAVER CACHE ENGINE ---
-    function syncWithIgrisCache(db, nodePath, cacheKey, timestampField, callback) {
-        let cachedData = {};
-        try {
-            const raw = localStorage.getItem(cacheKey);
-            if (raw) cachedData = JSON.parse(raw);
-        } catch (e) { console.error("Cache Error:", e); }
-
-        callback(cachedData); // Turant UI load karega (0 lag)
-
-        let lastTimestamp = 0;
-        const items = Object.values(cachedData);
-        if (items.length > 0) { lastTimestamp = Math.max(...items.map(i => i[timestampField] || 0)); }
-
-        const dbRef = ref(db, nodePath);
-        let liveQuery = lastTimestamp > 0 ? query(dbRef, orderByChild(timestampField), startAfter(lastTimestamp)) : query(dbRef, orderByChild(timestampField));
-
-        onChildAdded(liveQuery, (snapshot) => {
-            const data = snapshot.val();
-            if (data) {
-                cachedData[snapshot.key] = data;
-                localStorage.setItem(cacheKey, JSON.stringify(cachedData));
-                callback(cachedData);
-            }
-        });
-
-        onChildChanged(dbRef, (snapshot) => {
-            const data = snapshot.val();
-            if (data) {
-                cachedData[snapshot.key] = data;
-                localStorage.setItem(cacheKey, JSON.stringify(cachedData));
-                callback(cachedData);
-            }
-        });
-    }
-    // ------------------------------------------
-
-    // Ensure background Firebase Auth token is always active for Security Rules
-    window.ensureFirebaseAuth = async function() {
-      if (auth.currentUser) return auth.currentUser;
-      try {
-        const cred = await signInAnonymously(auth);
-        return cred.user;
-      } catch (e) {
-        console.warn("Auth init warning:", e);
-        return null;
-      }
-    };
-    window.ensureFirebaseAuth();
-
-    window.syncAuthSessionRole = async function(role, userId, cls) {
-      const user = await window.ensureFirebaseAuth();
-      if (user && role && userId) {
-        try {
-          await set(ref(db, `auth_sessions/${user.uid}`), {
-            role: role,
-            userId: String(userId),
-            assignedClass: String(cls || "1"),
-            updatedAt: Date.now()
-          });
-        } catch (e) { console.warn("Session sync warning:", e); }
-      }
-    };
 
     let currentRole = "admin";
  let assignedClass = "1";
@@ -5117,30 +5197,39 @@ Exact Output JSON Format Required:
             let dbSaveTimeout = null;
 
             let studentsListenerAttached = false;
-    
-            window.attachSmartStudentsListener = function(role, sAdmn) {
-        if (studentsListenerAttached) return;
-        studentsListenerAttached = true;
 
-        if (role === "student" && sAdmn) {
-          onValue(ref(db, `students/${sAdmn}`), (snap) => {
-            if (snap.exists()) {
-              inMemoryStudentsData[sAdmn] = snap.val();
-            }
-          });
-          return;
-        }
+       window.attachSmartStudentsListener = function(role, sAdmn) {  
+ if (studentsListenerAttached) return;  
+ studentsListenerAttached = true;  
+  
+ if (role === "student" && sAdmn) {  
+ onSnapshot(doc(fsDb, "students", String(sAdmn)), (snap) => {  
+ if (snap.exists()) {  
+ inMemoryStudentsData[sAdmn] = snap.data();  
+ if (window.mmstore) window.mmstore.set(`students/${sAdmn}`, snap.data(), false);  
+ }  
+ });  
+ return;  
+ }  
+  
+ onSnapshot(collection(fsDb, "students"), (snapshot) => {  
+ const freshData = {};  
+ snapshot.forEach((docSnap) => {  
+ freshData[docSnap.id] = docSnap.data();  
+ });  
+ inMemoryStudentsData = freshData;  
+ localStorage.setItem('offlineDbCache_students', JSON.stringify(freshData));  
+ if (window.mmstore) window.mmstore.set('students', freshData, false);  
+ if (currentRole === "admin") renderAdminStudentsDirectory(true);  
+ if (currentRole === "teacher") {   
+ refreshAllTeacherData();   
+ window.loadTeacherLeaderboard();   
+ }  
+ }, (err) => {  
+ console.warn("[Firestore] Students collection subscription error:", err);  
+ });  
+ };
 
-        // --- IGRIS CACHE SYSTEM ACTIVATED ---
-        syncWithIgrisCache(db, 'students', 'offlineDbCache_students', 'timestamp', (cachedData) => {
-          inMemoryStudentsData = cachedData;
-          if (currentRole === "admin") renderAdminStudentsDirectory(true);
-          if (currentRole === "teacher") { 
-            refreshAllTeacherData(); 
-            window.loadTeacherLeaderboard(); 
-          }
-        });
-      };
 
 
 
@@ -5291,14 +5380,110 @@ Exact Output JSON Format Required:
     };
 
     
-    
+function unpackFirestorePayload(data) {
+ if (!data || typeof data !== "object") return data;
+ if (Array.isArray(data)) return data.map(unpackFirestorePayload);
+ const out = {};
+ for (const [k, v] of Object.entries(data)) {
+ if (typeof v === "string" && (v.startsWith('[{"') || v.startsWith('{"') || v.startsWith('["'))) {
+ try { out[k] = JSON.parse(v); } catch (e) { out[k] = v; }
+ } else if (typeof v === "object" && v !== null) {
+ out[k] = unpackFirestorePayload(v);
+ } else {
+ out[k] = v;
+ }
+ }
+ return out;
+}
 
-    async function safeDataFetch(refPath) {
-      try {
-        const snap = await get(child(ref(db), refPath));
-        return snap.exists() ? snap.val() : null;
-      } catch(err) { return null; }
-    }
+async function safeDataFetch(refPath) {  
+ try {  
+ const parts = String(refPath).split('/').filter(Boolean);  
+ if (parts.length === 0) return null;  
+  
+ // Local-first check via mmstore  
+ if (window.mmstore) {  
+ const localVal = await window.mmstore.get(refPath);  
+ if (localVal !== null && localVal !== undefined) return localVal;  
+ }  
+  
+ if (parts.length === 1) {  
+ const colRef = collection(fsDb, parts[0]);  
+ const snap = await getDocs(colRef);  
+ if (snap.empty) return null;  
+ const result = {};  
+ snap.forEach(docSnap => { result[docSnap.id] = unpackFirestorePayload(docSnap.data()); });  
+ if (window.mmstore) await window.mmstore.set(refPath, result, false);  
+ return result;  
+ } else if (parts.length === 2) {  
+ const docRef = doc(fsDb, parts[0], parts[1]);  
+ const snap = await getDoc(docRef);  
+ if (!snap.exists()) return null;  
+ const data = unpackFirestorePayload(snap.data());  
+ if (window.mmstore) await window.mmstore.set(refPath, data, false);  
+ return data;  
+ } else {  
+ const docRef = doc(fsDb, parts[0], parts[1]);  
+ const snap = await getDoc(docRef);  
+ if (!snap.exists()) return null;  
+ const docData = unpackFirestorePayload(snap.data());  
+ let curr = docData;  
+ for (let i = 2; i < parts.length; i++) {  
+ if (curr && curr[parts[i]] !== undefined) {  
+ curr = curr[parts[i]];  
+ } else {  
+ return null;  
+ }  
+ }  
+ return curr;  
+ }  
+ } catch(err) {  
+ console.warn("[Firestore Engine] Read Error for path:", refPath, err);  
+ return null;  
+ }  
+ }
+
+  
+ async function safeDataWrite(refPath, value) {  
+ try {  
+ const parts = String(refPath).split('/').filter(Boolean);  
+ if (window.mmstore) {  
+ await window.mmstore.set(refPath, value, false);  
+ }  
+ if (parts.length === 1) {  
+ const docRef = doc(fsDb, parts[0], "root");  
+ await setDoc(docRef, { data: value }, { merge: true });  
+ } else if (parts.length === 2) {  
+ const docRef = doc(fsDb, parts[0], parts[1]);  
+ await setDoc(docRef, value, { merge: true });  
+ } else {  
+ const docRef = doc(fsDb, parts[0], parts[1]);  
+ const fieldPath = parts.slice(2).join('.');  
+ await updateDoc(docRef, { [fieldPath]: value });  
+ }  
+ } catch(err) {  
+ console.error("[Firestore Engine] Write Error for path:", refPath, err);  
+ }  
+ }  
+  
+ async function safeDataDelete(refPath) {  
+ try {  
+ const parts = String(refPath).split('/').filter(Boolean);  
+ if (window.mmstore) {  
+ await window.mmstore.delete(refPath, false);  
+ }  
+ if (parts.length === 2) {  
+ await deleteDoc(doc(fsDb, parts[0], parts[1]));  
+ } else if (parts.length > 2) {  
+ const docRef = doc(fsDb, parts[0], parts[1]);  
+ const fieldPath = parts.slice(2).join('.');  
+ await updateDoc(docRef, { [fieldPath]: null });  
+ }  
+ } catch(err) {  
+ console.error("[Firestore Engine] Delete Error for path:", refPath, err);  
+ }  
+ }
+
 
         // Smart Image Compressor ( Keeps under ~120KB for fast Firestore storage )
     function readFileAsDataURL(file, maxWidth = 900, quality = 0.72) {
@@ -5941,36 +6126,46 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       return null;
     };
 
+ window.completePortalLoginSession = function(resolvedUserId, uData) {  
+ const previousUser = localStorage.getItem("loggedUser") || localStorage.getItem("loggedInUser");  
+ if (previousUser !== resolvedUserId) {  
+ const theme = localStorage.getItem("appTheme");  
+ const darkMode = localStorage.getItem("darkMode");  
+ const moreAnim = localStorage.getItem("moreAnimations");  
+ const neonEff = localStorage.getItem("neonEffect");  
+ localStorage.clear();  
+ if(theme) localStorage.setItem("appTheme", theme);  
+ if(darkMode) localStorage.setItem("darkMode", darkMode);  
+ if(moreAnim) localStorage.setItem("moreAnimations", moreAnim);  
+ if(neonEff) localStorage.setItem("neonEffect", neonEff);  
+ if ('caches' in window) {  
+ caches.keys().then(names => { for (let name of names) caches.delete(name); });  
+ }  
+ }  
+  
+ const safeUser = String(resolvedUserId);  
+ const safeRole = String(uData.role || "student");  
+ const safePass = String(uData.password || "MM");  
+  
+ localStorage.setItem("loggedUser", safeUser);  
+ localStorage.setItem("loggedInUser", safeUser);  
+ localStorage.setItem("loggedRole", safeRole);  
+ localStorage.setItem("userRole", safeRole);  
+ localStorage.setItem("sessionToken", btoa(safePass + safeUser));  
+  
+ if (window.Igris) {  
+ window.Igris.sealSession(safeUser, safeRole);  
+ }  
+  
+ if(uData.assignedClass) localStorage.setItem("assignedClass", uData.assignedClass);  
+ if(uData.admn) localStorage.setItem("studentAdmn", uData.admn);  
+  
+ if (typeof window.initNativePushAndSW === "function") {  
+ window.initNativePushAndSW();  
+ }  
+ renderDashboardForRole(safeRole, uData.assignedClass, uData.admn);  
+ };  
 
-    window.completePortalLoginSession = function(resolvedUserId, uData) {
-      const previousUser = localStorage.getItem("loggedUser");
-      if (previousUser !== resolvedUserId) {
-        const theme = localStorage.getItem("appTheme");
-        const darkMode = localStorage.getItem("darkMode");
-        const moreAnim = localStorage.getItem("moreAnimations");
-        const neonEff = localStorage.getItem("neonEffect");
-        localStorage.clear();
-        if(theme) localStorage.setItem("appTheme", theme);
-        if(darkMode) localStorage.setItem("darkMode", darkMode);
-        if(moreAnim) localStorage.setItem("moreAnimations", moreAnim);
-        if(neonEff) localStorage.setItem("neonEffect", neonEff);
-        if ('caches' in window) {
-          caches.keys().then(names => { for (let name of names) caches.delete(name); });
-        }
-      }
-
-              localStorage.setItem("loggedUser", resolvedUserId);
-      // 🔥 FIX: Plain text password localStorage se hata diya. Sirf session token save hoga.
-      localStorage.setItem("sessionToken", btoa(uData.password + resolvedUserId)); 
-      localStorage.setItem("loggedRole", uData.role);
-      if(uData.assignedClass) localStorage.setItem("assignedClass", uData.assignedClass);
-      if(uData.admn) localStorage.setItem("studentAdmn", uData.admn);
-
-      if (typeof window.initNativePushAndSW === "function") {
-        window.initNativePushAndSW();
-      }
-      renderDashboardForRole(uData.role, uData.assignedClass, uData.admn);
-    };
 
 
 
@@ -6173,24 +6368,36 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       
       window.syncAuthSessionRole(role, loggedUser || sAdmn, aClass);
 
-      if(loggedUser) {
-        onValue(ref(db, `users/${loggedUser}`), (snap) => {
-          if(!snap.exists()) return forceLogout("⚠️ ACCOUNT DELETED: Your account no longer exists.");
-          
-          const dbUser = snap.val();
-          const expectedToken = btoa(dbUser.password + loggedUser);
-          
-          // Check 1: Token mismatch (Password changed by admin)
-          if(sessionToken !== expectedToken) {
-            return forceLogout("⚠️ SESSION EXPIRED: Password was changed by Admin.");
-          }
-          
-          // Check 2: Privilege Escalation (Hack attempt: localStorage role != DB role)
-          if(claimedRole !== dbUser.role || role !== dbUser.role) {
-            return forceLogout("🚨 SECURITY ALERT: Role manipulation detected. Logging out.");
-          }
-        });
-      }
+
+ // --- ZERO-EGRESS IGRIS SESSION VALIDATION ---
+ if(loggedUser) {  
+ if(window.Igris) {
+ const igrisCheck = window.Igris.validateSession();
+ if(!igrisCheck.valid) {
+ return; // Igris triggers lockdown screen automatically
+ }
+ }
+
+ onSnapshot(doc(fsDb, "users", String(loggedUser)), (snap) => {  
+ if(!snap.exists()) return forceLogout("⚠️ ACCOUNT DELETED: Your account no longer exists.");  
+   
+ const dbUser = snap.data();  
+ const expectedToken = btoa(dbUser.password + loggedUser);  
+   
+ // Check 1: Token mismatch (Password changed by admin)  
+ if(sessionToken !== expectedToken) {  
+ return forceLogout("⚠️ SESSION EXPIRED: Password was changed by Admin.");  
+ }  
+   
+ // Check 2: Privilege Escalation (Hack attempt: localStorage role != DB role)  
+ if(claimedRole !== dbUser.role || role !== dbUser.role) {  
+ if(window.Igris) window.Igris.triggerViolationScreen('PRIVILEGE_ESCALATION_DETECTED');
+ else return forceLogout("🚨 SECURITY ALERT: Role manipulation detected. Logging out.");  
+ }  
+ });  
+ }
+
+
 
       function forceLogout(msg) {
         localStorage.removeItem("loggedUser");
@@ -8243,11 +8450,11 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
     };
 
 
-    const savedUser = localStorage.getItem("loggedUser");
-    const savedRole = localStorage.getItem("loggedRole");
-    const savedClass = localStorage.getItem("assignedClass");
-    const savedAdmn = localStorage.getItem("studentAdmn");
-    if(savedUser && savedRole) { renderDashboardForRole(savedRole, savedClass, savedAdmn); }
+     const savedUser = localStorage.getItem("loggedUser") || localStorage.getItem("loggedInUser");  
+ const savedRole = localStorage.getItem("loggedRole") || localStorage.getItem("userRole");  
+ const savedClass = localStorage.getItem("assignedClass");  
+ const savedAdmn = localStorage.getItem("studentAdmn");  
+ if(savedUser && savedRole) { renderDashboardForRole(savedRole, savedClass, savedAdmn); }  
 
     addSafeListener("generatePdfBtn", "click", () => {
       const btn = document.getElementById("generatePdfBtn");
@@ -9879,12 +10086,18 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
         else if ('Notification' in window && Notification.permission === 'granted') { window.initNativePushAndSW(false); }
     });
 
-      document.addEventListener("DOMContentLoaded", () => {
-          // SPLASH SCREEN REMOVAL LOGIC (Runs after 2 seconds)
-      setTimeout(() => {
-          const splash = document.getElementById("premiumSplashScreen");
-          if(splash) splash.classList.add("slide-left-hide");
-      }, 2000);
+       const dismissSplashMain = () => {  
+ const splash = document.getElementById("premiumSplashScreen");  
+ if(splash && !splash.classList.contains("slide-left-hide")) {  
+ splash.classList.add("slide-left-hide");  
+ setTimeout(() => { splash.style.display = "none"; }, 850);  
+ }  
+ };  
+ setTimeout(dismissSplashMain, 1800);  
+  
+ document.addEventListener("DOMContentLoaded", () => {  
+ setTimeout(dismissSplashMain, 1800);  
+
 
 
     // YEH NAYA CODE ADD KAREIN: Auto Height Adjuster (Syllabus aur Study Material ke liye)
