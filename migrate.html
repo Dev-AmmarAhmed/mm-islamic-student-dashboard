@@ -380,16 +380,21 @@
               }
             }
           }
-          // Branch 4: General collections (including online_tests, users, students, fees, etc.)
+                    // Branch 4: General collections (including online_tests, users, students, fees, timetable, etc.)
           else {
             for (const [docId, payload] of Object.entries(rootData)) {
               if (payload === null || payload === undefined) continue;
 
               const safeDocId = String(docId).replace(/[\/\.]/g, "_");
+              if (!safeDocId || safeDocId === "null") continue;
+
               const docRef = doc(db, rootKey, safeDocId);
               let clean = deepSanitizeForFirestore(payload);
 
-              if (typeof clean !== "object" || clean === null) {
+              // Firestore Document Root MUST be an Object, NEVER an Array
+              if (Array.isArray(clean)) {
+                clean = { items: clean, __isArray: true };
+              } else if (typeof clean !== "object" || clean === null) {
                 clean = { value: clean };
               }
 
@@ -398,6 +403,7 @@
               if (opCount >= 350) await commitBatch(`(${rootKey})`);
             }
           }
+
 
           processedKeys++;
           const currentPct = 25 + Math.round((processedKeys / rootKeys.length) * 70);
