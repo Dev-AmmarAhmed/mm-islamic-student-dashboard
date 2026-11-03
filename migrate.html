@@ -169,7 +169,23 @@
       "attendance",
       "students",
       "users",
-      "teachers"
+      "teachers",
+      "teacher_points_logs",
+      "teacher_daily_claims",
+      "tests",
+      "test_attempts",
+      "online_tests",
+      "study_material",
+      "homework",
+      "timetable",
+      "leave_applications",
+      "teacher_leave_applications",
+      "notifications",
+      "student_permissions",
+      "teacher_permissions",
+      "subjects",
+      "syllabus_chapters",
+      "syllabus_progress"
     ];
 
     let rawJsonData = null;
@@ -211,24 +227,60 @@
     async function purgeCollections() {
       log("Purging old collections from Firestore...", "warn");
       for (const colName of TARGET_COLLECTIONS) {
-        const colRef = collection(db, colName);
-        const snapshot = await getDocs(colRef);
-        if (!snapshot.empty) {
-          let batch = writeBatch(db);
-          let count = 0;
-          for (const docSnap of snapshot.docs) {
-            batch.delete(docSnap.ref);
-            count++;
-            if (count % 450 === 0) {
-              await batch.commit();
-              batch = writeBatch(db);
+        try {
+          const colRef = collection(db, colName);
+          const snapshot = await getDocs(colRef);
+          if (!snapshot.empty) {
+            let batch = writeBatch(db);
+            let count = 0;
+            for (const docSnap of snapshot.docs) {
+              batch.delete(docSnap.ref);
+              count++;
+              if (count % 400 === 0) {
+                await batch.commit();
+                batch = writeBatch(db);
+              }
             }
+            await batch.commit();
+            log(`Purged collection: ${colName} (${count} documents removed).`);
           }
-          await batch.commit();
-          log(`Purged collection: ${colName} (${count} documents removed).`);
+        } catch (e) {
+          log(`Skipped purge on ${colName}: ${e.message}`, "warn");
         }
       }
       log("All target collections cleared.", "success");
+    }
+
+    // Comprehensive Sanitizer: Eliminates invalid nested arrays, undefs & illegal characters
+    function sanitizeForFirestore(val, depth = 0) {
+      if (val === undefined || val === null) return null;
+      if (typeof val !== "object") return val;
+
+      if (Array.isArray(val)) {
+        // Firestore prohibits nested arrays or arrays containing complex non-map objects
+        return val
+          .filter(item => item !== undefined)
+          .map(item => {
+            if (Array.isArray(item)) {
+              return JSON.stringify(item);
+            }
+            return sanitizeForFirestore(item, depth + 1);
+          });
+      }
+
+      const cleanObj = {};
+      for (const [k, v] of Object.entries(val)) {
+        if (v !== undefined) {
+          const safeKey = String(k).replace(/[\/\.]/g, "_");
+          // If value is a nested array of arrays, stringify it to protect Firestore integrity
+          if (Array.isArray(v) && v.some(sub => Array.isArray(sub))) {
+            cleanObj[safeKey] = JSON.stringify(v);
+          } else {
+            cleanObj[safeKey] = sanitizeForFirestore(v, depth + 1);
+          }
+        }
+      }
+      return cleanObj;
     }
 
     startBtn.addEventListener("click", async () => {
@@ -242,117 +294,120 @@
         await signInAnonymously(auth);
         log("Authenticated successfully.", "success");
 
-        // 1. Purge
         await purgeCollections();
-        progressBar.style.width = "30%";
+        progressBar.style.width = "25%";
 
-        // 2. Transform and Batch Write
-        log("Starting Firestore migration batch write...", "warn");
-        const keys = Object.keys(rawJsonData);
+        log("Starting clean Firestore migration...", "warn");
         let batch = writeBatch(db);
         let opCount = 0;
         let totalDocsCommitted = 0;
 
-                // Helper function to deeply sanitize objects and remove undefined / invalid entities
-        function sanitizeForFirestore(obj) {
-          if (obj === undefined) return null;
-          if (obj === null || typeof obj !== "object") return obj;
-
-          if (Array.isArray(obj)) {
-            return obj
-              .filter(item => item !== undefined)
-              .map(item => sanitizeForFirestore(item));
+        const commitBatch = async (label = "") => {
+          if (opCount > 0) {
+            await batch.commit();
+            totalDocsCommitted += opCount;
+            log(`Committed chunk of ${opCount} documents ${label}...`);
+            batch = writeBatch(db);
+            opCount = 0;
+            await new Promise(r => setTimeout(r, 60)); // Throttle
           }
+        };
 
-          const cleanObj = {};
-          for (const [key, val] of Object.entries(obj)) {
-            if (val !== undefined) {
-              // Sanitize key name to prevent invalid Firestore characters
-              const cleanKey = String(key).replace(/\//g, "_");
-              cleanObj[cleanKey] = sanitizeForFirestore(val);
-            }
-          }
-          return cleanObj;
-        }
+        const rootKeys = Object.keys(rawJsonData);
+        let processedKeys = 0;
 
-        for (const rootKey of keys) {
+        for (const rootKey of rootKeys) {
           const rootData = rawJsonData[rootKey];
           if (!rootData || typeof rootData !== "object") continue;
 
-          // Handle special nested collections: expenses
+          // Special branch 1: Expenses with monthly grouping
           if (rootKey === "expenses") {
-            for (const [monthOrId, itemPayload] of Object.entries(rootData)) {
-              if (itemPayload && typeof itemPayload === "object") {
-                // If it is a month container containing timestamp IDs like 1789612551653
-                const hasTimestampSubDocs = Object.keys(itemPayload).some(k => !isNaN(Number(k)) && k.length > 8);
-                if (hasTimestampSubDocs) {
-                  for (const [tId, expRecord] of Object.entries(itemPayload)) {
-                    const docRef = doc(db, "expenses", `${monthOrId}_${tId}`);
-                    const cleanPayload = sanitizeForFirestore(expRecord) || {};
-                    cleanPayload.month = monthOrId;
-                    cleanPayload.expenseId = String(tId);
-
-                    batch.set(docRef, cleanPayload, { merge: true });
+            for (const [subGroup, subPayload] of Object.entries(rootData)) {
+              if (subPayload && typeof subPayload === "object") {
+                const isTimestampBucket = Object.keys(subPayload).some(k => !isNaN(Number(k)) && k.length > 8);
+                if (isTimestampBucket) {
+                  for (const [tId, expRecord] of Object.entries(subPayload)) {
+                    const docRef = doc(db, "expenses", `${subGroup}_${tId}`);
+                    const clean = sanitizeForFirestore(expRecord) || {};
+                    clean.month = subGroup;
+                    clean.id = String(tId);
+                    batch.set(docRef, clean, { merge: true });
                     opCount++;
-                    totalDocsCommitted++;
-
-                    if (opCount >= 450) {
-                      await batch.commit();
-                      batch = writeBatch(db);
-                      opCount = 0;
-                      log(`Committed chunk of 450 documents (expenses)...`);
-                    }
+                    if (opCount >= 400) await commitBatch("(expenses)");
                   }
                 } else {
-                  const docRef = doc(db, "expenses", String(monthOrId));
-                  const cleanPayload = sanitizeForFirestore(itemPayload) || {};
-                  batch.set(docRef, cleanPayload, { merge: true });
+                  const docRef = doc(db, "expenses", String(subGroup));
+                  batch.set(docRef, sanitizeForFirestore(subPayload) || {}, { merge: true });
                   opCount++;
-                  totalDocsCommitted++;
-                  if (opCount >= 450) {
-                    await batch.commit();
-                    batch = writeBatch(db);
-                    opCount = 0;
-                    log(`Committed chunk of 450 documents...`);
-                  }
+                  if (opCount >= 400) await commitBatch("(expenses)");
                 }
               }
             }
-            continue;
           }
-
-          // Default processing for all other collections
-          for (const [docId, payload] of Object.entries(rootData)) {
-            const cleanDocId = String(docId).replace(/\//g, "_");
-            const docRef = doc(db, rootKey, cleanDocId);
-            const cleanPayload = sanitizeForFirestore(payload);
-            const formattedPayload = (typeof cleanPayload === "object" && cleanPayload !== null) ? cleanPayload : { value: cleanPayload };
-
-            batch.set(docRef, formattedPayload, { merge: true });
-            opCount++;
-            totalDocsCommitted++;
-
-            if (opCount >= 450) {
-              await batch.commit();
-              batch = writeBatch(db);
-              opCount = 0;
-              log(`Committed chunk of 450 documents (${rootKey})...`);
+          // Special branch 2: Fees entries nested by student admn
+          else if (rootKey === "fees_entries") {
+            for (const [admnId, entriesMap] of Object.entries(rootData)) {
+              if (entriesMap && typeof entriesMap === "object") {
+                for (const [entryId, entryData] of Object.entries(entriesMap)) {
+                  const docRef = doc(db, "fees_entries", `${admnId}_${entryId}`);
+                  const clean = sanitizeForFirestore(entryData) || {};
+                  clean.studentAdmn = String(admnId);
+                  clean.entryId = String(entryId);
+                  batch.set(docRef, clean, { merge: true });
+                  opCount++;
+                  if (opCount >= 400) await commitBatch("(fees_entries)");
+                }
+              }
             }
           }
+          // Special branch 3: Attendance nested by admn and month
+          else if (rootKey === "attendance") {
+            for (const [admnId, monthsMap] of Object.entries(rootData)) {
+              if (monthsMap && typeof monthsMap === "object") {
+                for (const [monthName, daysMap] of Object.entries(monthsMap)) {
+                  const docRef = doc(db, "attendance", `${admnId}_${monthName}`);
+                  const clean = sanitizeForFirestore(daysMap) || {};
+                  clean.admn = String(admnId);
+                  clean.month = monthName;
+                  batch.set(docRef, clean, { merge: true });
+                  opCount++;
+                  if (opCount >= 400) await commitBatch("(attendance)");
+                }
+              }
+            }
+          }
+          // Default branch for all other collections (users, students, fees, fees_matrix, etc.)
+          else {
+            for (const [docId, payload] of Object.entries(rootData)) {
+              const safeDocId = String(docId).replace(/[\/\.]/g, "_");
+              const docRef = doc(db, rootKey, safeDocId);
+              let clean = sanitizeForFirestore(payload);
+
+              if (typeof clean !== "object" || clean === null) {
+                clean = { value: clean };
+              }
+
+              batch.set(docRef, clean, { merge: true });
+              opCount++;
+              if (opCount >= 400) await commitBatch(`(${rootKey})`);
+            }
+          }
+
+          processedKeys++;
+          const currentPct = 25 + Math.round((processedKeys / rootKeys.length) * 70);
+          progressBar.style.width = `${currentPct}%`;
         }
 
-
-        // Commit remainder
-        if (opCount > 0) {
-          await batch.commit();
-        }
+        // Commit any remaining writes
+        await commitBatch("(final)");
 
         progressBar.style.width = "100%";
-        log(`Migration Complete! Total documents written: ${totalDocsCommitted}`, "success");
-        alert("✔ Realtime Database to Firestore Migration has completed successfully!");
+        log(`Migration Completed Successfully! Total documents created: ${totalDocsCommitted}`, "success");
+        alert("✔ All data from RTDB export has been cleanly migrated to Cloud Firestore!");
 
       } catch (err) {
-        log("Migration failed: " + err.message, "error");
+        log("Migration Error: " + err.message, "error");
+        console.error("Migration Trace:", err);
         alert("Migration Error: " + err.message);
       } finally {
         startBtn.disabled = false;
