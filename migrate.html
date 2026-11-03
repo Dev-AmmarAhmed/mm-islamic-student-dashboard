@@ -140,7 +140,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-    import { getFirestore, doc, collection, getDocs, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getFirestore, doc, collection, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBHpbgoGs7HFQ3-1tBn9BpGT4YYDaKkZB8",
@@ -166,6 +166,7 @@
       "fees",
       "fees_entries",
       "fees_matrix",
+      "fees_records",
       "attendance",
       "students",
       "users",
@@ -185,7 +186,8 @@
       "teacher_permissions",
       "subjects",
       "syllabus_chapters",
-      "syllabus_progress"
+      "syllabus_progress",
+      "muster"
     ];
 
     let rawJsonData = null;
@@ -236,7 +238,7 @@
             for (const docSnap of snapshot.docs) {
               batch.delete(docSnap.ref);
               count++;
-              if (count % 400 === 0) {
+              if (count % 350 === 0) {
                 await batch.commit();
                 batch = writeBatch(db);
               }
@@ -251,33 +253,35 @@
       log("All target collections cleared.", "success");
     }
 
-    // Comprehensive Sanitizer: Eliminates invalid nested arrays, undefs & illegal characters
-    function sanitizeForFirestore(val, depth = 0) {
-      if (val === undefined || val === null) return null;
-      if (typeof val !== "object") return val;
+    // Deep sanitizer: Converts nested arrays or arrays containing arrays into safe JSON strings
+    function deepSanitizeForFirestore(data) {
+      if (data === undefined || data === null) return null;
+      if (typeof data !== "object") return data;
 
-      if (Array.isArray(val)) {
-        // Firestore prohibits nested arrays or arrays containing complex non-map objects
-        return val
-          .filter(item => item !== undefined)
-          .map(item => {
-            if (Array.isArray(item)) {
-              return JSON.stringify(item);
-            }
-            return sanitizeForFirestore(item, depth + 1);
-          });
+      if (Array.isArray(data)) {
+        const filtered = data.filter(item => item !== undefined);
+        
+        // Check if this array contains another array or an object that contains an array
+        const containsNestedArray = filtered.some(item => {
+          if (Array.isArray(item)) return true;
+          if (item && typeof item === "object") {
+            return Object.values(item).some(val => Array.isArray(val));
+          }
+          return false;
+        });
+
+        if (containsNestedArray) {
+          return JSON.stringify(filtered);
+        }
+
+        return filtered.map(item => deepSanitizeForFirestore(item));
       }
 
       const cleanObj = {};
-      for (const [k, v] of Object.entries(val)) {
-        if (v !== undefined) {
-          const safeKey = String(k).replace(/[\/\.]/g, "_");
-          // If value is a nested array of arrays, stringify it to protect Firestore integrity
-          if (Array.isArray(v) && v.some(sub => Array.isArray(sub))) {
-            cleanObj[safeKey] = JSON.stringify(v);
-          } else {
-            cleanObj[safeKey] = sanitizeForFirestore(v, depth + 1);
-          }
+      for (const [key, val] of Object.entries(data)) {
+        if (val !== undefined) {
+          const safeKey = String(key).replace(/[\/\.]/g, "_");
+          cleanObj[safeKey] = deepSanitizeForFirestore(val);
         }
       }
       return cleanObj;
@@ -309,7 +313,7 @@
             log(`Committed chunk of ${opCount} documents ${label}...`);
             batch = writeBatch(db);
             opCount = 0;
-            await new Promise(r => setTimeout(r, 60)); // Throttle
+            await new Promise(r => setTimeout(r, 60));
           }
         };
 
@@ -320,7 +324,7 @@
           const rootData = rawJsonData[rootKey];
           if (!rootData || typeof rootData !== "object") continue;
 
-          // Special branch 1: Expenses with monthly grouping
+          // Branch 1: Expenses grouped by month
           if (rootKey === "expenses") {
             for (const [subGroup, subPayload] of Object.entries(rootData)) {
               if (subPayload && typeof subPayload === "object") {
@@ -328,109 +332,79 @@
                 if (isTimestampBucket) {
                   for (const [tId, expRecord] of Object.entries(subPayload)) {
                     const docRef = doc(db, "expenses", `${subGroup}_${tId}`);
-                    const clean = sanitizeForFirestore(expRecord) || {};
+                    const clean = deepSanitizeForFirestore(expRecord) || {};
                     clean.month = subGroup;
                     clean.id = String(tId);
                     batch.set(docRef, clean, { merge: true });
                     opCount++;
-                    if (opCount >= 400) await commitBatch("(expenses)");
+                    if (opCount >= 350) await commitBatch("(expenses)");
                   }
                 } else {
                   const docRef = doc(db, "expenses", String(subGroup));
-                  batch.set(docRef, sanitizeForFirestore(subPayload) || {}, { merge: true });
+                  batch.set(docRef, deepSanitizeForFirestore(subPayload) || {}, { merge: true });
                   opCount++;
-                  if (opCount >= 400) await commitBatch("(expenses)");
+                  if (opCount >= 350) await commitBatch("(expenses)");
                 }
               }
             }
           }
-          // Special branch 2: Fees entries nested by student admn
+          // Branch 2: Fees entries nested by student admn
           else if (rootKey === "fees_entries") {
             for (const [admnId, entriesMap] of Object.entries(rootData)) {
               if (entriesMap && typeof entriesMap === "object") {
                 for (const [entryId, entryData] of Object.entries(entriesMap)) {
                   const docRef = doc(db, "fees_entries", `${admnId}_${entryId}`);
-                  const clean = sanitizeForFirestore(entryData) || {};
+                  const clean = deepSanitizeForFirestore(entryData) || {};
                   clean.studentAdmn = String(admnId);
                   clean.entryId = String(entryId);
                   batch.set(docRef, clean, { merge: true });
                   opCount++;
-                  if (opCount >= 400) await commitBatch("(fees_entries)");
+                  if (opCount >= 350) await commitBatch("(fees_entries)");
                 }
               }
             }
           }
-
-
-                        // Special branch 3: Attendance nested by admn and month
+          // Branch 3: Attendance nested by student admn and month
           else if (rootKey === "attendance") {
             for (const [admnId, monthsMap] of Object.entries(rootData)) {
               if (monthsMap && typeof monthsMap === "object") {
                 for (const [monthName, daysMap] of Object.entries(monthsMap)) {
                   const docRef = doc(db, "attendance", `${admnId}_${monthName}`);
-                  const clean = sanitizeForFirestore(daysMap) || {};
+                  const clean = deepSanitizeForFirestore(daysMap) || {};
                   clean.admn = String(admnId);
                   clean.month = monthName;
                   batch.set(docRef, clean, { merge: true });
                   opCount++;
-                  if (opCount >= 400) await commitBatch("(attendance)");
+                  if (opCount >= 350) await commitBatch("(attendance)");
                 }
               }
             }
           }
-          // Special branch 4: Points & Points Logs (Fixes Property 1789612551653 error)
-          else if (rootKey === "points" || rootKey === "teacher_points_logs") {
-            for (const [pId, pPayload] of Object.entries(rootData)) {
-              const safeDocId = String(pId).replace(/[\/\.]/g, "_");
-              const docRef = doc(db, rootKey, `log_${safeDocId}`);
-              let clean = sanitizeForFirestore(pPayload);
-
-              if (typeof clean !== "object" || clean === null) {
-                clean = { value: clean, id: safeDocId };
-              } else {
-                clean.id = safeDocId;
-              }
-
-              batch.set(docRef, clean, { merge: true });
-              opCount++;
-              if (opCount >= 400) await commitBatch(`(${rootKey})`);
-            }
-          }
-          // Default branch for all other collections
+          // Branch 4: General collections (including online_tests, users, students, fees, etc.)
           else {
             for (const [docId, payload] of Object.entries(rootData)) {
+              if (payload === null || payload === undefined) continue;
+
               const safeDocId = String(docId).replace(/[\/\.]/g, "_");
               const docRef = doc(db, rootKey, safeDocId);
-              let clean = sanitizeForFirestore(payload);
+              let clean = deepSanitizeForFirestore(payload);
 
               if (typeof clean !== "object" || clean === null) {
                 clean = { value: clean };
               }
 
-              // Guard against numeric key maps inside root document fields
-              if (typeof clean === "object" && clean !== null && !Array.isArray(clean)) {
-                const sanitizedMap = {};
-                for (const [fieldKey, fieldVal] of Object.entries(clean)) {
-                  // Agar field key timestamp ya long number ho to prefix do taaki Firestore array na samjhe
-                  const safeFieldKey = (!isNaN(Number(fieldKey)) && fieldKey.length >= 10) ? `rec_${fieldKey}` : fieldKey;
-                  sanitizedMap[safeFieldKey] = fieldVal;
-                }
-                clean = sanitizedMap;
-              }
-
               batch.set(docRef, clean, { merge: true });
               opCount++;
-              if (opCount >= 400) await commitBatch(`(${rootKey})`);
+              if (opCount >= 350) await commitBatch(`(${rootKey})`);
             }
           }
-
 
           processedKeys++;
           const currentPct = 25 + Math.round((processedKeys / rootKeys.length) * 70);
           progressBar.style.width = `${currentPct}%`;
         }
 
-        // Commit any remaining writes
+        // Commit any remaining items
         await commitBatch("(final)");
 
         progressBar.style.width = "100%";
