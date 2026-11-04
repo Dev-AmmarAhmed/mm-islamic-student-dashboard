@@ -4968,23 +4968,23 @@ Exact Output JSON Format Required:
       window.closeModal("customConfirmModal");
     };
 
-       import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";  
- import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js";  
- import { getAuth, signInAnonymously, onAuthStateChanged, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";  
- import { getFirestore, doc, collection, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, where, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";  
-   
- // M.M ISLAMIC ENGLISH SCHOOL FIREBASE CREDENTIALS  
- const firebaseConfig = {  
- apiKey: "AIzaSyBHpbgoGs7HFQ3-1tBn9BpGT4YYDaKkZB8",  
- authDomain: "mm-islamic-erp.firebaseapp.com",  
- databaseURL: "https://mm-islamic-erp-default-rtdb.firebaseio.com",  
- projectId: "mm-islamic-erp",  
- storageBucket: "mm-islamic-erp.firebasestorage.app",  
- messagingSenderId: "547338314533",  
- appId: "1:547338314533:web:3973c2b36ef8b3b01170cc"  
- };  
-
-      const app = initializeApp(firebaseConfig);   
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";   
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js";   
+import { getAuth, signInAnonymously, onAuthStateChanged, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";   
+import { getFirestore, doc, collection, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, where, writeBatch, deleteField } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";   
+  
+// M.M ISLAMIC ENGLISH SCHOOL FIREBASE CREDENTIALS   
+const firebaseConfig = {   
+apiKey: "AIzaSyBHpbgoGs7HFQ3-1tBn9BpGT4YYDaKkZB8",   
+authDomain: "mm-islamic-erp.firebaseapp.com",   
+databaseURL: "https://mm-islamic-erp-default-rtdb.firebaseio.com",   
+projectId: "mm-islamic-erp",   
+storageBucket: "mm-islamic-erp.firebasestorage.app",   
+messagingSenderId: "547338314533",   
+appId: "1:547338314533:web:3973c2b36ef8b3b01170cc"   
+};   
+  
+const app = initializeApp(firebaseConfig);   
 try {   
 if (typeof initializeAppCheck === 'function') {   
 initializeAppCheck(app, {   
@@ -4996,8 +4996,265 @@ isTokenAutoRefreshEnabled: true
   
 const auth = getAuth(app);   
 const fsDb = getFirestore(app);   
-const db = fsDb;  
-window.db = fsDb;  
+const db = fsDb;   
+window.db = fsDb;   
+  
+// Helper: Unpack nested arrays/objects stringified for Firestore compliance  
+function unpackFirestorePayload(data) {  
+ if (!data || typeof data !== "object") return data;  
+ if (data.__isArray === true && Array.isArray(data.items)) return data.items.map(unpackFirestorePayload);  
+ if (Array.isArray(data)) return data.map(unpackFirestorePayload);  
+ const out = {};  
+ for (const [k, v] of Object.entries(data)) {  
+ if (typeof v === "string" && (v.startsWith('[{"') || v.startsWith('{"') || v.startsWith('["'))) {  
+ try { out[k] = JSON.parse(v); } catch (e) { out[k] = v; }  
+ } else if (typeof v === "object" && v !== null) {  
+ out[k] = unpackFirestorePayload(v);  
+ } else {  
+ out[k] = v;  
+ }  
+ }  
+ return out;  
+}  
+  
+// ====================================================================  
+// UNIVERSAL FIRESTORE DATA ACCESS LAYER (DAL) & PATH NORMALIZER  
+// ====================================================================  
+async function safeDataFetch(refPath) {  
+ try {  
+ const parts = String(refPath).split('/').filter(Boolean);  
+ if (parts.length === 0) return null;  
+  
+ const rootCol = parts[0];  
+  
+ // 1. ATTENDANCE NORMALIZER  
+ if (rootCol === "attendance") {  
+ if (parts.length === 1) {  
+ const snap = await getDocs(collection(fsDb, "attendance"));  
+ const fullAttendance = {};  
+ snap.forEach(d => {  
+ const docData = unpackFirestorePayload(d.data());  
+ const admn = docData.admn || d.id.split('_')[0];  
+ const month = docData.month || d.id.split('_')[1];  
+ if (!fullAttendance[admn]) fullAttendance[admn] = {};  
+ fullAttendance[admn][month] = docData;  
+ });  
+ return fullAttendance;  
+ } else if (parts.length === 2) {  
+ const targetAdmn = parts[1];  
+ const snap = await getDocs(collection(fsDb, "attendance"));  
+ const studentMonths = {};  
+ snap.forEach(d => {  
+ if (d.id.startsWith(`${targetAdmn}_`)) {  
+ const docData = unpackFirestorePayload(d.data());  
+ const month = docData.month || d.id.split('_')[1];  
+ studentMonths[month] = docData;  
+ }  
+ });  
+ return Object.keys(studentMonths).length > 0 ? studentMonths : null;  
+ } else if (parts.length === 3) {  
+ const docId = `${parts[1]}_${parts[2]}`;  
+ const snap = await getDoc(doc(fsDb, "attendance", docId));  
+ return snap.exists() ? unpackFirestorePayload(snap.data()) : null;  
+ } else {  
+ const docId = `${parts[1]}_${parts[2]}`;  
+ const snap = await getDoc(doc(fsDb, "attendance", docId));  
+ if (!snap.exists()) return null;  
+ const data = unpackFirestorePayload(snap.data());  
+ return data[parts[3]] !== undefined ? data[parts[3]] : null;  
+ }  
+ }  
+  
+ // 2. FEES ENTRIES NORMALIZER  
+ if (rootCol === "fees_entries") {  
+ if (parts.length === 1) {  
+ const snap = await getDocs(collection(fsDb, "fees_entries"));  
+ const fullEntries = {};  
+ snap.forEach(d => {  
+ const item = unpackFirestorePayload(d.data());  
+ const admn = item.studentAdmn || item.admn || d.id.split('_')[0];  
+ const entryId = item.entryId || item.id || d.id.split('_').slice(1).join('_');  
+ if (!fullEntries[admn]) fullEntries[admn] = {};  
+ fullEntries[admn][entryId] = item;  
+ });  
+ return fullEntries;  
+ } else if (parts.length === 2) {  
+ const targetAdmn = parts[1];  
+ const snap = await getDocs(collection(fsDb, "fees_entries"));  
+ const studentEntries = {};  
+ snap.forEach(d => {  
+ if (d.id.startsWith(`${targetAdmn}_`)) {  
+ const item = unpackFirestorePayload(d.data());  
+ const entryId = item.entryId || item.id || d.id.split('_').slice(1).join('_');  
+ studentEntries[entryId] = item;  
+ }  
+ });  
+ return Object.keys(studentEntries).length > 0 ? studentEntries : null;  
+ } else {  
+ const docId = `${parts[1]}_${parts[2]}`;  
+ const snap = await getDoc(doc(fsDb, "fees_entries", docId));  
+ return snap.exists() ? unpackFirestorePayload(snap.data()) : null;  
+ }  
+ }  
+  
+ // 3. EXPENSES NORMALIZER  
+ if (rootCol === "expenses") {  
+ if (parts.length === 1) {  
+ const snap = await getDocs(collection(fsDb, "expenses"));  
+ const fullExpenses = {};  
+ snap.forEach(d => {  
+ const item = unpackFirestorePayload(d.data());  
+ const month = item.month || d.id.split('_')[0];  
+ const expId = item.id || d.id.split('_').slice(1).join('_');  
+ if (!fullExpenses[month]) fullExpenses[month] = {};  
+ fullExpenses[month][expId] = item;  
+ });  
+ return fullExpenses;  
+ } else if (parts.length === 2) {  
+ const targetMonth = parts[1];  
+ const snap = await getDocs(collection(fsDb, "expenses"));  
+ const monthExpenses = {};  
+ snap.forEach(d => {  
+ if (d.id.startsWith(`${targetMonth}_`)) {  
+ const item = unpackFirestorePayload(d.data());  
+ const expId = item.id || d.id.split('_').slice(1).join('_');  
+ monthExpenses[expId] = item;  
+ } else if (d.id === targetMonth) {  
+ Object.assign(monthExpenses, unpackFirestorePayload(d.data()));  
+ }  
+ });  
+ return Object.keys(monthExpenses).length > 0 ? monthExpenses : null;  
+ } else {  
+ const docId = `${parts[1]}_${parts[2]}`;  
+ const snap = await getDoc(doc(fsDb, "expenses", docId));  
+ return snap.exists() ? unpackFirestorePayload(snap.data()) : null;  
+ }  
+ }  
+  
+ // 4. DEFAULT SCHEMAS (students, users, teachers, fees, fees_matrix, daily_claims, etc.)  
+ if (parts.length === 1) {  
+ const snap = await getDocs(collection(fsDb, rootCol));  
+ if (snap.empty) return null;  
+ const result = {};  
+ snap.forEach(d => { result[d.id] = unpackFirestorePayload(d.data()); });  
+ return result;  
+ } else if (parts.length === 2) {  
+ const snap = await getDoc(doc(fsDb, rootCol, parts[1]));  
+ return snap.exists() ? unpackFirestorePayload(snap.data()) : null;  
+ } else {  
+ const snap = await getDoc(doc(fsDb, rootCol, parts[1]));  
+ if (!snap.exists()) return null;  
+ const docData = unpackFirestorePayload(snap.data());  
+ let curr = docData;  
+ for (let i = 2; i < parts.length; i++) {  
+ if (curr && curr[parts[i]] !== undefined) curr = curr[parts[i]];  
+ else return null;  
+ }  
+ return curr;  
+ }  
+ } catch (err) {  
+ console.warn(`[Firestore Engine Read Error: ${refPath}]:`, err);  
+ return null;  
+ }  
+}  
+  
+async function safeDataWrite(refPath, value) {  
+ try {  
+ const parts = String(refPath).split('/').filter(Boolean);  
+ if (parts.length === 0) return;  
+ const rootCol = parts[0];  
+  
+ if (window.mmstore) {  
+ await window.mmstore.set(refPath, value, false).catch(() => {});  
+ }  
+  
+ // 1. ATTENDANCE ROUTER  
+ if (rootCol === "attendance") {  
+ if (parts.length >= 4) {  
+ const docId = `${parts[1]}_${parts[2]}`;  
+ const field = parts[3];  
+ await setDoc(doc(fsDb, "attendance", docId), { [field]: value, admn: String(parts[1]), month: parts[2] }, { merge: true });  
+ return;  
+ } else if (parts.length === 3) {  
+ const docId = `${parts[1]}_${parts[2]}`;  
+ await setDoc(doc(fsDb, "attendance", docId), { ...value, admn: String(parts[1]), month: parts[2] }, { merge: true });  
+ return;  
+ }  
+ }  
+  
+ // 2. FEES ENTRIES ROUTER  
+ if (rootCol === "fees_entries") {  
+ if (parts.length >= 3) {  
+ const docId = `${parts[1]}_${parts[2]}`;  
+ await setDoc(doc(fsDb, "fees_entries", docId), { ...value, studentAdmn: String(parts[1]), entryId: String(parts[2]) }, { merge: true });  
+ return;  
+ }  
+ }  
+  
+ // 3. EXPENSES ROUTER  
+ if (rootCol === "expenses") {  
+ if (parts.length >= 3) {  
+ const docId = `${parts[1]}_${parts[2]}`;  
+ await setDoc(doc(fsDb, "expenses", docId), { ...value, month: parts[1], id: String(parts[2]) }, { merge: true });  
+ return;  
+ }  
+ }  
+  
+ // 4. DEFAULT GENERAL SCHEMAS  
+ if (parts.length === 1) {  
+ await setDoc(doc(fsDb, rootCol, "root"), { data: value }, { merge: true });  
+ } else if (parts.length === 2) {  
+ const payload = (typeof value === "object" && value !== null) ? value : { value: value };  
+ await setDoc(doc(fsDb, rootCol, parts[1]), payload, { merge: true });  
+ } else {  
+ const fieldPath = parts.slice(2).join('.');  
+ await setDoc(doc(fsDb, rootCol, parts[1]), { [fieldPath]: value }, { merge: true });  
+ }  
+ } catch (err) {  
+ console.error(`[Firestore Engine Write Error: ${refPath}]:`, err);  
+ }  
+}  
+  
+async function safeDataDelete(refPath) {  
+ try {  
+ const parts = String(refPath).split('/').filter(Boolean);  
+ if (parts.length === 0) return;  
+ const rootCol = parts[0];  
+  
+ if (window.mmstore) {  
+ await window.mmstore.delete(refPath, false).catch(() => {});  
+ }  
+  
+ if (rootCol === "attendance") {  
+ if (parts.length === 3) {  
+ await deleteDoc(doc(fsDb, "attendance", `${parts[1]}_${parts[2]}`));  
+ return;  
+ } else if (parts.length >= 4) {  
+ await updateDoc(doc(fsDb, "attendance", `${parts[1]}_${parts[2]}`), { [parts[3]]: deleteField() });  
+ return;  
+ }  
+ }  
+  
+ if (rootCol === "fees_entries" && parts.length >= 3) {  
+ await deleteDoc(doc(fsDb, "fees_entries", `${parts[1]}_${parts[2]}`));  
+ return;  
+ }  
+  
+ if (rootCol === "expenses" && parts.length >= 3) {  
+ await deleteDoc(doc(fsDb, "expenses", `${parts[1]}_${parts[2]}`));  
+ return;  
+ }  
+  
+ if (parts.length === 2) {  
+ await deleteDoc(doc(fsDb, rootCol, parts[1]));  
+ } else if (parts.length > 2) {  
+ const fieldPath = parts.slice(2).join('.');  
+ await updateDoc(doc(fsDb, rootCol, parts[1]), { [fieldPath]: deleteField() });  
+ }  
+ } catch (err) {  
+ console.error(`[Firestore Engine Delete Error: ${refPath}]:`, err);  
+ }  
+}  
   
 // Compatibility Bridge: ref, onValue, set, update, remove, get, child  
 function ref(dbInstance, path = "") {  
@@ -5017,7 +5274,7 @@ async function set(refObj, data) {
 }  
   
 async function update(refObj, updates) {  
- if (!updates) return;  
+ if (!updates || typeof updates !== "object") return;  
  if (refObj && refObj.path && refObj.path.length > 0) {  
  await safeDataWrite(refObj.path, updates);  
  return;  
@@ -5085,52 +5342,44 @@ function onValue(refObj, callback) {
 }  
   
 // Bind mmstore to Firestore Data Flow: User -> mmstore -> Firestore -> mmstore -> UI  
- if (window.mmstore && typeof window.mmstore.setFirestoreSyncHandler === "function") {  
+if (window.mmstore && typeof window.mmstore.setFirestoreSyncHandler === "function") {  
  window.mmstore.setFirestoreSyncHandler(async (action, key, value) => {  
- const pathParts = key.split('/');  
- if (pathParts.length === 1) {  
- const docRef = doc(fsDb, pathParts[0], "root");  
- if (action === 'WRITE') await setDoc(docRef, { data: value }, { merge: true });  
- else if (action === 'DELETE') await deleteDoc(docRef);  
- } else if (pathParts.length === 2) {  
- const docRef = doc(fsDb, pathParts[0], pathParts[1]);  
- if (action === 'WRITE') await setDoc(docRef, value, { merge: true });  
- else if (action === 'DELETE') await deleteDoc(docRef);  
- } else {  
- const docRef = doc(fsDb, pathParts[0], pathParts[1]);  
- const fieldPath = pathParts.slice(2).join('.');  
- if (action === 'WRITE') await updateDoc(docRef, { [fieldPath]: value });  
+ if (action === 'WRITE') {  
+ await safeDataWrite(key, value);  
+ } else if (action === 'DELETE') {  
+ await safeDataDelete(key);  
  }  
  return value;  
  });  
- }  
-   
-// Ensure background Firebase Auth token is always active for Security Rules   
-window.ensureFirebaseAuth = async function() {   
-if (auth.currentUser) return auth.currentUser;   
-try {   
-const cred = await signInAnonymously(auth);   
-return cred.user;   
-} catch (e) {   
-console.warn("Auth init warning:", e);   
-return null;   
-}   
-};   
-window.ensureFirebaseAuth();   
+}  
   
-window.syncAuthSessionRole = async function(role, userId, cls) {   
-const user = await window.ensureFirebaseAuth();   
-if (user && role && userId) {   
-try {   
-await setDoc(doc(fsDb, "auth_sessions", user.uid), {   
-role: role,   
-userId: String(userId),   
-assignedClass: String(cls || "1"),   
-updatedAt: Date.now()   
-}, { merge: true });   
-} catch (e) { console.warn("Session sync warning:", e); }   
-}   
+// Ensure background Firebase Auth token is always active for Security Rules  
+window.ensureFirebaseAuth = async function() {  
+ if (auth.currentUser) return auth.currentUser;  
+ try {  
+ const cred = await signInAnonymously(auth);  
+ return cred.user;  
+ } catch (e) {  
+ console.warn("Auth init warning:", e);  
+ return null;  
+ }  
 };  
+window.ensureFirebaseAuth();  
+  
+window.syncAuthSessionRole = async function(role, userId, cls) {  
+ const user = await window.ensureFirebaseAuth();  
+ if (user && role && userId) {  
+ try {  
+ await setDoc(doc(fsDb, "auth_sessions", user.uid), {  
+ role: role,  
+ userId: String(userId),  
+ assignedClass: String(cls || "1"),  
+ updatedAt: Date.now()  
+ }, { merge: true });  
+ } catch (e) { console.warn("Session sync warning:", e); }  
+ }  
+};
+
 
 
     let currentRole = "admin";
@@ -5379,110 +5628,8 @@ updatedAt: Date.now()
       });
     };
 
-    
-function unpackFirestorePayload(data) {
- if (!data || typeof data !== "object") return data;
- if (Array.isArray(data)) return data.map(unpackFirestorePayload);
- const out = {};
- for (const [k, v] of Object.entries(data)) {
- if (typeof v === "string" && (v.startsWith('[{"') || v.startsWith('{"') || v.startsWith('["'))) {
- try { out[k] = JSON.parse(v); } catch (e) { out[k] = v; }
- } else if (typeof v === "object" && v !== null) {
- out[k] = unpackFirestorePayload(v);
- } else {
- out[k] = v;
- }
- }
- return out;
-}
+    // Native Firestore Data Access Layer active at top of module
 
-async function safeDataFetch(refPath) {  
- try {  
- const parts = String(refPath).split('/').filter(Boolean);  
- if (parts.length === 0) return null;  
-  
- // Local-first check via mmstore  
- if (window.mmstore) {  
- const localVal = await window.mmstore.get(refPath);  
- if (localVal !== null && localVal !== undefined) return localVal;  
- }  
-  
- if (parts.length === 1) {  
- const colRef = collection(fsDb, parts[0]);  
- const snap = await getDocs(colRef);  
- if (snap.empty) return null;  
- const result = {};  
- snap.forEach(docSnap => { result[docSnap.id] = unpackFirestorePayload(docSnap.data()); });  
- if (window.mmstore) await window.mmstore.set(refPath, result, false);  
- return result;  
- } else if (parts.length === 2) {  
- const docRef = doc(fsDb, parts[0], parts[1]);  
- const snap = await getDoc(docRef);  
- if (!snap.exists()) return null;  
- const data = unpackFirestorePayload(snap.data());  
- if (window.mmstore) await window.mmstore.set(refPath, data, false);  
- return data;  
- } else {  
- const docRef = doc(fsDb, parts[0], parts[1]);  
- const snap = await getDoc(docRef);  
- if (!snap.exists()) return null;  
- const docData = unpackFirestorePayload(snap.data());  
- let curr = docData;  
- for (let i = 2; i < parts.length; i++) {  
- if (curr && curr[parts[i]] !== undefined) {  
- curr = curr[parts[i]];  
- } else {  
- return null;  
- }  
- }  
- return curr;  
- }  
- } catch(err) {  
- console.warn("[Firestore Engine] Read Error for path:", refPath, err);  
- return null;  
- }  
- }
-
-  
- async function safeDataWrite(refPath, value) {  
- try {  
- const parts = String(refPath).split('/').filter(Boolean);  
- if (window.mmstore) {  
- await window.mmstore.set(refPath, value, false);  
- }  
- if (parts.length === 1) {  
- const docRef = doc(fsDb, parts[0], "root");  
- await setDoc(docRef, { data: value }, { merge: true });  
- } else if (parts.length === 2) {  
- const docRef = doc(fsDb, parts[0], parts[1]);  
- await setDoc(docRef, value, { merge: true });  
- } else {  
- const docRef = doc(fsDb, parts[0], parts[1]);  
- const fieldPath = parts.slice(2).join('.');  
- await updateDoc(docRef, { [fieldPath]: value });  
- }  
- } catch(err) {  
- console.error("[Firestore Engine] Write Error for path:", refPath, err);  
- }  
- }  
-  
- async function safeDataDelete(refPath) {  
- try {  
- const parts = String(refPath).split('/').filter(Boolean);  
- if (window.mmstore) {  
- await window.mmstore.delete(refPath, false);  
- }  
- if (parts.length === 2) {  
- await deleteDoc(doc(fsDb, parts[0], parts[1]));  
- } else if (parts.length > 2) {  
- const docRef = doc(fsDb, parts[0], parts[1]);  
- const fieldPath = parts.slice(2).join('.');  
- await updateDoc(docRef, { [fieldPath]: null });  
- }  
- } catch(err) {  
- console.error("[Firestore Engine] Delete Error for path:", refPath, err);  
- }  
- }
 
 
         // Smart Image Compressor ( Keeps under ~120KB for fast Firestore storage )
@@ -6672,34 +6819,41 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       for(let i = 1; i <= 50; i++) { const input = document.getElementById(`bulk_cls_${i}`); if(input) input.value = val; }
     };
 
-    addSafeListener("saveBulkStudentsBtn", "click", () => {
-      const btn = document.getElementById("saveBulkStudentsBtn");
-      runWithBtnSpinner(btn, "🚀 Save All Registered Students", async () => {
-        const updates = {};
-        let count = 0;
-        const baseTimestamp = Date.now();
-        for(let i = 1; i <= 50; i++) {
-          const nameEl = document.getElementById(`bulk_name_${i}`);
-          const clsEl = document.getElementById(`bulk_cls_${i}`);
-          const phoneEl = document.getElementById(`bulk_phone_${i}`);
-          if(nameEl && phoneEl) {
-            const name = nameEl.value.trim(); const cls = clsEl.value.trim(); const phone = phoneEl.value.trim().replace(/[^0-9]/g, '');
-            if(name && phone) {
-              count++;
-              const admnKey = "S" + (baseTimestamp + i).toString().slice(-5);
-              const studentObj = { admn: admnKey, name: name, class: cls, phone: phone, photo: "", points: 0, regDate: getTodayFormattedDate(), timestamp: Date.now() };
-              updates[`students/${admnKey}`] = studentObj;
-              updates[`users/${admnKey}`] = { password: "MM", role: "student", admn: admnKey, assignedClass: cls };
-            }
-          }
-        }
-        if(count === 0) { alert("Please fill Name and WhatsApp number for at least 1 student."); return; }
-        await update(ref(db), updates);
-        alert(`✔ Successfully registered ${count} students!`);
-        window.closeModal("bulkStudentModal");
-        renderAdminStudentsDirectory();
-      });
-    });
+       addSafeListener("saveBulkStudentsBtn", "click", () => {  
+ const btn = document.getElementById("saveBulkStudentsBtn");  
+ runWithBtnSpinner(btn, "🚀 Save All Registered Students", async () => {  
+ const batch = writeBatch(fsDb);  
+ let count = 0;  
+ const baseTimestamp = Date.now();  
+ for(let i = 1; i <= 50; i++) {  
+ const nameEl = document.getElementById(`bulk_name_${i}`);  
+ const clsEl = document.getElementById(`bulk_cls_${i}`);  
+ const phoneEl = document.getElementById(`bulk_phone_${i}`);  
+ if(nameEl && phoneEl) {  
+ const name = nameEl.value.trim(); const cls = clsEl.value.trim(); const phone = phoneEl.value.trim().replace(/[^0-9]/g, '');  
+ if(name && phone) {  
+ count++;  
+ const admnKey = "S" + (baseTimestamp + i).toString().slice(-5);  
+ const studentObj = { admn: admnKey, name: name, class: cls, phone: phone, photo: "", points: 0, regDate: getTodayFormattedDate(), timestamp: Date.now() };  
+ const userObj = { password: "MM", role: "student", admn: admnKey, assignedClass: cls };  
+ batch.set(doc(fsDb, "students", admnKey), studentObj, { merge: true });  
+ batch.set(doc(fsDb, "users", admnKey), userObj, { merge: true });  
+ inMemoryStudentsData[admnKey] = studentObj;  
+ if (window.mmstore) {  
+ window.mmstore.set(`students/${admnKey}`, studentObj, false).catch(() => {});  
+ window.mmstore.set(`users/${admnKey}`, userObj, false).catch(() => {});  
+ }  
+ }  
+ }  
+ }  
+ if(count === 0) { alert("Please fill Name and WhatsApp number for at least 1 student."); return; }  
+ await batch.commit();  
+ alert(`✔ Successfully registered ${count} students!`);  
+ window.closeModal("bulkStudentModal");  
+ renderAdminStudentsDirectory();  
+ });  
+ });  
+
 
     window.switchTab = function(tabId, el, event) {
       const targetTab = document.getElementById(tabId);
@@ -6896,19 +7050,18 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
 
             await calculateRealtimeStudentDues(student);
 
-      // 🔥 FIX: Student ab poore school ka data download nahi karega. 
-      // Firebase Query use karke sirf aur sirf apni class ke students mangwayega.
-      let classStudents = [];
-      try {
-        const classQuery = query(ref(db, 'students'), orderByChild('class'), equalTo(student.class));
-        const snap = await get(classQuery);
-        if (snap.exists()) {
-          classStudents = Object.values(snap.val()).filter(s => s != null);
-        }
-      } catch (err) {
-        console.warn("Class data fetch error", err);
-      }
-      
+       // Native Firestore Targeted Class Query (Zero Egress Waste)  
+ let classStudents = [];  
+ try {  
+ const classSnap = await getDocs(query(collection(fsDb, "students"), where("class", "==", String(student.class))));  
+ classSnap.forEach(d => {  
+ const data = unpackFirestorePayload(d.data());  
+ if (data) classStudents.push(data);  
+ });  
+ } catch (err) {  
+ console.warn("[Firestore] Class data query error:", err);  
+ }  
+
       classStudents.sort((a,b) => (b.points || 0) - (a.points || 0));
 
       const myRankIndex = classStudents.findIndex(s => String(s.admn) === String(student.admn));
@@ -7436,65 +7589,81 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       });
     });
 
-      async function loadTeacherTodayAttendance() {
-      const todayStr = getTodayFormattedDate();
-      const currentMonth = getAutoMonthName();
-      const todayNum = new Date().getDate();
-      document.getElementById("todayAttendanceDateText").innerText = todayStr;
-
-      document.getElementById("todayAttSavedStatusBox").style.display = "none";
-      document.getElementById("todayAttHolidayStatusBox").style.display = "none";
-
-      const students = getLiveStudents().filter(s => cleanClassStr(s.class) === cleanClassStr(assignedClass));
-      
-      // FIX: Data pehle fetch karo, phir HTML construct karke 1 hi baar print karo
-      const allAtt = await safeDataFetch("attendance");
-      
-      const tbody = document.getElementById("todayAttendanceTableBody");
-      let html = "";
-      let isAnyMarked = false, isHoliday = false;
-
-      students.forEach(st => {
-        const val = allAtt && allAtt[st.admn] && allAtt[st.admn][currentMonth] ? allAtt[st.admn][currentMonth][`day_${todayNum}`] : undefined;
-        if(val !== undefined) isAnyMarked = true;
-        if(val === "H") isHoliday = true;
-
-        html += `<tr><td style="text-align:left; padding-left:10px; font-weight:700;">${st.name}</td><td><input type="checkbox" class="t-today-att-chk" data-admn="${st.admn}" ${val === true ? 'checked' : ''}></td></tr>`;
-      });
-      
-      tbody.innerHTML = html; // DOM update strictly once
-      
-      if(isHoliday) document.getElementById("todayAttHolidayStatusBox").style.display = "block";
-      else if(isAnyMarked) document.getElementById("todayAttSavedStatusBox").style.display = "block";
-    }
-
-
-    addSafeListener("saveTodayAttendanceBtn", "click", () => {
-      const btn = document.getElementById("saveTodayAttendanceBtn");
-      runWithBtnSpinner(btn, "💾 Save Today's Attendance", async () => {
-        const currentMonth = getAutoMonthName();
-        const todayNum = new Date().getDate();
-        const chks = document.querySelectorAll(".t-today-att-chk");
-        const updates = {};
-        chks.forEach(c => { updates[`attendance/${c.getAttribute("data-admn")}/${currentMonth}/day_${todayNum}`] = c.checked; });
-        await update(ref(db), updates);
-        alert("Today's Attendance saved successfully.");
-        loadTeacherTodayAttendance();
-      });
-    });
-
-      addSafeListener("markHolidayTodayBtn", "click", () => {
-      if(confirm("Are you sure you want to mark today as a Holiday for this class?")) {
-        const currentMonth = getAutoMonthName();
-        const todayNum = new Date().getDate();
-        const students = getLiveStudents().filter(s => cleanClassStr(s.class) === cleanClassStr(assignedClass));
-        const updates = {};
-        students.forEach(st => { updates[`attendance/${st.admn}/${currentMonth}/day_${todayNum}`] = "H"; });
-        update(ref(db), updates)
-          .then(() => { alert("Marked today as Holiday."); loadTeacherTodayAttendance(); })
-          .catch((err) => { alert("Error marking holiday: " + err.message); });
-      }
-    });
+       async function loadTeacherTodayAttendance() {  
+ const todayStr = getTodayFormattedDate();  
+ const currentMonth = getAutoMonthName();  
+ const todayNum = new Date().getDate();  
+ document.getElementById("todayAttendanceDateText").innerText = todayStr;  
+  
+ document.getElementById("todayAttSavedStatusBox").style.display = "none";  
+ document.getElementById("todayAttHolidayStatusBox").style.display = "none";  
+  
+ const students = getLiveStudents().filter(s => cleanClassStr(s.class) === cleanClassStr(assignedClass));  
+ const allAtt = await safeDataFetch("attendance") || {};  
+   
+ const tbody = document.getElementById("todayAttendanceTableBody");  
+ let html = "";  
+ let isAnyMarked = false, isHoliday = false;  
+  
+ students.forEach(st => {  
+ const val = allAtt && allAtt[st.admn] && allAtt[st.admn][currentMonth] ? allAtt[st.admn][currentMonth][`day_${todayNum}`] : undefined;  
+ if(val !== undefined) isAnyMarked = true;  
+ if(val === "H") isHoliday = true;  
+  
+ html += `<tr><td style="text-align:left; padding-left:10px; font-weight:700;">${st.name}</td><td><input type="checkbox" class="t-today-att-chk" data-admn="${st.admn}" ${val === true ? 'checked' : ''}></td></tr>`;  
+ });  
+   
+ tbody.innerHTML = html;  
+   
+ if(isHoliday) document.getElementById("todayAttHolidayStatusBox").style.display = "block";  
+ else if(isAnyMarked) document.getElementById("todayAttSavedStatusBox").style.display = "block";  
+ }  
+  
+ addSafeListener("saveTodayAttendanceBtn", "click", () => {  
+ const btn = document.getElementById("saveTodayAttendanceBtn");  
+ runWithBtnSpinner(btn, "💾 Save Today's Attendance", async () => {  
+ const currentMonth = getAutoMonthName();  
+ const todayNum = new Date().getDate();  
+ const chks = document.querySelectorAll(".t-today-att-chk");  
+ const fieldName = `day_${todayNum}`;  
+  
+ const batch = writeBatch(fsDb);  
+ chks.forEach(c => {  
+ const admn = c.getAttribute("data-admn");  
+ const docId = `${admn}_${currentMonth}`;  
+ const payload = { [fieldName]: c.checked, admn: String(admn), month: currentMonth, updatedAt: Date.now() };  
+ batch.set(doc(fsDb, "attendance", docId), payload, { merge: true });  
+ if (window.mmstore) {  
+ window.mmstore.set(`attendance/${admn}/${currentMonth}/${fieldName}`, c.checked, false).catch(() => {});  
+ }  
+ });  
+ await batch.commit();  
+ alert("Today's Attendance saved successfully.");  
+ loadTeacherTodayAttendance();  
+ });  
+ });  
+  
+ addSafeListener("markHolidayTodayBtn", "click", () => {  
+ if(confirm("Are you sure you want to mark today as a Holiday for this class?")) {  
+ const currentMonth = getAutoMonthName();  
+ const todayNum = new Date().getDate();  
+ const students = getLiveStudents().filter(s => cleanClassStr(s.class) === cleanClassStr(assignedClass));  
+ const fieldName = `day_${todayNum}`;  
+  
+ const batch = writeBatch(fsDb);  
+ students.forEach(st => {  
+ const docId = `${st.admn}_${currentMonth}`;  
+ const payload = { [fieldName]: "H", admn: String(st.admn), month: currentMonth, updatedAt: Date.now() };  
+ batch.set(doc(fsDb, "attendance", docId), payload, { merge: true });  
+ if (window.mmstore) {  
+ window.mmstore.set(`attendance/${st.admn}/${currentMonth}/${fieldName}`, "H", false).catch(() => {});  
+ }  
+ });  
+ batch.commit()  
+ .then(() => { alert("Marked today as Holiday."); loadTeacherTodayAttendance(); })  
+ .catch((err) => { alert("Error marking holiday: " + err.message); });  
+ }  
+ });  
 
 
       window.triggerTeacherStudentSearch = function() {
@@ -7769,34 +7938,38 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       document.getElementById("concessionUpdateBox").style.display = "block";
     };
 
-    addSafeListener("saveConcessionBtn", "click", () => {
-      const btn = document.getElementById("saveConcessionBtn");
-      runWithBtnSpinner(btn, "💾 Save Concession", async () => {
-        const admn = document.getElementById("concessionSelectedAdmn").value;
-        const inputAmount = parseFloat(document.getElementById("concessionAmountInput").value);
-        
-        if(!admn || isNaN(inputAmount) || inputAmount < 0) { alert("Invalid amount entered."); return; }
-        
-        const student = await getStudentRecord(admn);
-        const isYearly = window.getFeeStructure(student.class).type === "installment";
-        
-        // Agar yearly hai, to wapas 4 se divide karke per installment rate save karenge
-        const finalRate = isYearly ? (inputAmount / 4) : inputAmount;
-        
-        await update(ref(db), { [`students/${admn}/customFee`]: finalRate });
-        
-        // Memory me bhi update karein
-        if (inMemoryStudentsData[admn]) inMemoryStudentsData[admn].customFee = finalRate;
-        
-        alert("✔ Student fee concession updated successfully!");
-        window.closeModal("addConcessionModal");
-        
-        // Reset Box
-        document.getElementById("concessionSearchInput").value = "";
-        document.getElementById("concessionSelectedAdmn").value = "";
-        document.getElementById("concessionUpdateBox").style.display = "none";
-      });
-    });
+       addSafeListener("saveConcessionBtn", "click", () => {  
+ const btn = document.getElementById("saveConcessionBtn");  
+ runWithBtnSpinner(btn, "💾 Save Concession", async () => {  
+ const admn = document.getElementById("concessionSelectedAdmn").value;  
+ const inputAmount = parseFloat(document.getElementById("concessionAmountInput").value);  
+   
+ if(!admn || isNaN(inputAmount) || inputAmount < 0) { alert("Invalid amount entered."); return; }  
+   
+ const student = await getStudentRecord(admn);  
+ const isYearly = window.getFeeStructure(student.class).type === "installment";  
+ const finalRate = isYearly ? (inputAmount / 4) : inputAmount;  
+  
+ const batch = writeBatch(fsDb);  
+ batch.set(doc(fsDb, "students", String(admn)), { customFee: finalRate }, { merge: true });  
+ batch.set(doc(fsDb, "fees", String(admn)), { monthlyFee: finalRate }, { merge: true });  
+ await batch.commit();  
+  
+ if (inMemoryStudentsData[admn]) inMemoryStudentsData[admn].customFee = finalRate;  
+ if (window.mmstore) {  
+ window.mmstore.set(`students/${admn}/customFee`, finalRate, false).catch(() => {});  
+ window.mmstore.set(`fees/${admn}/monthlyFee`, finalRate, false).catch(() => {});  
+ }  
+   
+ alert("✔ Student fee concession updated successfully!");  
+ window.closeModal("addConcessionModal");  
+   
+ document.getElementById("concessionSearchInput").value = "";  
+ document.getElementById("concessionSelectedAdmn").value = "";  
+ document.getElementById("concessionUpdateBox").style.display = "none";  
+ });  
+ });  
+
 
 
     
@@ -7831,38 +8004,61 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       });
     });
 
-    addSafeListener("submitFeeEntryBtn", "click", () => {
-      const btn = document.getElementById("submitFeeEntryBtn");
-      runWithBtnSpinner(btn, "Submit Entry", async () => {
-        const admn = document.getElementById("feeSelectedStudentAdmn").value;
-        const total = document.getElementById("feeModalTotal").value.trim();
-        const mode = document.getElementById("feeModalMode").value;
-        const selectedChks = Array.from(document.querySelectorAll(".fee-chk:checked")).map(c => c.value);
+       addSafeListener("submitFeeEntryBtn", "click", () => {  
+ const btn = document.getElementById("submitFeeEntryBtn");  
+ runWithBtnSpinner(btn, "Submit Entry", async () => {  
+ const admn = document.getElementById("feeSelectedStudentAdmn").value;  
+ const total = document.getElementById("feeModalTotal").value.trim();  
+ const mode = document.getElementById("feeModalMode").value;  
+ const selectedChks = Array.from(document.querySelectorAll(".fee-chk:checked")).map(c => c.value);  
+  
+ if(!admn || selectedChks.length === 0 || !total) { alert("Please select Student, Fee Types, and enter Amount."); return; }  
+  
+ const dateStr = getTodayFormattedDate();  
+ const entryId = Date.now().toString();  
+ const safeAdmn = String(admn);  
+ const entryDocId = `${safeAdmn}_${entryId}`;  
+  
+ const entryRecord = {  
+ id: entryId,  
+ entryId: entryId,  
+ admn: safeAdmn,  
+ studentAdmn: safeAdmn,  
+ types: selectedChks,  
+ amount: total,  
+ mode: mode,  
+ date: dateStr,  
+ timestamp: Date.now()  
+ };  
+  
+ const matrixPayload = {};  
+ selectedChks.forEach(feeType => {  
+ matrixPayload[feeType] = { paid: true, date: dateStr, amount: total };  
+ });  
+  
+ const lastMonthPaid = selectedChks[selectedChks.length - 1];  
+ const batch = writeBatch(fsDb);  
+ batch.set(doc(fsDb, "fees_entries", entryDocId), entryRecord, { merge: true });  
+ batch.set(doc(fsDb, "fees_matrix", safeAdmn), matrixPayload, { merge: true });  
+ batch.set(doc(fsDb, "fees", safeAdmn), { lastPaidMonth: lastMonthPaid, status: "Paid", updatedAt: Date.now() }, { merge: true });  
+ await batch.commit();  
+  
+ if (window.mmstore) {  
+ window.mmstore.set(`fees_entries/${safeAdmn}/${entryId}`, entryRecord, false).catch(() => {});  
+ window.mmstore.set(`fees_matrix/${safeAdmn}`, matrixPayload, false).catch(() => {});  
+ }  
+  
+ const student = await getStudentRecord(safeAdmn);  
+ lastGeneratedReceipt = { studentName: student ? student.name : "Student", phone: student ? student.phone : "", amount: total, types: selectedChks.join(", "), date: dateStr };  
+  
+ const feeMonthsStr = selectedChks.join(", ");  
+ await window.pushAppNotification(safeAdmn, "Fees Submitted ✔️", `Fees submitted for ${feeMonthsStr}. Amount: ₹${total}`, "fee_paid", { amount: total, months: feeMonthsStr });  
+  
+ document.getElementById("feeSubmittedStatusBox").style.display = "block";  
+ alert("Fee entry saved successfully.");  
+ });  
+ });  
 
-        if(!admn || selectedChks.length === 0 || !total) { alert("Please select Student, Fee Types, and enter Amount."); return; }
-
-        const dateStr = getTodayFormattedDate();
-        const entryId = Date.now().toString();
-        const updates = {};
-        updates[`fees_entries/${admn}/${entryId}`] = { id: entryId, admn: admn, types: selectedChks, amount: total, mode: mode, date: dateStr };
-
-        selectedChks.forEach(feeType => {
-          updates[`fees_matrix/${admn}/${feeType}`] = { paid: true, date: dateStr, amount: total };
-        });
-        await update(ref(db), updates);
-
-        const student = await getStudentRecord(admn);
-               lastGeneratedReceipt = { studentName: student ? student.name : "Student", phone: student ? student.phone : "", amount: total, types: selectedChks.join(", "), date: dateStr };
-
-        // Push Fee Notification to Student
-        const feeMonthsStr = selectedChks.join(", ");
-        await window.pushAppNotification(admn, "Fees Submitted ✔️", `Fees submitted for ${feeMonthsStr}. Amount: ₹${total}`, "fee_paid", { amount: total, months: feeMonthsStr });
-
-        document.getElementById("feeSubmittedStatusBox").style.display = "block";
-
-        alert("Fee entry saved successfully.");
-      });
-    });
 
       addSafeListener("sendWhatsappReceiptBtn", "click", () => {
       if(!lastGeneratedReceipt) return;
@@ -7941,53 +8137,69 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
         });
     });
 
-    addSafeListener("loadEditingMatrixBtn", "click", () => {
-      const btn = document.getElementById("loadEditingMatrixBtn");
-      runWithBtnSpinner(btn, "Load Editing Matrix", async () => {
-        const std = document.getElementById("attEditStdSelect").value;
-        const month = document.getElementById("attEditMonthSelect").value;
-        if(!std) { alert("Please select Standard."); return; }
+       addSafeListener("loadEditingMatrixBtn", "click", () => {  
+ const btn = document.getElementById("loadEditingMatrixBtn");  
+ runWithBtnSpinner(btn, "Load Editing Matrix", async () => {  
+ const std = document.getElementById("attEditStdSelect").value;  
+ const month = document.getElementById("attEditMonthSelect").value;  
+ if(!std) { alert("Please select Standard."); return; }  
+  
+ const daysCount = getDaysInMonth(month);  
+ const students = getLiveStudents().filter(s => cleanClassStr(s.class) === cleanClassStr(std));  
+ const allAtt = await safeDataFetch("attendance") || {};  
+  
+ const headerRow = document.getElementById("editMatrixHeaderRow");  
+ headerRow.innerHTML = `<th style="min-width:160px; text-align:left; padding-left:10px;">Name</th>`;  
+ for(let d=1; d<=daysCount; d++) { headerRow.innerHTML += `<th>${d}</th>`; }  
+  
+ const tbody = document.getElementById("editMatrixBody");  
+ tbody.innerHTML = "";  
+  
+ if (students.length === 0) {  
+ tbody.innerHTML = `<tr><td colspan="${daysCount + 1}" style="color:var(--text-muted);">No students registered in Class ${std}</td></tr>`;  
+ } else {  
+ students.forEach(st => {  
+ const studentMonthData = allAtt[st.admn] && allAtt[st.admn][month] ? allAtt[st.admn][month] : {};  
+ let rowHtml = `<tr><td style="text-align:left; padding-left:10px; font-weight:700;">${st.name}</td>`;  
+ for(let d=1; d<=daysCount; d++) {  
+ const key = `day_${d}`;  
+ rowHtml += `<td><input type="checkbox" class="att-matrix-chk" data-admn="${st.admn}" data-day="${d}" ${studentMonthData[key] === true ? "checked" : ""}></td>`;  
+ }  
+ rowHtml += `</tr>`;  
+ tbody.innerHTML += rowHtml;  
+ });  
+ }  
+ document.getElementById("editingMatrixCard").style.display = "block";  
+ });  
+ });  
+  
+ addSafeListener("saveAttendanceChangesBtn", "click", () => {  
+ const btn = document.getElementById("saveAttendanceChangesBtn");  
+ runWithBtnSpinner(btn, "Save Changes to Record", async () => {  
+ const month = document.getElementById("attEditMonthSelect").value;  
+ const chks = document.querySelectorAll(".att-matrix-chk");  
+  
+ const studentMonthMap = {};  
+ chks.forEach(chk => {  
+ const admn = chk.getAttribute("data-admn");  
+ const day = chk.getAttribute("data-day");  
+ if (!studentMonthMap[admn]) studentMonthMap[admn] = {};  
+ studentMonthMap[admn][`day_${day}`] = chk.checked;  
+ });  
+  
+ const batch = writeBatch(fsDb);  
+ for (const [admn, daysObj] of Object.entries(studentMonthMap)) {  
+ const docId = `${admn}_${month}`;  
+ batch.set(doc(fsDb, "attendance", docId), { ...daysObj, admn: String(admn), month: month, updatedAt: Date.now() }, { merge: true });  
+ if (window.mmstore) {  
+ window.mmstore.set(`attendance/${admn}/${month}`, daysObj, false).catch(() => {});  
+ }  
+ }  
+ await batch.commit();  
+ alert("Attendance Matrix saved successfully.");  
+ });  
+ });  
 
-        const daysCount = getDaysInMonth(month);
-        const students = getLiveStudents().filter(s => cleanClassStr(s.class) === cleanClassStr(std));
-        const allAtt = await safeDataFetch("attendance") || {};
-
-        const headerRow = document.getElementById("editMatrixHeaderRow");
-        headerRow.innerHTML = `<th style="min-width:160px; text-align:left; padding-left:10px;">Name</th>`;
-        for(let d=1; d<=daysCount; d++) { headerRow.innerHTML += `<th>${d}</th>`; }
-
-        const tbody = document.getElementById("editMatrixBody");
-        tbody.innerHTML = "";
-
-        if (students.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="${daysCount + 1}" style="color:var(--text-muted);">No students registered in Class ${std}</td></tr>`;
-        } else {
-          students.forEach(st => {
-            const studentMonthData = allAtt[st.admn] && allAtt[st.admn][month] ? allAtt[st.admn][month] : {};
-            let rowHtml = `<tr><td style="text-align:left; padding-left:10px; font-weight:700;">${st.name}</td>`;
-            for(let d=1; d<=daysCount; d++) {
-              const key = `day_${d}`;
-              rowHtml += `<td><input type="checkbox" class="att-matrix-chk" data-admn="${st.admn}" data-day="${d}" ${studentMonthData[key] === true ? "checked" : ""}></td>`;
-            }
-            rowHtml += `</tr>`;
-            tbody.innerHTML += rowHtml;
-          });
-        }
-        document.getElementById("editingMatrixCard").style.display = "block";
-      });
-    });
-
-    addSafeListener("saveAttendanceChangesBtn", "click", () => {
-      const btn = document.getElementById("saveAttendanceChangesBtn");
-      runWithBtnSpinner(btn, "Save Changes to Record", async () => {
-        const month = document.getElementById("attEditMonthSelect").value;
-        const chks = document.querySelectorAll(".att-matrix-chk");
-        const updates = {};
-        chks.forEach(chk => { updates[`attendance/${chk.getAttribute("data-admn")}/${month}/day_${chk.getAttribute("data-day")}`] = chk.checked; });
-        await update(ref(db), updates);
-        alert("Attendance Matrix saved successfully.");
-      });
-    });
 
     async function generateAttendanceReport(stdVal, selectedAdmnVal, monthVal, targetContainerId) {
       const daysCount = getDaysInMonth(monthVal);
@@ -8077,196 +8289,291 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       document.getElementById("expDescBox").style.display = type === "Teacher Salary" ? "none" : "block";
     });
 
-    addSafeListener("submitExpBtn", "click", () => {
-      const btn = document.getElementById("submitExpBtn");
-      runWithBtnSpinner(btn, "Submit Entry", async () => {
-        const type = document.getElementById("expType").value;
-        const amount = document.getElementById("expAmount").value.trim();
-        const teacherName = document.getElementById("expTeacherNameSelect").value;
-        const desc = document.getElementById("expDescInput").value.trim();
-        const month = document.getElementById("expGenMonthSelect").value || getAutoMonthName();
+       addSafeListener("submitExpBtn", "click", () => {  
+ const btn = document.getElementById("submitExpBtn");  
+ runWithBtnSpinner(btn, "Submit Entry", async () => {  
+ const type = document.getElementById("expType").value;  
+ const amount = document.getElementById("expAmount").value.trim();  
+ const teacherName = document.getElementById("expTeacherNameSelect").value;  
+ const desc = document.getElementById("expDescInput").value.trim();  
+ const month = document.getElementById("expGenMonthSelect").value || getAutoMonthName();  
+  
+ if(!type || !amount) { alert("Please fill all expense details."); return; }  
+ const expId = Date.now().toString();  
+ const detail = type === "Teacher Salary" ? teacherName : (desc || "Others Expense");  
+ const docId = `${month}_${expId}`;  
+ const expObj = {   
+ id: expId,   
+ expenseId: expId,   
+ date: getTodayFormattedDate(),   
+ type: type,   
+ detail: detail,   
+ amount: amount,   
+ month: month,   
+ timestamp: Date.now()   
+ };  
+  
+ await setDoc(doc(fsDb, "expenses", docId), expObj, { merge: true });  
+ if (window.mmstore) {  
+ window.mmstore.set(`expenses/${month}/${expId}`, expObj, false).catch(() => {});  
+ }  
+ alert("Expense entry saved successfully.");  
+ document.getElementById("expAmount").value = "";  
+ document.getElementById("expDescInput").value = "";  
+ });  
+ });  
+  
+ addSafeListener("generateExpenseSheetBtn", "click", () => {  
+ const btn = document.getElementById("generateExpenseSheetBtn");  
+ runWithBtnSpinner(btn, "Generate Expense Sheet", async () => {  
+ const month = document.getElementById("expGenMonthSelect").value;  
+ const expenses = await safeDataFetch(`expenses/${month}`);  
+ const tbody = document.getElementById("expSheetBody");  
+ tbody.innerHTML = "";  
+  
+ if(expenses && Object.keys(expenses).length > 0) {  
+ Object.values(expenses).forEach(ex => {  
+ if(ex && ex.type) tbody.innerHTML += `<tr><td>${ex.date}</td><td>${ex.type}</td><td>${ex.detail || '-'}</td><td>₹${ex.amount}</td></tr>`;  
+ });  
+ document.getElementById("expenseSheetDisplayArea").style.display = "block";  
+ } else { alert("No expense records found."); }  
+ });  
+ });  
+  
+ addSafeListener("loadRmExpenseSheetBtn", "click", () => {  
+ const month = document.getElementById("rmExpGenMonthSelect").value;  
+ safeDataFetch(`expenses/${month}`).then(expenses => {  
+ const tbody = document.getElementById("rmExpSheetBody");  
+ tbody.innerHTML = "";  
+ if(expenses && Object.keys(expenses).length > 0) {  
+ Object.entries(expenses).forEach(([key, ex]) => {  
+ tbody.innerHTML += `<tr><td>${ex.date}</td><td>${ex.type}</td><td>${ex.detail || '-'}</td><td>₹${ex.amount}</td><td><button class="btn-sm-del" onclick="window.deleteExpenseEntry('${month}', '${key}')">Delete</button></td></tr>`;  
+ });  
+ document.getElementById("rmExpenseSheetDisplayArea").style.display = "block";  
+ } else { alert("No expense records available to delete."); }  
+ });  
+ });  
+  
+ window.deleteExpenseEntry = async function(month, expKey) {  
+ if(confirm("Are you sure you want to remove this expense entry?")) {  
+ const docId = `${month}_${expKey}`;  
+ await deleteDoc(doc(fsDb, "expenses", docId));  
+ if (window.mmstore) {  
+ window.mmstore.delete(`expenses/${month}/${expKey}`, false).catch(() => {});  
+ }  
+ alert("Expense entry removed successfully.");  
+ document.getElementById("loadRmExpenseSheetBtn").click();  
+ }  
+ };  
+  
+ addSafeListener("loadRmFeeBtn", "click", () => {  
+ const admn = document.getElementById("rmFeeSelectedAdmn").value;  
+ if(!admn) { alert("Please select a student."); return; }  
+ safeDataFetch(`fees_entries/${admn}`).then(entries => {  
+ const tbody = document.getElementById("rmFeeTableBody");  
+ tbody.innerHTML = "";  
+ if(entries && Object.keys(entries).length > 0) {  
+ Object.entries(entries).forEach(([key, entry]) => {  
+ tbody.innerHTML += `<tr><td>${entry.date}</td><td>${entry.types ? entry.types.join(", ") : "-"}</td><td>₹${entry.amount}</td><td><button class="btn-sm-del" onclick="window.deleteFeeEntry('${admn}', '${key}')">Delete</button></td></tr>`;  
+ });  
+ document.getElementById("rmFeeDisplayArea").style.display = "block";  
+ } else { alert("No fee entries found."); }  
+ });  
+ });  
+  
+ window.deleteFeeEntry = async function(admn, entryKey) {  
+ if(confirm("Are you sure you want to delete this fee payment entry?")) {  
+ const safeAdmn = String(admn);  
+ const safeKey = String(entryKey);  
+ const entryDocId = `${safeAdmn}_${safeKey}`;  
+  
+ const entry = await safeDataFetch(`fees_entries/${safeAdmn}/${safeKey}`);  
+ const batch = writeBatch(fsDb);  
+ batch.delete(doc(fsDb, "fees_entries", entryDocId));  
+  
+ if(entry && Array.isArray(entry.types)) {  
+ const matrixClears = {};  
+ entry.types.forEach(t => { matrixClears[t] = deleteField(); });  
+ batch.update(doc(fsDb, "fees_matrix", safeAdmn), matrixClears);  
+ }  
+ await batch.commit();  
+  
+ if (window.mmstore) {  
+ window.mmstore.delete(`fees_entries/${safeAdmn}/${safeKey}`, false).catch(() => {});  
+ }  
+  
+ alert("Fee entry removed successfully.");  
+ const rmBtn = document.getElementById("loadRmFeeBtn");  
+ if (rmBtn && rmBtn.offsetParent !== null) rmBtn.click();  
+ if (typeof window.loadSystemFeesLogs === "function") window.loadSystemFeesLogs();  
+ }  
+ };  
 
-        if(!type || !amount) { alert("Please fill all expense details."); return; }
-        const expId = Date.now().toString();
-        const detail = type === "Teacher Salary" ? teacherName : (desc || "Others Expense");
-        await set(ref(db, `expenses/${month}/${expId}`), { id: expId, date: getTodayFormattedDate(), type: type, detail: detail, amount: amount });
-        alert("Expense entry saved successfully.");
-      });
-    });
-
-    addSafeListener("generateExpenseSheetBtn", "click", () => {
-      const btn = document.getElementById("generateExpenseSheetBtn");
-      runWithBtnSpinner(btn, "Generate Expense Sheet", async () => {
-        const month = document.getElementById("expGenMonthSelect").value;
-        const expenses = await safeDataFetch(`expenses/${month}`);
-        const tbody = document.getElementById("expSheetBody");
-        tbody.innerHTML = "";
-
-        if(expenses && Object.keys(expenses).length > 0) {
-          Object.values(expenses).forEach(ex => {
-            if(ex && ex.type) tbody.innerHTML += `<tr><td>${ex.date}</td><td>${ex.type}</td><td>${ex.detail || '-'}</td><td>₹${ex.amount}</td></tr>`;
-          });
-          document.getElementById("expenseSheetDisplayArea").style.display = "block";
-        } else { alert("No expense records found."); }
-      });
-    });
-
-    addSafeListener("loadRmExpenseSheetBtn", "click", () => {
-      const month = document.getElementById("rmExpGenMonthSelect").value;
-      safeDataFetch(`expenses/${month}`).then(expenses => {
-        const tbody = document.getElementById("rmExpSheetBody");
-        tbody.innerHTML = "";
-        if(expenses && Object.keys(expenses).length > 0) {
-          Object.entries(expenses).forEach(([key, ex]) => {
-            tbody.innerHTML += `<tr><td>${ex.date}</td><td>${ex.type}</td><td>${ex.detail || '-'}</td><td>₹${ex.amount}</td><td><button class="btn-sm-del" onclick="window.deleteExpenseEntry('${month}', '${key}')">Delete</button></td></tr>`;
-          });
-          document.getElementById("rmExpenseSheetDisplayArea").style.display = "block";
-        } else { alert("No expense records available to delete."); }
-      });
-    });
-
-    window.deleteExpenseEntry = async function(month, expKey) {
-      if(confirm("Are you sure you want to remove this expense entry?")) {
-        await remove(ref(db, `expenses/${month}/${expKey}`));
-        alert("Expense entry removed successfully.");
-        document.getElementById("loadRmExpenseSheetBtn").click();
-      }
-    };
-
-    addSafeListener("loadRmFeeBtn", "click", () => {
-      const admn = document.getElementById("rmFeeSelectedAdmn").value;
-      if(!admn) { alert("Please select a student."); return; }
-      safeDataFetch(`fees_entries/${admn}`).then(entries => {
-        const tbody = document.getElementById("rmFeeTableBody");
-        tbody.innerHTML = "";
-        if(entries && Object.keys(entries).length > 0) {
-          Object.entries(entries).forEach(([key, entry]) => {
-            tbody.innerHTML += `<tr><td>${entry.date}</td><td>${entry.types ? entry.types.join(", ") : "-"}</td><td>₹${entry.amount}</td><td><button class="btn-sm-del" onclick="window.deleteFeeEntry('${admn}', '${key}')">Delete</button></td></tr>`;
-          });
-          document.getElementById("rmFeeDisplayArea").style.display = "block";
-        } else { alert("No fee entries found."); }
-      });
-    });
-
-    window.deleteFeeEntry = async function(admn, entryKey) {
-      if(confirm("Are you sure you want to delete this fee payment entry?")) {
-        await remove(ref(db, `fees_entries/${admn}/${entryKey}`));
-        alert("Fee entry removed successfully.");
-        document.getElementById("loadRmFeeBtn").click();
-      }
-    };
-
-    addSafeListener("clearAttendanceMonthBtn", "click", () => {
-      const std = document.getElementById("rmAttStd").value;
-      const month = document.getElementById("rmAttMonth").value;
-      getLiveStudents().filter(s => cleanClassStr(s.class) === cleanClassStr(std)).forEach((st) => { remove(ref(db, `attendance/${st.admn}/${month}`)).catch(()=>{}); });
-      alert(`Attendance record cleared for Class ${std} (${month}).`);
-    });
+  addSafeListener("clearAttendanceMonthBtn", "click", async () => {  
+ const std = document.getElementById("rmAttStd").value;  
+ const month = document.getElementById("rmAttMonth").value;  
+ if(!std || !month) { alert("Please select both Standard and Month."); return; }  
+  
+ if(confirm(`Are you sure you want to completely erase attendance for Class ${std} (${month})?`)) {  
+ const students = getLiveStudents().filter(s => cleanClassStr(s.class) === cleanClassStr(std));  
+ const batch = writeBatch(fsDb);  
+  
+ students.forEach((st) => {  
+ const docId = `${st.admn}_${month}`;  
+ batch.delete(doc(fsDb, "attendance", docId));  
+ if (window.mmstore) {  
+ window.mmstore.delete(`attendance/${st.admn}/${month}`, false).catch(() => {});  
+ }  
+ });  
+  
+ await batch.commit();  
+ alert(`Attendance record cleared for Class ${std} (${month}).`);  
+ window.closeModal("removeAttendModal");  
+ }  
+ });  
 
 
 
-          addSafeListener("updateStudentProfileBtn", "click", () => {
-      const btn = document.getElementById("updateStudentProfileBtn");
-      runWithBtnSpinner(btn, "💾 Update Profile", async () => {
-        const oldAdmn = document.getElementById("profStudentAdmn").value;
-        const newAdmn = document.getElementById("profAdmnDisplay").value.trim();
-        const name = document.getElementById("profNameInput").value.trim();
-        const pass = document.getElementById("profPasswordInput").value.trim();
-        const cls = document.getElementById("profClassSelect").value;
-        const phone = document.getElementById("profPhoneInput").value.trim();
-        const dob = document.getElementById("profDobInput").value.trim();
-        const email = document.getElementById("profEmailInput") ? document.getElementById("profEmailInput").value.trim() : "";
-        const pts = parseInt(document.getElementById("profPointsInput").value) || 0;
-        const photoFile = document.getElementById("profPhotoFileInput");
+ addSafeListener("updateStudentProfileBtn", "click", () => {  
+ const btn = document.getElementById("updateStudentProfileBtn");  
+ runWithBtnSpinner(btn, "💾 Update Profile", async () => {  
+ const oldAdmn = document.getElementById("profStudentAdmn").value;  
+ const newAdmn = document.getElementById("profAdmnDisplay").value.trim();  
+ const name = document.getElementById("profNameInput").value.trim();  
+ const pass = document.getElementById("profPasswordInput").value.trim();  
+ const cls = document.getElementById("profClassSelect").value;  
+ const phone = document.getElementById("profPhoneInput").value.trim();  
+ const dob = document.getElementById("profDobInput").value.trim();  
+ const email = document.getElementById("profEmailInput") ? document.getElementById("profEmailInput").value.trim() : "";  
+ const pts = parseInt(document.getElementById("profPointsInput").value) || 0;  
+ const photoFile = document.getElementById("profPhotoFileInput");  
+  
+ if(!newAdmn || !name) { alert("Student Name and Admission No are required."); return; }  
+  
+ const currentStudent = await getStudentRecord(oldAdmn);  
+ let photoUrl = currentStudent ? (currentStudent.photo || "https://via.placeholder.com/150") : "https://via.placeholder.com/150";  
+  
+ const croppedData = window.croppedPhotosMap && window.croppedPhotosMap["profPhotoFileInput"];  
+ if (croppedData) {  
+ photoUrl = await window.saveMediaToFirestore("student_photos", newAdmn, croppedData, { name: name, class: cls });  
+ delete window.croppedPhotosMap["profPhotoFileInput"];  
+ } else if(photoFile && photoFile.files.length > 0) {  
+ const uploadedPhoto = await readFileAsDataURL(photoFile.files[0], 500, 0.72);  
+ if(uploadedPhoto) {  
+ photoUrl = await window.saveMediaToFirestore("student_photos", newAdmn, uploadedPhoto, { name: name, class: cls });  
+ }  
+ }  
+  
+ const updatedStudentObj = {  
+ ...(currentStudent || {}),  
+ srNo: newAdmn,  
+ admn: newAdmn,  
+ name: name,  
+ class: cls,  
+ phone: phone,  
+ dob: dob || "-",  
+ email: email || "",  
+ points: pts,  
+ photo: photoUrl,  
+ regDate: currentStudent ? (currentStudent.regDate || getTodayFormattedDate()) : getTodayFormattedDate()  
+ };  
+ const updatedUserObj = { password: pass || "MM", role: "student", admn: newAdmn, assignedClass: cls };  
+  
+ const batch = writeBatch(fsDb);  
+ if(String(oldAdmn) !== String(newAdmn)) {  
+ batch.delete(doc(fsDb, "students", String(oldAdmn)));  
+ batch.delete(doc(fsDb, "users", String(oldAdmn)));  
+ delete inMemoryStudentsData[oldAdmn];  
+ if (window.mmstore) {  
+ window.mmstore.delete(`students/${oldAdmn}`, false).catch(() => {});  
+ window.mmstore.delete(`users/${oldAdmn}`, false).catch(() => {});  
+ }  
+ }  
+ batch.set(doc(fsDb, "students", String(newAdmn)), updatedStudentObj, { merge: true });  
+ batch.set(doc(fsDb, "users", String(newAdmn)), updatedUserObj, { merge: true });  
+  
+ if (currentStudent && currentStudent.email && currentStudent.email !== email) {  
+ batch.delete(doc(fsDb, "email_lookup", window.encodeEmailKey(currentStudent.email)));  
+ }  
+ if (email) {  
+ batch.set(doc(fsDb, "email_lookup", window.encodeEmailKey(email)), { admn: String(newAdmn) }, { merge: true });  
+ }  
+  
+ await batch.commit();  
+ inMemoryStudentsData[newAdmn] = updatedStudentObj;  
+ if (window.mmstore) {  
+ window.mmstore.set(`students/${newAdmn}`, updatedStudentObj, false).catch(() => {});  
+ window.mmstore.set(`users/${newAdmn}`, updatedUserObj, false).catch(() => {});  
+ }  
+  
+ if(currentRole === "teacher") await refreshAllTeacherData(); else renderAdminStudentsDirectory();  
+ alert("✔ Student Profile & Photo updated in Cloud Firestore!");  
+ window.closeModal("studentProfileModal");  
+ });  
+ });  
+  
+ addSafeListener("deleteAdminStudentBtn", "click", () => {  
+ const admn = document.getElementById("profStudentAdmn").value;  
+ if(admn) window.deleteStudent(admn);  
+ });  
 
-        if(!newAdmn || !name) { alert("Student Name and Admission No are required."); return; }
 
-        const currentStudent = await getStudentRecord(oldAdmn);
-        let photoUrl = currentStudent ? (currentStudent.photo || "https://via.placeholder.com/150") : "https://via.placeholder.com/150";
+     addSafeListener("saveStudentBtn", "click", () => {  
+ const btn = document.getElementById("saveStudentBtn");  
+ runWithBtnSpinner(btn, "Submit Registration", async () => {  
+ const finalAdmn = document.getElementById("regAdmn").value.trim();  
+ const name = document.getElementById("regName").value.trim();  
+ const std = currentRole === "teacher" ? assignedClass : document.getElementById("regStd").value;  
+ const rawPhone = document.getElementById("regPhone").value.trim();  
+ const dob = document.getElementById("regDob").value;  
+ const fileInput = document.getElementById("regPhotoFile");  
+  
+ if(!name || !std || !rawPhone) { alert("Please fill Name, Class, and Phone number."); return; }  
+ let photoUrl = "https://via.placeholder.com/150";  
+ if(fileInput && fileInput.files.length > 0) {  
+ const uploadedPhoto = await readFileAsDataURL(fileInput.files[0], 500, 0.72);  
+ if(uploadedPhoto) {  
+ photoUrl = await window.saveMediaToFirestore("student_photos", finalAdmn, uploadedPhoto, { name: name, class: std });  
+ }  
+ }  
+  
+ const studentObj = {   
+ srNo: finalAdmn,   
+ admn: finalAdmn,   
+ name: name,   
+ class: std,   
+ phone: rawPhone.replace(/[^0-9]/g, ''),   
+ dob: dob || "-",   
+ photo: photoUrl,   
+ regDate: getTodayFormattedDate(),   
+ points: 0,   
+ timestamp: Date.now()   
+ };  
+ const userObj = { password: "MM", role: "student", admn: finalAdmn, assignedClass: std };  
+ const feeObj = { admn: String(finalAdmn), name: name, class: std, monthlyFee: 500, status: "Pending", totalPaid: 0, lastPaidMonth: "None" };  
+  
+ const batch = writeBatch(fsDb);  
+ batch.set(doc(fsDb, "students", String(finalAdmn)), studentObj, { merge: true });  
+ batch.set(doc(fsDb, "users", String(finalAdmn)), userObj, { merge: true });  
+ batch.set(doc(fsDb, "fees", String(finalAdmn)), feeObj, { merge: true });  
+ await batch.commit();  
+  
+ inMemoryStudentsData[finalAdmn] = studentObj;  
+ if (window.mmstore) {  
+ window.mmstore.set(`students/${finalAdmn}`, studentObj, false).catch(() => {});  
+ window.mmstore.set(`users/${finalAdmn}`, userObj, false).catch(() => {});  
+ window.mmstore.set(`fees/${finalAdmn}`, feeObj, false).catch(() => {});  
+ }  
+  
+ if(currentRole === "teacher") await refreshAllTeacherData(); else renderAdminStudentsDirectory();  
+   
+ alert(`✔ Student registered successfully with Admission No: ${finalAdmn}`);  
+ document.getElementById("regName").value = ""; document.getElementById("regPhone").value = ""; document.getElementById("regDob").value = "";  
+ if(fileInput) fileInput.value = "";  
+ window.closeModal("registerStudentModal");  
+ });  
+ });  
 
-        const croppedData = window.croppedPhotosMap && window.croppedPhotosMap["profPhotoFileInput"];
-        if (croppedData) {
-          photoUrl = await window.saveMediaToFirestore("student_photos", newAdmn, croppedData, { name: name, class: cls });
-          delete window.croppedPhotosMap["profPhotoFileInput"];
-        } else if(photoFile && photoFile.files.length > 0) {
-          const uploadedPhoto = await readFileAsDataURL(photoFile.files[0], 500, 0.72);
-          if(uploadedPhoto) {
-            photoUrl = await window.saveMediaToFirestore("student_photos", newAdmn, uploadedPhoto, { name: name, class: cls });
-          }
-        }
-
-        const updatedStudentObj = {
-          ...(currentStudent || {}),
-          srNo: newAdmn,
-          admn: newAdmn,
-          name: name,
-          class: cls,
-          phone: phone,
-          dob: dob || "-",
-          email: email || "",
-          points: pts,
-          photo: photoUrl,
-          regDate: currentStudent ? (currentStudent.regDate || getTodayFormattedDate()) : getTodayFormattedDate()
-        };
-
-        const updates = {};
-        if(String(oldAdmn) !== String(newAdmn)) {
-          updates[`students/${oldAdmn}`] = null;
-          updates[`users/${oldAdmn}`] = null;
-        }
-        updates[`students/${newAdmn}`] = updatedStudentObj;
-        updates[`users/${newAdmn}`] = { password: pass || "MM", role: "student", admn: newAdmn, assignedClass: cls };
-        if (currentStudent && currentStudent.email && currentStudent.email !== email) {
-          updates[`email_lookup/${window.encodeEmailKey(currentStudent.email)}`] = null;
-        }
-        if (email) {
-          updates[`email_lookup/${window.encodeEmailKey(email)}`] = String(newAdmn);
-        }
-
-        await update(ref(db), updates);
-        if(currentRole === "teacher") await refreshAllTeacherData(); else renderAdminStudentsDirectory();
-        alert("✔ Student Profile & Photo updated in Cloud Firestore!");
-        window.closeModal("studentProfileModal");
-      });
-    });
-
-    addSafeListener("deleteAdminStudentBtn", "click", () => {
-      const admn = document.getElementById("profStudentAdmn").value;
-      if(admn) window.deleteStudent(admn);
-    });
-
-    addSafeListener("saveStudentBtn", "click", () => {
-  const btn = document.getElementById("saveStudentBtn");
-      runWithBtnSpinner(btn, "Submit Registration", async () => {
-        const finalAdmn = document.getElementById("regAdmn").value.trim();
-        const name = document.getElementById("regName").value.trim();
-        const std = currentRole === "teacher" ? assignedClass : document.getElementById("regStd").value;
-        const rawPhone = document.getElementById("regPhone").value.trim();
-        const dob = document.getElementById("regDob").value;
-        const fileInput = document.getElementById("regPhotoFile");
-
-        if(!name || !std || !rawPhone) { alert("Please fill Name, Class, and Phone number."); return; }
-              let photoUrl = "https://via.placeholder.com/150";
-        if(fileInput && fileInput.files.length > 0) {
-          const uploadedPhoto = await readFileAsDataURL(fileInput.files[0], 500, 0.72);
-          if(uploadedPhoto) {
-            photoUrl = await window.saveMediaToFirestore("student_photos", finalAdmn, uploadedPhoto, { name: name, class: std });
-          }
-        }
-
-        const updates = {};
-        updates[`students/${finalAdmn}`] = { srNo: finalAdmn, admn: finalAdmn, name: name, class: std, phone: rawPhone.replace(/[^0-9]/g, ''), dob: dob || "-", photo: photoUrl, regDate: getTodayFormattedDate(), points: 0, timestamp: Date.now() };
-        updates[`users/${finalAdmn}`] = { password: "MM", role: "student", admn: finalAdmn, assignedClass: std };
-
-        await update(ref(db), updates);
-        if(currentRole === "teacher") await refreshAllTeacherData(); else renderAdminStudentsDirectory();
-        
-        alert(`✔ Student registered successfully with Admission No: ${finalAdmn}`);
-        document.getElementById("regName").value = ""; document.getElementById("regPhone").value = ""; document.getElementById("regDob").value = "";
-        if(fileInput) fileInput.value = "";
-        window.closeModal("registerStudentModal");
-      });
-    });
 
 
           addSafeListener("saveTeacherBtn", "click", () => {
@@ -8402,26 +8709,34 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       document.getElementById("rmStudentArea").style.display = "block";
     });
 
-     window.deleteStudent = async function(admn) {
-      if(confirm(`Are you sure you want to completely remove ALL data for student ID: ${admn}?`)) {
-        const updates = {};
-        updates[`students/${admn}`] = null;
-        updates[`users/${admn}`] = null;
-        updates[`fees_entries/${admn}`] = null;
-        updates[`fees_matrix/${admn}`] = null;
-        updates[`attendance/${admn}`] = null;
-        updates[`daily_claims/${admn}`] = null;
-        updates[`tests/${admn}`] = null;
-        updates[`student_test_attempts/${admn}`] = null;
-        
-        await update(ref(db), updates);
-        
-        alert("Student record and all related data removed successfully.");
-        window.closeModal("removeStudentModal");
-        window.closeModal("studentProfileModal");
-        if(currentRole === "admin") renderAdminStudentsDirectory();
-      }
-    };
+       window.deleteStudent = async function(admn) {  
+ if(confirm(`Are you sure you want to completely remove ALL data for student ID: ${admn}?`)) {  
+ const targetAdmn = String(admn);  
+ const batch = writeBatch(fsDb);  
+ batch.delete(doc(fsDb, "students", targetAdmn));  
+ batch.delete(doc(fsDb, "users", targetAdmn));  
+ batch.delete(doc(fsDb, "fees", targetAdmn));  
+ batch.delete(doc(fsDb, "fees_matrix", targetAdmn));  
+ batch.delete(doc(fsDb, "daily_claims", targetAdmn));  
+ batch.delete(doc(fsDb, "tests", targetAdmn));  
+ batch.delete(doc(fsDb, "student_test_attempts", targetAdmn));  
+ await batch.commit();  
+  
+ delete inMemoryStudentsData[targetAdmn];  
+ if (window.mmstore) {  
+ window.mmstore.delete(`students/${targetAdmn}`, false).catch(() => {});  
+ window.mmstore.delete(`users/${targetAdmn}`, false).catch(() => {});  
+ window.mmstore.delete(`fees/${targetAdmn}`, false).catch(() => {});  
+ window.mmstore.delete(`fees_matrix/${targetAdmn}`, false).catch(() => {});  
+ }  
+   
+ alert("Student record and all related data removed successfully.");  
+ window.closeModal("removeStudentModal");  
+ window.closeModal("studentProfileModal");  
+ if(currentRole === "admin") renderAdminStudentsDirectory();  
+ }  
+ };  
+
 
 
       window.exportFullDatabaseJson = async function() {
@@ -8666,31 +8981,64 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       window.openModal("editFeeLogModal");
     };
 
-    window.saveUpdatedFeeLogEntry = function() {
-      const btn = document.getElementById("saveFeeLogEditBtn");
-      runWithBtnSpinner(btn, "💾 Update Entry", async () => {
-        const admn = document.getElementById("editLogAdmn").value;
-        const entryId = document.getElementById("editLogEntryId").value;
-        const amount = document.getElementById("editLogAmountInput").value.trim();
-        const mode = document.getElementById("editLogModeSelect").value;
-        const selectedChks = Array.from(document.querySelectorAll(".edit-fee-chk:checked")).map(c => c.value);
+       window.saveUpdatedFeeLogEntry = function() {  
+ const btn = document.getElementById("saveFeeLogEditBtn");  
+ runWithBtnSpinner(btn, "💾 Update Entry", async () => {  
+ const admn = document.getElementById("editLogAdmn").value;  
+ const entryId = document.getElementById("editLogEntryId").value;  
+ const amount = document.getElementById("editLogAmountInput").value.trim();  
+ const mode = document.getElementById("editLogModeSelect").value;  
+ const selectedChks = Array.from(document.querySelectorAll(".edit-fee-chk:checked")).map(c => c.value);  
+  
+ if(!admn || !entryId || !amount || selectedChks.length === 0) { alert("Please select Fee Type/Month and enter Amount."); return; }  
+  
+ const safeAdmn = String(admn);  
+ const safeKey = String(entryId);  
+ const entryDocId = `${safeAdmn}_${safeKey}`;  
+ const dateStr = getTodayFormattedDate();  
+  
+ const oldEntry = await safeDataFetch(`fees_entries/${safeAdmn}/${safeKey}`);  
+ const matrixPayload = {};  
+  
+ if (oldEntry && Array.isArray(oldEntry.types)) {  
+ oldEntry.types.forEach(t => {  
+ if (!selectedChks.includes(t)) {  
+ matrixPayload[t] = deleteField();  
+ }  
+ });  
+ }  
+ selectedChks.forEach(feeType => {  
+ matrixPayload[feeType] = { paid: true, date: dateStr, amount: amount };  
+ });  
+  
+ const updatedEntry = {  
+ id: safeKey,  
+ entryId: safeKey,  
+ admn: safeAdmn,  
+ studentAdmn: safeAdmn,  
+ types: selectedChks,  
+ amount: amount,  
+ mode: mode,  
+ date: dateStr,  
+ updatedAt: Date.now()  
+ };  
+  
+ const batch = writeBatch(fsDb);  
+ batch.set(doc(fsDb, "fees_entries", entryDocId), updatedEntry, { merge: true });  
+ batch.set(doc(fsDb, "fees_matrix", safeAdmn), matrixPayload, { merge: true });  
+ await batch.commit();  
+  
+ if (window.mmstore) {  
+ window.mmstore.set(`fees_entries/${safeAdmn}/${safeKey}`, updatedEntry, false).catch(() => {});  
+ window.mmstore.set(`fees_matrix/${safeAdmn}`, matrixPayload, false).catch(() => {});  
+ }  
+  
+ alert("✔ Fees entry updated successfully!");  
+ window.closeModal("editFeeLogModal");  
+ window.loadSystemFeesLogs();  
+ });  
+ };  
 
-        if(!admn || !entryId || !amount || selectedChks.length === 0) { alert("Please select Fee Type/Month and enter Amount."); return; }
-
-        const dateStr = getTodayFormattedDate();
-        const updates = {};
-        const oldEntry = await safeDataFetch(`fees_entries/${admn}/${entryId}`);
-        if(oldEntry && Array.isArray(oldEntry.types)) { oldEntry.types.forEach(t => { updates[`fees_matrix/${admn}/${t}`] = null; }); }
-
-        updates[`fees_entries/${admn}/${entryId}`] = { id: entryId, admn: admn, types: selectedChks, amount: amount, mode: mode, date: dateStr };
-        selectedChks.forEach(feeType => { updates[`fees_matrix/${admn}/${feeType}`] = { paid: true, date: dateStr, amount: amount }; });
-
-        await update(ref(db), updates);
-        alert("✔ Fees entry updated successfully!");
-        window.closeModal("editFeeLogModal");
-        window.loadSystemFeesLogs();
-      });
-    };
 
 
           addSafeListener("saveSubjectBtn", "click", () => {
@@ -9736,62 +10084,71 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       }
     };
 
-   window.handleMusterAction = async function(type, btn) {
-  if(btn.classList.contains("btn-grayed")) {
-    window.shakeButton(btn);
-    return;
-  }
+    window.handleMusterAction = async function(type, btn) {  
+ if(btn.classList.contains("btn-grayed")) {  
+ window.shakeButton(btn);  
+ return;  
+ }  
+   
+ const loggedUser = localStorage.getItem("loggedUser");  
+ if(!loggedUser) return;  
   
-  const loggedUser = localStorage.getItem("loggedUser");
-  if(!loggedUser) return;
-
-  const actionText = type === 'in' ? "Check-in" : "Check-out";
-  if(confirm(`Submit ${actionText} time?`)) {
-    runWithBtnSpinner(btn, "Verifying Location...", async () => {
-      
-      // PHASE 1: Native App (Kotlin/Flutter) Bridge Integration
-      let isVerified = true; 
-      
-      // Check if running inside the App wrapper
-      if (window.NativeAppBridge) {
-         try {
-            // Verify exact Lat, Lng, 50m radius, and Router IP
-            const response = await window.NativeAppBridge.verifyMusterEligibility(
-                "19.0620114", "72.9215085", 50, "192.168.0.1"
-            );
-            
-            if (response !== "SUCCESS") {
-               alert("Verification Failed: You are not within the 50m radius of the institute or not connected to the authorized WiFi network.");
-               isVerified = false;
-            }
-         } catch(e) {
-            alert("Could not detect location or WiFi. Please ensure app permissions are granted.");
-            isVerified = false;
-         }
-      }
-      
-      // Halt execution if verification fails (prevents Firebase save)
-      if (!isVerified) return;
-
-      const currentMonth = getAutoMonthName();
-      const todayNum = new Date().getDate();
-      const nowTime = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
-      
-      await update(ref(db), {
-        [`muster/${currentMonth}/day_${todayNum}/${loggedUser}/${type}`]: nowTime
-      });
-      
-      alert(`${actionText} time saved successfully!`);
-      window.checkMusterButtonStates();
-
-      if(type === 'in') {
-        setTimeout(() => {
-          window.pushAppNotification(loggedUser, "📅 Take Attendance", "Please don't forget to mark today's class attendance.", "reminder");
-        }, 10 * 60 * 1000); 
-      }
-    });
-  }
-};
+ const actionText = type === 'in' ? "Check-in" : "Check-out";  
+ if(confirm(`Submit ${actionText} time?`)) {  
+ runWithBtnSpinner(btn, "Verifying Location...", async () => {  
+   
+ let isVerified = true;   
+ if (window.NativeAppBridge) {  
+ try {  
+ const response = await window.NativeAppBridge.verifyMusterEligibility(  
+ "19.0620114", "72.9215085", 50, "192.168.0.1"  
+ );  
+ if (response !== "SUCCESS") {  
+ alert("Verification Failed: You are not within the 50m radius of the institute or not connected to the authorized WiFi network.");  
+ isVerified = false;  
+ }  
+ } catch(e) {  
+ alert("Could not detect location or WiFi. Please ensure app permissions are granted.");  
+ isVerified = false;  
+ }  
+ }  
+   
+ if (!isVerified) return;  
+  
+ const currentMonth = getAutoMonthName();  
+ const todayNum = new Date().getDate();  
+ const nowTime = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });  
+ const docRef = doc(fsDb, "muster", currentMonth);  
+  
+ try {  
+ await updateDoc(docRef, {  
+ [`day_${todayNum}.${loggedUser}.${type}`]: nowTime  
+ });  
+ } catch (err) {  
+ await setDoc(docRef, {  
+ [`day_${todayNum}`]: {  
+ [loggedUser]: {  
+ [type]: nowTime  
+ }  
+ }  
+ }, { merge: true });  
+ }  
+  
+ if (window.mmstore) {  
+ window.mmstore.set(`muster/${currentMonth}/day_${todayNum}/${loggedUser}/${type}`, nowTime, false).catch(() => {});  
+ }  
+   
+ alert(`${actionText} time saved successfully!`);  
+ window.checkMusterButtonStates();  
+  
+ if(type === 'in') {  
+ setTimeout(() => {  
+ window.pushAppNotification(loggedUser, "📅 Take Attendance", "Please don't forget to mark today's class attendance.", "reminder");  
+ }, 10 * 60 * 1000);   
+ }  
+ });  
+ }  
+ };  
 
 
 
@@ -9843,26 +10200,37 @@ if (id === "weeklyRewardDetailsModal") { window.renderWeeklyScheduleModal(); }
       }, 800); 
     };
 
-    window.deleteTeacherMuster = async function() {
-      const username = document.getElementById("delMusterTeacherSelect").value;
-      const month = document.getElementById("delMusterMonthSelect").value;
-      
-      if(!username) { alert("Please select a teacher first."); return; }
-      
-      if(confirm(`Are you sure you want to completely delete muster data for this teacher in ${month}?`)) {
-        const updates = {};
-        const daysCount = getDaysInMonth(month);
-        for(let d=1; d<=daysCount; d++) {
-          updates[`muster/${month}/day_${d}/${username}`] = null;
-        }
-        await update(ref(db), updates);
-        alert("✔ Muster data deleted successfully!");
-        window.closeModal('deleteMusterModal');
-        if(document.getElementById("adminMusterTableCard").style.display === "block") {
-          window.loadAdminMusterTable();
-        }
-      }
-    };
+    window.deleteTeacherMuster = async function() {  
+ const username = document.getElementById("delMusterTeacherSelect").value;  
+ const month = document.getElementById("delMusterMonthSelect").value;  
+   
+ if(!username) { alert("Please select a teacher first."); return; }  
+   
+ if(confirm(`Are you sure you want to completely delete muster data for this teacher in ${month}?`)) {  
+ const docRef = doc(fsDb, "muster", month);  
+ const daysCount = getDaysInMonth(month);  
+ const updates = {};  
+ for(let d=1; d<=daysCount; d++) {  
+ updates[`day_${d}.${username}`] = deleteField();  
+ }  
+ try {  
+ await updateDoc(docRef, updates);  
+ } catch(e) {  
+ console.warn("[Muster] Delete muster warning:", e);  
+ }  
+  
+ if (window.mmstore) {  
+ window.mmstore.delete(`muster/${month}`, false).catch(() => {});  
+ }  
+  
+ alert("✔ Muster data deleted successfully!");  
+ window.closeModal('deleteMusterModal');  
+ if(document.getElementById("adminMusterTableCard").style.display === "block") {  
+ window.loadAdminMusterTable();  
+ }  
+ }  
+ };  
+
       
     // ==========================================
     // NOTIFICATION ENGINE & SILENT AUTO-UPDATE (PHASE 4)
@@ -12253,67 +12621,84 @@ window.syncProfileModalHeight = function() {
         document.getElementById("sProfileLockedNotice").style.display = anyAllowed ? "none" : "block";
       };
 
-      window.saveStudentSelfProfileUpdate = function() {
-        const btn = document.getElementById("sSaveProfileChangesBtn");
-        runWithBtnSpinner(btn, "💾 Update Profile", async () => {
-          const student = await getStudentRecord(currentStudentAdmn);
-          if (!student) return;
+       window.saveStudentSelfProfileUpdate = function() {  
+ const btn = document.getElementById("sSaveProfileChangesBtn");  
+ runWithBtnSpinner(btn, "💾 Update Profile", async () => {  
+ const student = await getStudentRecord(currentStudentAdmn);  
+ if (!student) return;  
+  
+ const clsKey = cleanClassStr(student.class);  
+ const perms = (await safeDataFetch(`student_permissions/${clsKey}`)) || (await safeDataFetch(`student_permissions/ALL`)) || {};  
+  
+ const studentUpdates = {};  
+ const userUpdates = {};  
+ let hasEmailUpdate = false;  
+ let oldEmail = student.email || "";  
+ let newEmail = "";  
+  
+ if (perms.name) {  
+ const newName = document.getElementById("sGrayedName").value.trim();  
+ if (!newName) { alert("Name cannot be empty."); return; }  
+ studentUpdates.name = newName;  
+ }  
+ if (perms.password) {  
+ const newPass = document.getElementById("sGrayedPassword").value.trim();  
+ if (!newPass) { alert("Password cannot be empty."); return; }  
+ userUpdates.password = newPass;  
+ localStorage.setItem("loggedPass", newPass);  
+ }  
+ if (perms.phone) {  
+ studentUpdates.phone = document.getElementById("sGrayedPhone").value.trim();  
+ }  
+ if (perms.dob) {  
+ studentUpdates.dob = document.getElementById("sGrayedDob").value.trim() || "-";  
+ }  
+ if (perms.email) {  
+ newEmail = document.getElementById("sGrayedEmail").value.trim();  
+ studentUpdates.email = newEmail;  
+ hasEmailUpdate = true;  
+ }  
+ if (perms.photo && window.croppedPhotosMap["sUpdatePhotoInput"]) {  
+ const croppedData = window.croppedPhotosMap["sUpdatePhotoInput"];  
+ const photoPointer = await window.saveMediaToFirestore("student_photos", student.admn, croppedData, {  
+ name: student.name,  
+ class: student.class  
+ });  
+ studentUpdates.photo = photoPointer;  
+ delete window.croppedPhotosMap["sUpdatePhotoInput"];  
+ }  
+  
+ if (Object.keys(studentUpdates).length === 0 && Object.keys(userUpdates).length === 0) {  
+ alert("No changes to save.");  
+ return;  
+ }  
+  
+ const batch = writeBatch(fsDb);  
+ if (Object.keys(studentUpdates).length > 0) {  
+ batch.set(doc(fsDb, "students", String(student.admn)), studentUpdates, { merge: true });  
+ }  
+ if (Object.keys(userUpdates).length > 0) {  
+ batch.set(doc(fsDb, "users", String(student.admn)), userUpdates, { merge: true });  
+ }  
+ if (hasEmailUpdate) {  
+ if (oldEmail && oldEmail !== newEmail) {  
+ batch.delete(doc(fsDb, "email_lookup", window.encodeEmailKey(oldEmail)));  
+ }  
+ if (newEmail) {  
+ batch.set(doc(fsDb, "email_lookup", window.encodeEmailKey(newEmail)), { admn: String(student.admn) }, { merge: true });  
+ }  
+ }  
+ await batch.commit();  
+  
+ const refreshed = await safeDataFetch(`students/${student.admn}`);  
+ if (refreshed) inMemoryStudentsData[student.admn] = refreshed;  
+ if (window.mmstore && refreshed) window.mmstore.set(`students/${student.admn}`, refreshed, false).catch(() => {});  
+ await refreshStudentDashboard();  
+ alert("✔ Your profile has been updated successfully!");  
+ window.closeModal("studentUpdateModal");  
+ });  
+ };  
 
-          const clsKey = cleanClassStr(student.class);
-          const perms = (await safeDataFetch(`student_permissions/${clsKey}`)) || (await safeDataFetch(`student_permissions/ALL`)) || {};
-
-          const updates = {};
-
-          if (perms.name) {
-            const newName = document.getElementById("sGrayedName").value.trim();
-            if (!newName) { alert("Name cannot be empty."); return; }
-            updates[`students/${student.admn}/name`] = newName;
-          }
-          if (perms.password) {
-            const newPass = document.getElementById("sGrayedPassword").value.trim();
-            if (!newPass) { alert("Password cannot be empty."); return; }
-            updates[`users/${student.admn}/password`] = newPass;
-            localStorage.setItem("loggedPass", newPass);
-          }
-          if (perms.phone) {
-            updates[`students/${student.admn}/phone`] = document.getElementById("sGrayedPhone").value.trim();
-          }
-          if (perms.dob) {
-            updates[`students/${student.admn}/dob`] = document.getElementById("sGrayedDob").value.trim() || "-";
-          }
-                    if (perms.email) {
-            const newEmail = document.getElementById("sGrayedEmail").value.trim();
-            if (student.email && student.email !== newEmail) {
-              updates[`email_lookup/${window.encodeEmailKey(student.email)}`] = null;
-            }
-            updates[`students/${student.admn}/email`] = newEmail;
-            if (newEmail) {
-              updates[`email_lookup/${window.encodeEmailKey(newEmail)}`] = String(student.admn);
-            }
-          }
-if (perms.photo && window.croppedPhotosMap["sUpdatePhotoInput"]) {
-            const croppedData = window.croppedPhotosMap["sUpdatePhotoInput"];
-            const photoPointer = await window.saveMediaToFirestore("student_photos", student.admn, croppedData, {
-              name: student.name,
-              class: student.class
-            });
-            updates[`students/${student.admn}/photo`] = photoPointer;
-            delete window.croppedPhotosMap["sUpdatePhotoInput"];
-          }
-
-          if (Object.keys(updates).length === 0) {
-            alert("No changes to save.");
-            return;
-          }
-
-          await update(ref(db), updates);
-          const refreshed = await safeDataFetch(`students/${student.admn}`);
-          if (refreshed) inMemoryStudentsData[student.admn] = refreshed;
-          await refreshStudentDashboard();
-          alert("✔ Your profile has been updated successfully!");
-          window.closeModal("studentUpdateModal");
-        });
-      };
 
 
             // Attach Cropper to Teacher Modals & Teacher Self Profile
